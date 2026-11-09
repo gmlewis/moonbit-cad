@@ -52,6 +52,10 @@ realistic layers add orthogonal records rather than bloating `Component`:
   future.
 - `WireRun` — endpoints, gauge, length, notes; collected into the power/IO
   report. **Implemented.**
+- `CableRoute` — polyline jacket geometry, diameter, material, and the wire
+  runs it carries; checked for length against each wire. **Implemented** in
+  `harness.mbt` + `catalog/harness.mbt`. Connector mating checks remain
+  future.
 - `ControlBinding` — joint → actuator channel → MCU pins/bus; direction, gear
   ratio, soft limits, homing/limit inputs. **Implemented**, with
   `ros2_control` YAML, a firmware pin map, and completeness checks.

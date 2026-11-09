@@ -424,6 +424,8 @@ pub(all) struct Component {
   wiring : Array[WireRun]
   /// Joint-to-actuator control bindings declared on this component.
   control : Array[ControlBinding]
+  /// Routed cable bundles belonging to this component.
+  cables : Array[CableRoute]
 }
 
 ///|
@@ -451,6 +453,7 @@ pub fn Component::new(name : String, description~ : String = "") -> Component {
     pcb: None,
     wiring: [],
     control: [],
+    cables: [],
   }
 }
 

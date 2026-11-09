@@ -836,6 +836,22 @@ pub fn lead_screw_gripper(
     width_mm=pcb_w_mm,
     connectors=["power", "motor", "limit_home", "limit_closed", "can"],
   )
+  // External motor harness: outside the frame from the controller down to the
+  // motor's -Y side, clear of the beam, motor plate, and moving jaw.
+  let motor_harness = cable_route(
+    name=name + "_motor_harness",
+    points=[
+      (0.0, -34.0, 30.0),
+      (-20.0, -34.0, 30.0),
+      (-42.0, -34.0, 31.0),
+      (-48.0, -34.0, 34.0),
+      (-48.0, -14.0, 35.0),
+      (-44.0, -14.0, 35.0),
+    ],
+    jacket_diameter_mm=6.0,
+    wire_names=["motor_power", "motor_step_dir"],
+    material="PVC",
+  )
   let multiplier = lead_mm / mm_per_m / rad_per_rev
   base
   .attach(
@@ -901,6 +917,13 @@ pub fn lead_screw_gripper(
     "pcb_mount",
     parent_mate="pcb_mount",
     controller,
+    child_mate="mount",
+    spec=@cad.JointSpec::fixed(),
+  )
+  .attach(
+    "motor_harness_mount",
+    parent_mate="origin",
+    motor_harness,
     child_mate="mount",
     spec=@cad.JointSpec::fixed(),
   )

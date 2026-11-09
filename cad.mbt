@@ -31,6 +31,7 @@
 /// | `pcb : PcbSpec?` | Board outline, thickness, mounting holes, height limit, and connectors. |
 /// | `wiring : Array[WireRun]` | Point-to-point cable runs with gauge, length, and endpoints. |
 /// | `control : Array[ControlBinding]` | Joint → actuator/channel/pins, direction, gear ratio, soft limits, homing/limit inputs. |
+/// | `cables : Array[CableRoute]` | Routed cable bundles: polyline, jacket diameter, carried wire runs, material. |
 ///
 /// A `BodyPart` stores both representations of one solid: a
 /// `@step_cad.SceneNode` in millimeters/degrees and a `@urdf.Inertial` in
@@ -88,6 +89,8 @@
 ///   bolt-ready plates, limit switches, and a controller PCB).
 /// - `catalog/sensors` — limit switches, magnetic encoders, IMUs, cameras,
 ///   force sensors, and PCB envelopes with mounting holes.
+/// - `catalog/harness` — polyline cable bundles with jacket geometry, carried
+///   wire runs, and a length-based purchased part number.
 ///
 /// ## Quick start
 ///
@@ -142,10 +145,12 @@
 /// Actuators carry an `ActuatorSpec` (voltage, rated/stall current, torque,
 /// driver, control interface, encoder), sensors carry a `SensorSpec`, and
 /// boards carry a `PcbSpec`. Ports and `WireRun`s declare the electrical
-/// interfaces and harness. `Component::power_budget()` collects all of it,
-/// with per-voltage rated/stall current and power totals, and
-/// `PowerBudget::to_text()` renders the actuator, power, sensor, port, and
-/// wiring report.
+/// interfaces and harness. `CableRoute` adds routed jacket geometry with its
+/// carried wire runs, and `Component::harness_checks()` verifies route geometry
+/// and that each wire is long enough for its route. `Component::power_budget()`
+/// collects all of it, with per-voltage rated/stall current and power totals,
+/// and `PowerBudget::to_text()` renders the actuator, power, sensor, port,
+/// wiring, and cable-route report.
 ///
 /// ```mbt
 /// let budget = assembly.power_budget()
@@ -193,6 +198,7 @@
 /// | `assembly.mbt` | `PartMeta`, `Port`, `Fit`, `Fastener`, assembly plans, and bill-of-materials roll-up/CSV. |
 /// | `electronics.mbt` | `ActuatorSpec`, `SensorSpec`, `PcbSpec`, `WireRun`, and the power/IO budget report. |
 /// | `control.mbt` | `ControlBinding`, `ros2_control` YAML, firmware pin map, and control-completeness checks. |
+/// | `harness.mbt` | `CableRoute` length, tree collection, and harness checks (route geometry and wire reach). |
 /// | `build.mbt` | Sourcing, print/cut list, fastener torque table, procedure, and build-package manifest. |
 /// | `compile-step.mbt` | `Component` → posed `@step_cad.Design` through forward kinematics. |
 /// | `compile-urdf.mbt` | `Component` → `@urdf.Robot` and `@urdf.UrdfBundle` (with real `.gltf` and `.step` assets). |

@@ -195,17 +195,25 @@ pub(all) struct WireLine {
 }
 
 ///|
+/// One routed cable bundle in the harness report.
+pub(all) struct RouteLine {
+  path : String
+  route : CableRoute
+}
+
+///|
 /// The electrical budget for a component tree.
 pub(all) struct PowerBudget {
   actuators : Array[ActuatorLine]
   sensors : Array[SensorLine]
   ports : Array[PortLine]
   wires : Array[WireLine]
+  routes : Array[RouteLine]
 }
 
 ///|
 pub fn PowerBudget::new() -> PowerBudget {
-  { actuators: [], sensors: [], ports: [], wires: [], }
+  { actuators: [], sensors: [], ports: [], wires: [], routes: [], }
 }
 
 ///|
@@ -350,6 +358,24 @@ pub fn PowerBudget::to_text(self : PowerBudget) -> String {
       run.notes +
       "\n"
   }
+  out = out + "\nCable routes\n------------\n"
+  if self.routes.length() == 0 {
+    out = out + "(none)\n"
+  }
+  for entry in self.routes {
+    let route = entry.route
+    out = out +
+      route_label(entry.path, route.name) +
+      " | jacket " +
+      route.jacket_diameter_mm.to_string() +
+      " mm | " +
+      round2(route.length_mm()).to_string() +
+      " mm | " +
+      route.material +
+      " | wires: " +
+      array_join(route.wire_names, ", ") +
+      "\n"
+  }
   out
 }
 
@@ -442,6 +468,9 @@ fn Component::collect_power_budget(
   }
   for run in self.wiring {
     budget.wires.push({ path, run, })
+  }
+  for route in self.cables {
+    budget.routes.push({ path, route, })
   }
   for att in self.attachments {
     att.child.collect_power_budget(path + "/" + att.child.name, budget)

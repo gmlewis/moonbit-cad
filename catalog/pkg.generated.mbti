@@ -14,6 +14,8 @@ pub fn bldc_actuator_pod(name? : String, housing_diam_mm? : Double, housing_leng
 
 pub fn box_tube_strut(String, width_mm~ : Double, height_mm~ : Double, length_mm~ : Double, wall_mm? : Double, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/cad.Component
 
+pub fn cable_route(name? : String, points? : Array[(Double, Double, Double)], jacket_diameter_mm? : Double, wire_names? : Array[String], material? : String, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/cad.Component
+
 pub fn camera_module(name? : String, body_mm? : Double, body_h_mm? : Double, lens_diam_mm? : Double, voltage_v? : Double, current_ma? : Double) -> @gmlewis/cad.Component
 
 pub fn cylindrical_spacer(name? : String, outer_diam_mm? : Double, inner_diam_mm? : Double, length_mm? : Double, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/cad.Component

@@ -30,6 +30,7 @@ or an entire robot. It contains:
 | `pcb : PcbSpec?` | Board outline, thickness, mounting holes, height limit, and connectors. |
 | `wiring : Array[WireRun]` | Point-to-point cable runs with gauge, length, and endpoints. |
 | `control : Array[ControlBinding]` | Joint → actuator/channel/pins, direction, gear ratio, soft limits, homing/limit inputs. |
+| `cables : Array[CableRoute]` | Routed cable bundles: polyline, jacket diameter, carried wire runs, material. |
 
 A **`BodyPart`** stores both representations of one solid: a
 `@step_cad.SceneNode` in millimeters/degrees and a `@urdf.Inertial` in
@@ -86,6 +87,8 @@ tree, so a load can be snapped onto a motor's nested rotor link.
   jaws, bolt-ready plates, two limit switches, and a controller PCB).
 - **`catalog/sensors`** — micro limit switches, magnetic encoders, six-axis
   IMUs, camera modules, force sensors, and PCB envelopes with mounting holes.
+- **`catalog/harness`** — polyline cable bundles with jacket diameter, carried
+  wire runs, a length-based purchased part number, and jacket geometry.
 
 ## Showcase examples
 
@@ -143,7 +146,8 @@ duplicate names, missing part metadata); example 03 reports zero warnings.
 `--report <file.txt>` writes the electrical budget derived from the tree:
 actuator ratings (voltage, rated/stall current, torque, driver, control
 interface, encoder), per-voltage totals and power, sensor supply/draw/interface,
-the full port map, and the declared wire runs (endpoints, gauge, length).
+the full port map, the declared wire runs (endpoints, gauge, length), and the
+routed cable bundles (jacket diameter, path length, carried wires).
 
 ```bash
 ./run-example.sh 03 --report 03-report.txt
@@ -201,10 +205,11 @@ python3 scripts/validate_urdf.py --check-meshes build/03/bundle/urdf/*.urdf
 native unit tests. The unit tests cover primitive bridges, component
 composition, URDF compilation (including rigid merges), posed STEP export,
 bill-of-materials roll-up, assembly plans and hardware checks, power/IO
-budgets, control export and joint-completeness checks, forward-kinematics pose
-smoke tests, build-package generation (sourcing, print list, torque table,
-manifest), every catalog component, the sensor catalog, the mimic-coupled
-gearbox, and the 17-link quadruped.
+budgets, cable-route length and wire checks, control export and
+joint-completeness checks, forward-kinematics pose smoke tests, build-package
+generation (sourcing, print list, torque table, manifest), every catalog
+component, the sensor and harness catalogs, the mimic-coupled gearbox, and the
+17-link quadruped.
 
 Validation and rendering helpers live in `scripts/` (they run from a clone of
 this repository alone; only the external tools named below are required):

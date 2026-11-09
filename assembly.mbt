@@ -208,7 +208,7 @@ pub fn Bom::add(self : Bom, part : PartMeta, quantity : Int32) -> Bom {
       self.lines[i] = {
         ..line,
         quantity: total_qty,
-        total_cost_usd: line.unit_cost_usd * total_qty.to_double(),
+        total_cost_usd: round2(line.unit_cost_usd * total_qty.to_double()),
       }
       return self
     }
@@ -222,8 +222,8 @@ pub fn Bom::add(self : Bom, part : PartMeta, quantity : Int32) -> Bom {
     material: part.material,
     process: part.process,
     finish: part.finish,
-    unit_cost_usd: part.unit_cost_usd,
-    total_cost_usd: part.unit_cost_usd * quantity.to_double(),
+    unit_cost_usd: round2(part.unit_cost_usd),
+    total_cost_usd: round2(part.unit_cost_usd * quantity.to_double()),
     notes: part.notes,
   })
   self

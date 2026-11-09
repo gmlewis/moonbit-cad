@@ -128,6 +128,16 @@ pub(all) struct BuildFile {
 }
 pub fn BuildFile::new(String, String) -> Self
 
+pub(all) struct CableRoute {
+  name : String
+  points : Array[(Double, Double, Double)]
+  jacket_diameter_mm : Double
+  wire_names : Array[String]
+  material : String
+}
+pub fn CableRoute::length_mm(Self) -> Double
+pub fn CableRoute::new(String, points? : Array[(Double, Double, Double)], jacket_diameter_mm? : Double, wire_names? : Array[String], material? : String) -> Self
+
 pub(all) struct CompiledLink {
   name : String
   bodies : Array[BodyPart]
@@ -151,9 +161,11 @@ pub(all) struct Component {
   pcb : PcbSpec?
   wiring : Array[WireRun]
   control : Array[ControlBinding]
+  cables : Array[CableRoute]
 }
 pub fn Component::add_bodies(Self, Array[BodyPart]) -> Self
 pub fn Component::add_body(Self, BodyPart) -> Self
+pub fn Component::add_cable_route(Self, CableRoute) -> Self
 pub fn Component::add_control_binding(Self, ControlBinding) -> Self
 pub fn Component::add_fastener(Self, Fastener) -> Self
 pub fn Component::add_fit(Self, Fit) -> Self
@@ -170,6 +182,7 @@ pub fn Component::bom(Self) -> Bom
 pub fn Component::build_manifest(Self, name? : String) -> String
 pub fn Component::build_package_files(Self, name? : String) -> Array[BuildFile]
 pub fn Component::build_procedure_text(Self) -> String
+pub fn Component::cable_routes(Self) -> Array[CableRoute]
 pub fn Component::compile_links(Self, package_name? : String?) -> (Array[CompiledLink], Array[@urdf.Joint], Array[@urdf.Transmission])
 pub fn Component::control_bindings(Self) -> Array[ControlBinding]
 pub fn Component::control_checks(Self) -> Array[String]
@@ -177,6 +190,7 @@ pub fn Component::display_name(Self) -> String
 pub fn Component::fastener_table_csv(Self) -> String
 pub fn Component::format_documentation(Self) -> String
 pub fn Component::get_mate(Self, String) -> @urdf.MateConnector?
+pub fn Component::harness_checks(Self) -> Array[String]
 pub fn Component::link_design(Self, String) -> @gmlewis/step/cad.Design?
 pub fn Component::new(String, description? : String) -> Self
 pub fn Component::power_budget(Self) -> PowerBudget
@@ -195,6 +209,7 @@ pub fn Component::to_step_file(Self, joint_positions? : Map[String, Double]) -> 
 pub fn Component::to_urdf_bundle(Self, package_name? : String, include_step_parts? : Bool) -> @urdf.UrdfBundle
 pub fn Component::total_mass_kg(Self) -> Double
 pub fn Component::with_actuator(Self, ActuatorSpec) -> Self
+pub fn Component::with_cable_route(Self, CableRoute) -> Self
 pub fn Component::with_description(Self, String) -> Self
 pub fn Component::with_param(Self, String, String) -> Self
 pub fn Component::with_part(Self, PartMeta) -> Self
@@ -339,9 +354,15 @@ pub(all) struct PowerBudget {
   sensors : Array[SensorLine]
   ports : Array[PortLine]
   wires : Array[WireLine]
+  routes : Array[RouteLine]
 }
 pub fn PowerBudget::new() -> Self
 pub fn PowerBudget::to_text(Self) -> String
+
+pub(all) struct RouteLine {
+  path : String
+  route : CableRoute
+}
 
 pub(all) enum SensorKind {
   LimitSwitch
