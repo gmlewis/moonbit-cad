@@ -16,6 +16,8 @@ pub(all) struct OutputPaths {
   bom : String?
   plan : String?
   report : String?
+  control : String?
+  pins : String?
   check : Bool
 }
 
@@ -82,6 +84,16 @@ pub fn with_output_args(spec : Map[String, @cli.Arg]) -> Map[String, @cli.Arg] {
     ),
   )
   spec.set(
+    "control",
+    @cli.opt_string(help="Write ros2_control YAML to path ('-' for stdout)"),
+  )
+  spec.set(
+    "pins",
+    @cli.opt_string(
+      help="Write firmware pin-map CSV to path ('-' for stdout)",
+    ),
+  )
+  spec.set(
     "check",
     @cli.flag(help="Print assembly/hardware warnings to stderr"),
   )
@@ -103,6 +115,8 @@ pub fn output_paths(args : @cli.Args) -> OutputPaths {
     bom: args.string_opt("bom"),
     plan: args.string_opt("plan"),
     report: args.string_opt("report"),
+    control: args.string_opt("control"),
+    pins: args.string_opt("pins"),
     check: args.flag("check"),
   }
 }
@@ -119,7 +133,9 @@ fn any_output(output : OutputPaths) -> Bool {
   output.bundle is Some(_) ||
   output.bom is Some(_) ||
   output.plan is Some(_) ||
-  output.report is Some(_)
+  output.report is Some(_) ||
+  output.control is Some(_) ||
+  output.pins is Some(_)
 }
 
 ///|
@@ -151,7 +167,15 @@ pub async fn write_output(
     for warning in warnings {
       @cli.eprintln("warning: " + warning)
     }
-    @cli.eprintln("assembly checks: " + warnings.length().to_string() + " warning(s)")
+    let control_warnings = comp.control_checks()
+    for warning in control_warnings {
+      @cli.eprintln("warning: " + warning)
+    }
+    @cli.eprintln(
+      "hardware checks: " +
+      (warnings.length() + control_warnings.length()).to_string() +
+      " warning(s)",
+    )
   }
   if !any_output(output) {
     if output.check {
@@ -212,6 +236,19 @@ pub async fn write_output(
   match output.report {
     Some(_) =>
       @step_cad.write_text_file(comp.report_text(), stdout_path(output.report))
+    None => ()
+  }
+  match output.control {
+    Some(_) =>
+      @step_cad.write_text_file(
+        comp.to_ros2_control_yaml(),
+        stdout_path(output.control),
+      )
+    None => ()
+  }
+  match output.pins {
+    Some(_) =>
+      @step_cad.write_text_file(comp.to_pin_map_csv(), stdout_path(output.pins))
     None => ()
   }
 }

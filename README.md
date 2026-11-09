@@ -29,6 +29,7 @@ or an entire robot. It contains:
 | `sensor : SensorSpec?` | Kind, interface, supply, current draw, range, and resolution for a sensor. |
 | `pcb : PcbSpec?` | Board outline, thickness, mounting holes, height limit, and connectors. |
 | `wiring : Array[WireRun]` | Point-to-point cable runs with gauge, length, and endpoints. |
+| `control : Array[ControlBinding]` | Joint → actuator/channel/pins, direction, gear ratio, soft limits, homing/limit inputs. |
 
 A **`BodyPart`** stores both representations of one solid: a
 `@step_cad.SceneNode` in millimeters/degrees and a `@urdf.Inertial` in
@@ -152,6 +153,20 @@ Example 03 declares six 48 V QDD joints on CAN, a 24 V NEMA stepper on
 STEP/DIR, two 5 V limit switches on GPIO, and a 24 V controller PCB with four
 wire runs. `Component::power_budget()` returns the same data programmatically.
 
+### Control export
+
+`--control <file.yaml>` writes a `ros2_control` configuration with a joint-state
+broadcaster, a joint trajectory controller, and a hardware section mapping every
+bound joint to its actuator, CAN node or STEP/DIR channel, MCU pins, direction,
+gear ratio, soft limits, and homing/limit inputs. The same file lists the
+declared sensors and their interfaces. `--pins <file.csv>` writes the matching
+firmware pin map. `Component::control_checks()` verifies that every commandable
+joint is bound and that every referenced joint, actuator, and input resolves.
+
+```bash
+./run-example.sh 03 --control 03-control.yaml --pins 03-pins.csv
+```
+
 ## Development
 
 ```bash
@@ -162,7 +177,8 @@ wire runs. `Component::power_budget()` returns the same data programmatically.
 native unit tests. The unit tests cover primitive bridges, component
 composition, URDF compilation (including rigid merges), posed STEP export,
 bill-of-materials roll-up, assembly plans and hardware checks, power/IO
-budgets, every catalog component, the sensor catalog, the mimic-coupled
+budgets, control export and joint-completeness checks, forward-kinematics pose
+smoke tests, every catalog component, the sensor catalog, the mimic-coupled
 gearbox, and the 17-link quadruped.
 
 Validation and rendering helpers live in `scripts/` (they run from a clone of

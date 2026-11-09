@@ -10,8 +10,8 @@
 pub fn limit_switch(
   name~ : String = "limit_switch",
   body_len_mm~ : Double = 10.0,
-  body_w_mm~ : Double = 6.0,
-  body_h_mm~ : Double = 3.0,
+  body_w_mm~ : Double = 10.0,
+  body_h_mm~ : Double = 6.0,
   voltage_v~ : Double = 5.0,
   current_ma~ : Double = 10.0,
   color~ : @step_cad.Rgb = @step_cad.Rgb::red(),

@@ -30,6 +30,7 @@
 /// | `sensor : SensorSpec?` | Kind, interface, supply, current draw, range, and resolution for a sensor. |
 /// | `pcb : PcbSpec?` | Board outline, thickness, mounting holes, height limit, and connectors. |
 /// | `wiring : Array[WireRun]` | Point-to-point cable runs with gauge, length, and endpoints. |
+/// | `control : Array[ControlBinding]` | Joint → actuator/channel/pins, direction, gear ratio, soft limits, homing/limit inputs. |
 ///
 /// A `BodyPart` stores both representations of one solid: a
 /// `@step_cad.SceneNode` in millimeters/degrees and a `@urdf.Inertial` in
@@ -152,6 +153,22 @@
 /// let same = assembly.report_text()
 /// ```
 ///
+/// ## Control export
+///
+/// `ControlBinding` maps a commandable joint to its actuator, bus channel or
+/// MCU pins, direction, gear ratio, soft limits, and homing/limit inputs.
+/// `Component::to_ros2_control_yaml()` writes a `ros2_control` configuration
+/// (joint-state broadcaster, trajectory controller, hardware parameters, and
+/// sensors) and `Component::to_pin_map_csv()` writes the matching firmware pin
+/// map. `Component::control_checks()` verifies that every commandable robot
+/// joint is bound and that every referenced joint, actuator, and input exists.
+///
+/// ```mbt
+/// let yaml = assembly.to_ros2_control_yaml()
+/// let pins = assembly.to_pin_map_csv()
+/// let warnings = assembly.control_checks()
+/// ```
+///
 /// ## Module map
 ///
 /// | File | Contents |
@@ -160,6 +177,7 @@
 /// | `component.mbt` | `BodyPart`, `JointSpec`, `Attachment`, the `Component` AST, and builders. |
 /// | `assembly.mbt` | `PartMeta`, `Port`, `Fit`, `Fastener`, assembly plans, and bill-of-materials roll-up/CSV. |
 /// | `electronics.mbt` | `ActuatorSpec`, `SensorSpec`, `PcbSpec`, `WireRun`, and the power/IO budget report. |
+/// | `control.mbt` | `ControlBinding`, `ros2_control` YAML, firmware pin map, and control-completeness checks. |
 /// | `compile-step.mbt` | `Component` → posed `@step_cad.Design` through forward kinematics. |
 /// | `compile-urdf.mbt` | `Component` → `@urdf.Robot` and `@urdf.UrdfBundle` (with real `.gltf` and `.step` assets). |
 /// | `catalog/fasteners.mbt` | Standoffs, bushings, bearings, couplers, and L/U/flange brackets. |

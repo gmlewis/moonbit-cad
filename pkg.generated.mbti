@@ -143,9 +143,11 @@ pub(all) struct Component {
   sensor : SensorSpec?
   pcb : PcbSpec?
   wiring : Array[WireRun]
+  control : Array[ControlBinding]
 }
 pub fn Component::add_bodies(Self, Array[BodyPart]) -> Self
 pub fn Component::add_body(Self, BodyPart) -> Self
+pub fn Component::add_control_binding(Self, ControlBinding) -> Self
 pub fn Component::add_fastener(Self, Fastener) -> Self
 pub fn Component::add_fit(Self, Fit) -> Self
 pub fn Component::add_mate(Self, @urdf.MateConnector) -> Self
@@ -159,6 +161,8 @@ pub fn Component::attach(Self, String, parent_mate~ : String, Self, child_mate? 
 pub fn Component::attach_to(Self, String, String, parent_mate~ : String, Self, child_mate? : String, spec? : JointSpec, bom_external? : Bool) -> Self
 pub fn Component::bom(Self) -> Bom
 pub fn Component::compile_links(Self, package_name? : String?) -> (Array[CompiledLink], Array[@urdf.Joint], Array[@urdf.Transmission])
+pub fn Component::control_bindings(Self) -> Array[ControlBinding]
+pub fn Component::control_checks(Self) -> Array[String]
 pub fn Component::display_name(Self) -> String
 pub fn Component::format_documentation(Self) -> String
 pub fn Component::get_mate(Self, String) -> @urdf.MateConnector?
@@ -171,7 +175,9 @@ pub fn Component::to_blender_python(Self, joint_positions? : Map[String, Double]
 pub fn Component::to_bom_csv(Self) -> String
 pub fn Component::to_design(Self, joint_positions? : Map[String, Double]) -> @gmlewis/step/cad.Design
 pub fn Component::to_gltf(Self, joint_positions? : Map[String, Double]) -> String
+pub fn Component::to_pin_map_csv(Self) -> String
 pub fn Component::to_robot(Self, package_name? : String?) -> @urdf.Robot
+pub fn Component::to_ros2_control_yaml(Self, controller_name? : String, update_rate_hz? : Double) -> String
 pub fn Component::to_step_file(Self, joint_positions? : Map[String, Double]) -> String
 pub fn Component::to_urdf_bundle(Self, package_name? : String, include_step_parts? : Bool) -> @urdf.UrdfBundle
 pub fn Component::total_mass_kg(Self) -> Double
@@ -193,6 +199,20 @@ pub(all) enum ConnectionKind {
 }
 pub fn ConnectionKind::equal(Self, Self) -> Bool
 pub fn ConnectionKind::to_repr(Self) -> @debug.Repr
+
+pub(all) struct ControlBinding {
+  joint : String
+  actuator : String
+  channel : String
+  mcu_pins : String
+  direction : String
+  gear_ratio : Double
+  soft_lower : Double?
+  soft_upper : Double?
+  homing_input : String?
+  limit_input : String?
+}
+pub fn ControlBinding::new(String, actuator? : String, channel? : String, mcu_pins? : String, direction? : String, gear_ratio? : Double, soft_lower? : Double?, soft_upper? : Double?, homing_input? : String?, limit_input? : String?) -> Self
 
 pub(all) struct Fastener {
   name : String

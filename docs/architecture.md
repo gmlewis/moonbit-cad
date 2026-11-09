@@ -24,7 +24,7 @@ living document: add to it as the layers below gain content.
 | Sensing | Limit switches, encoders, IMUs, cameras, force sensors | `gmlewis/cad` (`electronics.mbt`) + `catalog/sensors` |
 | Electronics | PCB envelopes, connectors, keepouts, wiring/harness | `gmlewis/cad` (`electronics.mbt`); KiCad import future |
 | Assembly | BOM, fastener schedules, fits/clearances, assembly steps, part numbers | `gmlewis/cad` (`assembly.mbt`; steps future) |
-| Export | STEP/URDF/SDF/glTF, `ros2_control`, firmware pin maps, BOM, drawings | `gmlewis/cad/export` (future) |
+| Export | STEP/URDF/SDF/glTF, `ros2_control`, firmware pin maps, BOM | `gmlewis/cad` (`control.mbt`, `assembly.mbt`, `electronics.mbt`); drawings future |
 
 Create a future package only when it has real content; do not add empty
 placeholder packages.
@@ -52,8 +52,9 @@ realistic layers add orthogonal records rather than bloating `Component`:
   future.
 - `WireRun` — endpoints, gauge, length, notes; collected into the power/IO
   report. **Implemented.**
-- `ControlBinding` — joint → actuator channel → MCU pin/bus; direction, gear
-  ratio, soft limits, homing/limit inputs. Still future.
+- `ControlBinding` — joint → actuator channel → MCU pins/bus; direction, gear
+  ratio, soft limits, homing/limit inputs. **Implemented**, with
+  `ros2_control` YAML, a firmware pin map, and completeness checks.
 - `BomLine` — aggregated roll-ups, **implemented** with CSV export.
 - `AssemblyStep` — ordered assembly instructions with tools and torque,
   **implemented** (`Component::assembly_plan()`), with consistency checks in
@@ -77,7 +78,8 @@ Run these in order; each layer has a check:
 7. Assembly rules: tool access, insertion order, fastener reach.
 8. Electrical rules: voltage/current/bus compatibility; connector mate.
 9. Control sanity: every commandable joint has a binding; every sensor has an
-   input; firmware pin map matches the harness.
+   input; firmware pin map matches the harness. `Component::control_checks()`
+   covers the first two.
 
 ## Import/export boundaries
 

@@ -422,6 +422,8 @@ pub(all) struct Component {
   pcb : PcbSpec?
   /// Point-to-point cable runs belonging to this component.
   wiring : Array[WireRun]
+  /// Joint-to-actuator control bindings declared on this component.
+  control : Array[ControlBinding]
 }
 
 ///|
@@ -448,6 +450,7 @@ pub fn Component::new(name : String, description~ : String = "") -> Component {
     sensor: None,
     pcb: None,
     wiring: [],
+    control: [],
   }
 }
 

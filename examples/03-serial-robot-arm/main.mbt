@@ -238,6 +238,7 @@ async fn main {
     outer_diam_mm=160.0,
     center_bore_mm=40.0,
     bolt_count=6,
+    bolt_circle_mm=120.0,
   )
   let waist = @catalog.bldc_actuator_pod(
     name="waist",
@@ -422,6 +423,10 @@ async fn main {
     tool_out_len / 2.0 - 22.0,
   )
   let grip_lead_mm = 2.0
+  let grip_travel_mm = 28.0
+  let joint_gear_ratio = 6.0
+  let can_node_base = 1
+  let joint_limit_rad = @math.PI
   let gripper = @catalog.lead_screw_gripper(
     name="gripper",
     opening_mm=30.0,
@@ -551,6 +556,42 @@ async fn main {
       child_mate="mount",
       spec=@cad.JointSpec::fixed(),
     )
+  // Control map: six CAN joint modules plus the gripper's STEP/DIR channel.
+  let arm_bindings : Array[(String, String)] = [
+    ("waist_joint", "waist"),
+    ("shoulder_joint", "shoulder"),
+    ("elbow_joint", "elbow"),
+    ("wrist_pitch_joint", "wrist_pitch"),
+    ("wrist_roll_joint", "wrist_roll"),
+    ("tool_pitch_joint", "tool_pitch"),
+  ]
+  for i in 0..<arm_bindings.length() {
+    let binding = arm_bindings[i]
+    let _ = comp.add_control_binding(
+      @cad.ControlBinding::new(
+        binding.0,
+        actuator=binding.1,
+        channel="can0:" + (can_node_base + i).to_string(),
+        gear_ratio=joint_gear_ratio,
+        soft_lower=Some(-joint_limit_rad),
+        soft_upper=Some(joint_limit_rad),
+      ),
+    )
+  }
+  let gripper_pins = "STEP=PA0; DIR=PA1; EN=PA2"
+  let _ = comp.add_control_binding(
+    @cad.ControlBinding::new(
+      "gripper_motor_shaft_joint",
+      actuator="gripper_motor_stator",
+      channel="step_dir:0",
+      mcu_pins=gripper_pins,
+      gear_ratio=1.0,
+      soft_lower=Some(0.0),
+      soft_upper=Some(grip_travel_mm / grip_lead_mm * 2.0 * @math.PI),
+      homing_input=Some("limit_home"),
+      limit_input=Some("limit_closed"),
+    ),
+  )
   let deg = @math.PI / 180.0
   let positions : Map[String, Double] = Map([])
   positions.set("waist_joint", args.double("waistDeg") * deg)
@@ -562,8 +603,8 @@ async fn main {
   let grip_mm = args.double("gripMm")
   let grip_mm = if grip_mm < 0.0 {
     0.0
-  } else if grip_mm > 28.0 {
-    28.0
+  } else if grip_mm > grip_travel_mm {
+    grip_travel_mm
   } else {
     grip_mm
   }
