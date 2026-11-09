@@ -19,8 +19,12 @@ pub fn nema_stepper(
 ) -> Component {
   let stator_name = name + "_stator"
   let rotor_name = name + "_rotor"
-  let stator_profile = @step_cad.Profile2D::rounded_rect(
-    frame_size_mm, frame_size_mm, 2.0,
+  // `rounded_rect` is anchored at (0, 0); center it so the stator body is
+  // concentric with the front boss and the rotor shaft.
+  let stator_profile = @step_cad.translate_pts(
+    @step_cad.Profile2D::rounded_rect(frame_size_mm, frame_size_mm, 2.0),
+    -frame_size_mm / 2.0,
+    -frame_size_mm / 2.0,
   )
   let stator = Component::new(stator_name, description="NEMA stepper stator")
     .with_param("frame_size_mm", frame_size_mm.to_string())

@@ -35,7 +35,7 @@ pub fn hex_standoff(name? : String, outer_flat_mm? : Double, bore_mm? : Double, 
 
 pub fn hub_motor_assembly(name? : String, stator_diam_mm? : Double, stator_width_mm? : Double, tire_diam_mm? : Double, tire_width_mm? : Double, max_effort_nm? : Double, max_vel_rad_s? : Double) -> Component
 
-pub fn l_bracket(name? : String, width_mm? : Double, leg_a_mm? : Double, leg_b_mm? : Double, thickness_mm? : Double, hole_diam_mm? : Double, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> Component
+pub fn l_bracket(name? : String, width_mm? : Double, leg_a_mm? : Double, leg_b_mm? : Double, thickness_mm? : Double, hole_diam_mm? : Double, wall_hole_diam_mm? : Double, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> Component
 
 pub fn nema_stepper(name? : String, frame_size_mm? : Double, body_length_mm? : Double, boss_diam_mm? : Double, boss_height_mm? : Double, shaft_diam_mm? : Double, shaft_length_mm? : Double, max_effort_nm? : Double, max_vel_rad_s? : Double) -> Component
 

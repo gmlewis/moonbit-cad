@@ -111,12 +111,20 @@ native unit tests. The unit tests cover primitive bridges, component
 composition, URDF compilation (including rigid merges), posed STEP export,
 every catalog component, the mimic-coupled gearbox, and the 17-link quadruped.
 
-Validation helpers live in `scripts/`:
+Validation and rendering helpers live in `scripts/` (they run from a clone of
+this repository alone; only the external tools named below are required):
 
 ```bash
 python3 scripts/validate_step.py --no-mesh model.step
 python3 scripts/validate_urdf.py --check-meshes model.urdf
+python3 scripts/render_step.py model.step preview.png          # OCCT + Inkscape
+python3 scripts/render_solidcraft.py model.step preview-shaded.png  # SolidCraft + Inkscape
 ```
+
+`render_step.py` uses OCCT `DRAWEXE` (plus `sips` or ImageMagick for PPM
+conversion). `render_solidcraft.py` uses `solidcraft-cli snapshot` for shaded
+views. Both composite four views into one PNG with Inkscape; without Inkscape
+they write the isometric view alone.
 
 ## License
 

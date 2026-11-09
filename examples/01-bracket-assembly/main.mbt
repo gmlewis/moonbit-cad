@@ -20,14 +20,18 @@ async fn main {
     return
   }
   let bracket = @cad.l_bracket(width_mm=args.double("bracketWidth"))
-  let flange = @cad.flange_plate(name="mount_flange")
+  let flange = @cad.flange_plate(
+    name="mount_flange",
+    outer_diam_mm=44.0,
+    bolt_circle_mm=32.0,
+  )
   let stepper = @cad.nema_stepper()
   let coupler = @cad.shaft_coupler()
   let bearing = @cad.ball_bearing(name="output_bearing")
   let comp = bracket
     .attach(
       "flange_merge",
-      parent_mate="base_mount",
+      parent_mate="base_top",
       flange,
       child_mate="bottom",
       spec=@cad.JointSpec::merge_rigid(),

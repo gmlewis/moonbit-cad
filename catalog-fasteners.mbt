@@ -176,7 +176,7 @@ pub fn flange_plate(
       @step_cad.Profile2D::centered_circle(outer_diam_mm),
     )
     .with_hole_at(0.0, 0.0, center_bore_mm)
-    .with_bolt_circle(bolt_count, bolt_circle_mm, bolt_diam_mm)
+    .with_bolt_circle(bolt_count, bolt_circle_mm / 2.0, bolt_diam_mm)
   let mut comp = Component::new(name, description="Flange plate")
     .with_param("outer_diam_mm", outer_diam_mm.to_string())
     .with_param("center_bore_mm", center_bore_mm.to_string())
@@ -207,8 +207,8 @@ pub fn flange_plate(
 }
 
 ///|
-/// Builds a simple L-shaped mounting bracket with a base hole and an upright
-/// wall face.
+/// Builds a simple L-shaped mounting bracket: a base plate, an upright wall,
+/// and a clearance hole through the upright for a motor boss/shaft.
 pub fn l_bracket(
   name~ : String = "l_bracket",
   width_mm~ : Double = 40.0,
@@ -216,6 +216,7 @@ pub fn l_bracket(
   leg_b_mm~ : Double = 45.0,
   thickness_mm~ : Double = 5.0,
   hole_diam_mm~ : Double = 5.0,
+  wall_hole_diam_mm~ : Double = 22.5,
   density~ : @urdf.Density = @urdf.Density::aluminum_6061(),
   color~ : @step_cad.Rgb = @step_cad.Rgb::grey(),
 ) -> Component {
@@ -223,11 +224,28 @@ pub fn l_bracket(
   let hole = @step_cad.Profile2D::centered_circle(hole_diam_mm)
   // Shift the single mounting hole toward the far end of the base leg.
   let hole_at = @step_cad.translate_pts(hole, 0.0, leg_a_mm * 0.3)
+  // The upright is an XZ profile extruded along Y.  `wall_mount` sits on its
+  // back face (Y = 0) at Z = leg_b_mm * 0.6, so put the clearance hole there.
+  let wall_z = leg_b_mm * 0.6
+  let upright_center_z = (thickness_mm + leg_b_mm) / 2.0
+  let wall_hole_y = upright_center_z - wall_z
+  let wall_holes : Array[Array[(Double, Double)]] = if wall_hole_diam_mm > 0.0 {
+    [
+      @step_cad.translate_pts(
+        @step_cad.Profile2D::circle(wall_hole_diam_mm),
+        0.0,
+        wall_hole_y,
+      ).rev(),
+    ]
+  } else {
+    []
+  }
   Component::new(name, description="L bracket")
   .with_param("width_mm", width_mm.to_string())
   .with_param("leg_a_mm", leg_a_mm.to_string())
   .with_param("leg_b_mm", leg_b_mm.to_string())
   .with_param("thickness_mm", thickness_mm.to_string())
+  .with_param("wall_hole_diam_mm", wall_hole_diam_mm.to_string())
   .add_body(
     BodyPart::extruded_profile_mm(
       name + "_base",
@@ -241,19 +259,23 @@ pub fn l_bracket(
     ),
   )
   .add_body(
-    BodyPart::box_mm(
+    BodyPart::extruded_profile_mm(
       name + "_upright",
-      width_mm,
+      @step_cad.Profile2D::centered_rect(width_mm, leg_b_mm - thickness_mm),
       thickness_mm,
-      leg_b_mm - thickness_mm,
+      holes=wall_holes,
       y_mm=thickness_mm / 2.0,
-      z_mm=(thickness_mm + leg_b_mm) / 2.0,
+      z_mm=upright_center_z,
+      rx_deg=-90.0,
       density~,
       color~,
     ),
   )
   .add_mate_mm_deg("base_mount", y=leg_a_mm * 0.6)
-  .add_mate_mm_deg("wall_mount", y=thickness_mm, z=leg_b_mm * 0.6, ry_deg=90.0)
+  .add_mate_mm_deg("base_top", y=leg_a_mm * 0.6, z=thickness_mm)
+  // +Z points out of the upright's back face (Y = 0), so a motor mounted here
+  // sits behind the wall with its shaft passing through it.
+  .add_mate_mm_deg("wall_mount", z=leg_b_mm * 0.6, rx_deg=-90.0)
 }
 
 ///|
