@@ -1,0 +1,32 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "gmlewis/cad/examples/common"
+
+import {
+  "gmlewis/cad",
+  "gmlewis/step/cli",
+}
+
+// Values
+pub fn output_paths(@cli.Args) -> OutputPaths
+
+pub fn with_output_args(Map[String, @cli.Arg]) -> Map[String, @cli.Arg]
+
+pub async fn write_output(@cad.Component, OutputPaths, joint_positions? : Map[String, Double]) -> Unit
+
+// Errors
+
+// Types and methods
+pub(all) struct OutputPaths {
+  step : String?
+  assembly : String?
+  eval : String?
+  gltf : String?
+  bpy : String?
+  blend : String?
+  urdf : String?
+  bundle : String?
+}
+
+// Type aliases
+
+// Traits

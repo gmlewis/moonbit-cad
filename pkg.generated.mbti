@@ -1,0 +1,189 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "gmlewis/cad"
+
+import {
+  "gmlewis/urdf",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn assistive_scooter_robot(name? : String, wheelbase_mm? : Double, track_width_mm? : Double, seat_height_mm? : Double, rear_wheel_r_mm? : Double, front_wheel_r_mm? : Double) -> Component
+
+pub fn ball_bearing(name? : String, inner_diam_mm? : Double, outer_diam_mm? : Double, width_mm? : Double, density? : @urdf.Density) -> Component
+
+pub fn bldc_actuator_pod(name? : String, housing_diam_mm? : Double, housing_length_mm? : Double, output_diam_mm? : Double, output_thickness_mm? : Double, reduction? : Double, lower_rad? : Double, upper_rad? : Double, max_effort_nm? : Double, max_vel_rad_s? : Double, color? : @gmlewis/step/cad.Rgb) -> Component
+
+pub fn box_tube_strut(String, width_mm~ : Double, height_mm~ : Double, length_mm~ : Double, wall_mm? : Double, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> Component
+
+pub fn centered_cuboid_node(Double, Double, Double, name? : String, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/step/cad.SceneNode
+
+pub fn centered_cylinder_node(Double, Double, name? : String, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/step/cad.SceneNode
+
+pub fn centered_extruded_profile_node(Array[(Double, Double)], Double, holes? : Array[Array[(Double, Double)]], name? : String, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/step/cad.SceneNode
+
+pub fn centered_tube_node(Double, Double, Double, segments? : Int32, name? : String, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/step/cad.SceneNode
+
+pub fn cylindrical_spacer(name? : String, outer_diam_mm? : Double, inner_diam_mm? : Double, length_mm? : Double, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> Component
+
+pub fn flange_plate(name? : String, outer_diam_mm? : Double, center_bore_mm? : Double, thickness_mm? : Double, bolt_count? : Int32, bolt_circle_mm? : Double, bolt_diam_mm? : Double, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> Component
+
+pub fn galileo_quadruped_robot(name? : String, body_len_mm? : Double, body_width_mm? : Double, body_height_mm? : Double, thigh_len_mm? : Double, calf_len_mm? : Double, wheel_radius_mm? : Double) -> Component
+
+pub fn herringbone_gear_component(String, gear_module~ : Double, num_teeth~ : Int32, gear_length_mm~ : Double, helix_angle_deg? : Double, bore_radius_mm? : Double, num_elbows? : Int32, resolution? : Int32, direction? : Double, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> Component
+
+pub fn hex_standoff(name? : String, outer_flat_mm? : Double, bore_mm? : Double, length_mm? : Double, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> Component
+
+pub fn hub_motor_assembly(name? : String, stator_diam_mm? : Double, stator_width_mm? : Double, tire_diam_mm? : Double, tire_width_mm? : Double, max_effort_nm? : Double, max_vel_rad_s? : Double) -> Component
+
+pub fn l_bracket(name? : String, width_mm? : Double, leg_a_mm? : Double, leg_b_mm? : Double, thickness_mm? : Double, hole_diam_mm? : Double, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> Component
+
+pub fn nema_stepper(name? : String, frame_size_mm? : Double, body_length_mm? : Double, boss_diam_mm? : Double, boss_height_mm? : Double, shaft_diam_mm? : Double, shaft_length_mm? : Double, max_effort_nm? : Double, max_vel_rad_s? : Double) -> Component
+
+pub fn planetary_gearbox(name? : String, params? : PlanetaryGearboxParams) -> Component
+
+pub fn quadruped_leg_assembly(String, is_left~ : Bool, hip_offset_y_mm? : Double, thigh_len_mm? : Double, calf_len_mm? : Double, wheel_radius_mm? : Double) -> Component
+
+pub fn rgb_to_rgba(@gmlewis/step/cad.Rgb, a? : Double) -> @urdf.Rgba
+
+pub fn rgba_to_rgb(@urdf.Rgba) -> @gmlewis/step/cad.Rgb
+
+pub fn robot_leg_segment(String, length_mm~ : Double, width_mm? : Double, thickness_mm? : Double, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> Component
+
+pub fn shaft_coupler(name? : String, outer_diam_mm? : Double, bore_in_mm? : Double, bore_out_mm? : Double, length_mm? : Double, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> Component
+
+pub fn step_to_urdf_matrix(@gmlewis/step/cad.Matrix3x3) -> @urdf.Matrix3x3
+
+pub fn step_to_urdf_transform(@gmlewis/step/cad.Transform) -> @urdf.Transform
+
+pub fn transform_scene_node(@gmlewis/step/cad.SceneNode, @gmlewis/step/cad.Transform) -> @gmlewis/step/cad.SceneNode
+
+pub fn transform_scene_node_urdf(@gmlewis/step/cad.SceneNode, @urdf.Transform) -> @gmlewis/step/cad.SceneNode
+
+pub fn treaded_wheel(String, radius_mm? : Double, width_mm? : Double, hub_radius_mm? : Double, density? : @urdf.Density) -> Component
+
+pub fn u_bracket(name? : String, inner_span_mm? : Double, arm_length_mm? : Double, width_mm? : Double, thickness_mm? : Double, bore_mm? : Double, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> Component
+
+pub fn urdf_to_step_matrix(@urdf.Matrix3x3) -> @gmlewis/step/cad.Matrix3x3
+
+pub fn urdf_to_step_transform(@urdf.Transform) -> @gmlewis/step/cad.Transform
+
+pub fn urdf_transform_from_mm_deg(x_mm? : Double, y_mm? : Double, z_mm? : Double, rx_deg? : Double, ry_deg? : Double, rz_deg? : Double) -> @urdf.Transform
+
+// Errors
+
+// Types and methods
+pub(all) struct Attachment {
+  joint_name : String
+  parent_mate : String
+  child : Component
+  child_mate : String
+  spec : JointSpec
+}
+
+pub(all) struct BodyPart {
+  name : String
+  node : @gmlewis/step/cad.SceneNode
+  density : @urdf.Density
+  inertial : @urdf.Inertial
+  collisions : Array[@urdf.Collision]
+}
+pub fn BodyPart::box_mm(String, Double, Double, Double, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb, x_mm? : Double, y_mm? : Double, z_mm? : Double, rx_deg? : Double, ry_deg? : Double, rz_deg? : Double) -> Self
+pub fn BodyPart::custom(String, @gmlewis/step/cad.SceneNode, @urdf.Inertial, collisions? : Array[@urdf.Collision], density? : @urdf.Density) -> Self
+pub fn BodyPart::cylinder_mm(String, Double, Double, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb, x_mm? : Double, y_mm? : Double, z_mm? : Double, rx_deg? : Double, ry_deg? : Double, rz_deg? : Double) -> Self
+pub fn BodyPart::extruded_profile_mm(String, Array[(Double, Double)], Double, holes? : Array[Array[(Double, Double)]], density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb, x_mm? : Double, y_mm? : Double, z_mm? : Double, rx_deg? : Double, ry_deg? : Double, rz_deg? : Double) -> Self
+pub fn BodyPart::transform_by(Self, @urdf.Transform) -> Self
+pub fn BodyPart::tube_mm(String, Double, Double, Double, segments? : Int32, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb, x_mm? : Double, y_mm? : Double, z_mm? : Double, rx_deg? : Double, ry_deg? : Double, rz_deg? : Double) -> Self
+
+pub(all) struct CompiledLink {
+  name : String
+  bodies : Array[BodyPart]
+  urdf_link : @urdf.Link
+}
+
+pub(all) struct Component {
+  name : String
+  description : String
+  parameters : Map[String, String]
+  bodies : Array[BodyPart]
+  mates : Map[String, @urdf.MateConnector]
+  attachments : Array[Attachment]
+  robot_name : String?
+}
+pub fn Component::add_bodies(Self, Array[BodyPart]) -> Self
+pub fn Component::add_body(Self, BodyPart) -> Self
+pub fn Component::add_mate(Self, @urdf.MateConnector) -> Self
+pub fn Component::add_mate_mm_deg(Self, String, x? : Double, y? : Double, z? : Double, rx_deg? : Double, ry_deg? : Double, rz_deg? : Double, axis? : (Double, Double, Double)) -> Self
+pub fn Component::attach(Self, String, parent_mate~ : String, Self, child_mate? : String, spec? : JointSpec) -> Self
+pub fn Component::attach_to(Self, String, String, parent_mate~ : String, Self, child_mate? : String, spec? : JointSpec) -> Self
+pub fn Component::compile_links(Self, package_name? : String?) -> (Array[CompiledLink], Array[@urdf.Joint], Array[@urdf.Transmission])
+pub fn Component::display_name(Self) -> String
+pub fn Component::format_documentation(Self) -> String
+pub fn Component::get_mate(Self, String) -> @urdf.MateConnector?
+pub fn Component::link_design(Self, String) -> @gmlewis/step/cad.Design?
+pub fn Component::new(String, description? : String) -> Self
+pub fn Component::to_assembly_step(Self, joint_positions? : Map[String, Double]) -> String
+pub fn Component::to_blender_python(Self, joint_positions? : Map[String, Double], segments? : Int32) -> String
+pub fn Component::to_design(Self, joint_positions? : Map[String, Double]) -> @gmlewis/step/cad.Design
+pub fn Component::to_gltf(Self, joint_positions? : Map[String, Double]) -> String
+pub fn Component::to_robot(Self, package_name? : String?) -> @urdf.Robot
+pub fn Component::to_step_file(Self, joint_positions? : Map[String, Double]) -> String
+pub fn Component::to_urdf_bundle(Self, package_name? : String, include_step_parts? : Bool) -> @urdf.UrdfBundle
+pub fn Component::total_mass_kg(Self) -> Double
+pub fn Component::with_description(Self, String) -> Self
+pub fn Component::with_param(Self, String, String) -> Self
+pub fn Component::with_robot_name(Self, String) -> Self
+
+#derive(Eq, @debug.Debug)
+pub(all) enum ConnectionKind {
+  MergeRigid
+  Fixed
+  Revolute(@urdf.JointLimit)
+  Continuous(@urdf.JointLimit?)
+  Prismatic(@urdf.JointLimit)
+}
+pub fn ConnectionKind::equal(Self, Self) -> Bool
+pub fn ConnectionKind::to_repr(Self) -> @debug.Repr
+
+#derive(Eq, @debug.Debug)
+pub(all) struct JointSpec {
+  kind : ConnectionKind
+  offset_mm : Double
+  angle_deg : Double
+  flip_axis : Bool
+  dynamics : @urdf.JointDynamics?
+  mimic : @urdf.JointMimic?
+  transmission_reduction : Double?
+}
+pub fn JointSpec::continuous(limit? : @urdf.JointLimit?, offset_mm? : Double, angle_deg? : Double, flip_axis? : Bool, dynamics? : @urdf.JointDynamics?, mimic? : @urdf.JointMimic?, transmission_reduction? : Double?) -> Self
+pub fn JointSpec::equal(Self, Self) -> Bool
+pub fn JointSpec::fixed(offset_mm? : Double, angle_deg? : Double, flip_axis? : Bool) -> Self
+pub fn JointSpec::merge_rigid(offset_mm? : Double, angle_deg? : Double, flip_axis? : Bool) -> Self
+pub fn JointSpec::prismatic(@urdf.JointLimit, offset_mm? : Double, angle_deg? : Double, flip_axis? : Bool, dynamics? : @urdf.JointDynamics?, mimic? : @urdf.JointMimic?, transmission_reduction? : Double?) -> Self
+pub fn JointSpec::revolute(@urdf.JointLimit, offset_mm? : Double, angle_deg? : Double, flip_axis? : Bool, dynamics? : @urdf.JointDynamics?, mimic? : @urdf.JointMimic?, transmission_reduction? : Double?) -> Self
+pub fn JointSpec::to_repr(Self) -> @debug.Repr
+
+pub(all) struct PlanetaryGearboxParams {
+  gear_module : Double
+  gear_length_mm : Double
+  helix_angle_deg : Double
+  sun_teeth : Int32
+  planet_teeth : Int32
+  num_planets : Int32
+  pressure_angle_deg : Double
+  num_elbows : Int32
+  resolution : Int32
+  bore_radius_mm : Double
+  tolerance_mm : Double
+  outer_thickness_mm : Double
+  include_carrier : Bool
+}
+pub fn PlanetaryGearboxParams::default() -> Self
+
+pub(all) enum VisualMode {
+  Primitives
+  MeshPackage(String)
+}
+
+// Type aliases
+
+// Traits
