@@ -94,6 +94,7 @@ pub fn ball_bearing(
     width_mm.to_string(),
     "steel",
     unit_cost_usd,
+    supplier_url="https://www.mcmaster.com/bearings/",
   )
   @cad.Component::new(name, description="Ball bearing")
   .with_param("inner_diam_mm", inner_diam_mm.to_string())
@@ -153,6 +154,7 @@ pub fn shaft_coupler(
     "Shaft coupler " + outer_diam_mm.to_string() + " mm",
     "aluminum",
     unit_cost_usd,
+    supplier_url="https://www.mcmaster.com/shaft-couplings/",
   )
   @cad.Component::new(name, description="Shaft coupler")
   .with_param("outer_diam_mm", outer_diam_mm.to_string())
@@ -427,6 +429,7 @@ pub fn socket_head_screw(
     "Socket head cap screw " + thread + " x " + length_mm.to_string() + " mm",
     "steel",
     unit_cost_usd,
+    supplier_url="https://www.mcmaster.com/screws/socket-head-cap-screws/",
   )
   @cad.Component::new(name, description="Socket head cap screw")
   .with_param("thread", thread)

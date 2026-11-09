@@ -8,11 +8,13 @@ fn purchased_part(
   description : String,
   material : String,
   unit_cost_usd : Double,
+  supplier_url~ : String = "",
 ) -> @cad.PartMeta {
   @cad.PartMeta::new(
     part_number,
     description~,
     supplier="generic",
+    supplier_url~,
     material~,
     process="purchased",
     unit_cost_usd~,
@@ -27,11 +29,13 @@ fn fabricated_part(
   material : String,
   process : String,
   unit_cost_usd : Double,
+  supplier_url~ : String = "",
 ) -> @cad.PartMeta {
   @cad.PartMeta::new(
     part_number,
     description~,
     supplier="in-house",
+    supplier_url~,
     material~,
     process~,
     unit_cost_usd~,

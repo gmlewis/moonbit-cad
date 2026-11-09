@@ -21,7 +21,7 @@ or an entire robot. It contains:
 | `bodies : Array[BodyPart]` | Rigid solids with CAD geometry, density, exact inertia, and collision primitives. |
 | `mates : Map[String, @urdf.MateConnector]` | Named attachment frames other components snap onto. |
 | `attachments : Array[Attachment]` | Child components plus the joint that connects them. |
-| `part : PartMeta?` | Purchasing/manufacturing data (part number, supplier, material, process, cost). |
+| `part : PartMeta?` | Purchasing/manufacturing data (part number, supplier and URL, material, process, cost). |
 | `ports : Array[Port]` | Typed electrical/mechanical interfaces (power, signal, bus, sensor). |
 | `fasteners : Array[Fastener]` | Fastener schedule: thread, length, engagement, quantity, torque, references. |
 | `fits : Array[Fit]` | Named fits with a nominal size and allowed min/max range. |
@@ -120,7 +120,7 @@ python3 scripts/validate_urdf.py --check-meshes \
 
 Every example accepts `--bom <file.csv>`, which rolls the component tree up
 into aggregated part lines (part number, description, quantity, supplier,
-material, process, finish, unit and total cost, notes). Components with their
+supplier URL, material, process, finish, unit and total cost, notes). Components with their
 own `part` are counted as one purchased/assembled item and their bodies are not
 double-counted; attachments marked `bom_external=false` (such as a motor's
 rotor) stay internal, while bolted-on children are collected. Any body or
@@ -167,6 +167,30 @@ joint is bound and that every referenced joint, actuator, and input resolves.
 ./run-example.sh 03 --control 03-control.yaml --pins 03-pins.csv
 ```
 
+### Build package
+
+`--package <dir>` writes everything needed to source, fabricate, assemble, and
+test one example:
+
+| File | Contents |
+| --- | --- |
+| `README.md` | Manifest: part counts, cost, assembly steps, warnings, file list, validation commands. |
+| `bom.csv` | Aggregated bill of materials. |
+| `sourcing.csv` | Suppliers, supplier links, quantities, and cost roll-up. |
+| `print-list.csv` | Fabricated parts with orientation, layer height, infill, supports, and process notes. |
+| `fasteners.csv` | Fastener schedule and torque table. |
+| `assembly.txt` | Ordered steps, torque table, electrical checkout, and test sequence. |
+| `report.txt` | Power, IO, and wiring budget. |
+| `control.yaml`, `pins.csv` | `ros2_control` configuration and firmware pin map. |
+| `assembly.step` | Posed assembly STEP. |
+| `bundle/` | URDF, `package.xml`, glTF meshes, and per-link STEP parts. |
+
+```bash
+./run-example.sh 03 --package build/03 --check
+python3 scripts/validate_step.py --no-mesh build/03/assembly.step
+python3 scripts/validate_urdf.py --check-meshes build/03/bundle/urdf/*.urdf
+```
+
 ## Development
 
 ```bash
@@ -178,7 +202,8 @@ native unit tests. The unit tests cover primitive bridges, component
 composition, URDF compilation (including rigid merges), posed STEP export,
 bill-of-materials roll-up, assembly plans and hardware checks, power/IO
 budgets, control export and joint-completeness checks, forward-kinematics pose
-smoke tests, every catalog component, the sensor catalog, the mimic-coupled
+smoke tests, build-package generation (sourcing, print list, torque table,
+manifest), every catalog component, the sensor catalog, the mimic-coupled
 gearbox, and the 17-link quadruped.
 
 Validation and rendering helpers live in `scripts/` (they run from a clone of

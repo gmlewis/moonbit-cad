@@ -11,6 +11,7 @@ pub(all) struct PartMeta {
   part_number : String
   description : String
   supplier : String
+  supplier_url : String
   material : String
   process : String
   finish : String
@@ -23,6 +24,7 @@ pub fn PartMeta::new(
   part_number : String,
   description~ : String = "",
   supplier~ : String = "",
+  supplier_url~ : String = "",
   material~ : String = "",
   process~ : String = "",
   finish~ : String = "",
@@ -33,6 +35,7 @@ pub fn PartMeta::new(
     part_number,
     description,
     supplier,
+    supplier_url,
     material,
     process,
     finish,
@@ -44,6 +47,14 @@ pub fn PartMeta::new(
 ///|
 pub fn PartMeta::with_notes(self : PartMeta, notes : String) -> PartMeta {
   { ..self, notes, }
+}
+
+///|
+pub fn PartMeta::with_supplier_url(
+  self : PartMeta,
+  supplier_url : String,
+) -> PartMeta {
+  { ..self, supplier_url, }
 }
 
 ///|
@@ -162,6 +173,7 @@ pub(all) struct BomLine {
   description : String
   quantity : Int32
   supplier : String
+  supplier_url : String
   material : String
   process : String
   finish : String
@@ -206,6 +218,7 @@ pub fn Bom::add(self : Bom, part : PartMeta, quantity : Int32) -> Bom {
     description: part.description,
     quantity,
     supplier: part.supplier,
+    supplier_url: part.supplier_url,
     material: part.material,
     process: part.process,
     finish: part.finish,
@@ -248,8 +261,8 @@ fn csv_row(fields : Array[String]) -> String {
 /// Renders the bill of materials as CSV with a header and a final newline.
 pub fn Bom::to_csv(self : Bom) -> String {
   let header : Array[String] = [
-    "part_number", "description", "quantity", "supplier", "material", "process",
-    "finish", "unit_cost_usd", "total_cost_usd", "notes",
+    "part_number", "description", "quantity", "supplier", "supplier_url", "material",
+    "process", "finish", "unit_cost_usd", "total_cost_usd", "notes",
   ]
   let rows : Array[String] = [csv_row(header.map(fn(v) { csv_field(v) }))]
   for line in self.lines {
@@ -259,6 +272,7 @@ pub fn Bom::to_csv(self : Bom) -> String {
         csv_field(line.description),
         line.quantity.to_string(),
         csv_field(line.supplier),
+        csv_field(line.supplier_url),
         csv_field(line.material),
         csv_field(line.process),
         csv_field(line.finish),

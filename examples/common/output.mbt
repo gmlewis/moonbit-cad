@@ -18,6 +18,7 @@ pub(all) struct OutputPaths {
   report : String?
   control : String?
   pins : String?
+  build_package : String?
   check : Bool
 }
 
@@ -94,6 +95,12 @@ pub fn with_output_args(spec : Map[String, @cli.Arg]) -> Map[String, @cli.Arg] {
     ),
   )
   spec.set(
+    "package",
+    @cli.opt_string(
+      help="Write the complete build package (BOM, sourcing, procedure, control, URDF bundle) to a directory",
+    ),
+  )
+  spec.set(
     "check",
     @cli.flag(help="Print assembly/hardware warnings to stderr"),
   )
@@ -117,6 +124,7 @@ pub fn output_paths(args : @cli.Args) -> OutputPaths {
     report: args.string_opt("report"),
     control: args.string_opt("control"),
     pins: args.string_opt("pins"),
+    build_package: args.string_opt("package"),
     check: args.flag("check"),
   }
 }
@@ -135,7 +143,8 @@ fn any_output(output : OutputPaths) -> Bool {
   output.plan is Some(_) ||
   output.report is Some(_) ||
   output.control is Some(_) ||
-  output.pins is Some(_)
+  output.pins is Some(_) ||
+  output.build_package is Some(_)
 }
 
 ///|
@@ -249,6 +258,17 @@ pub async fn write_output(
   match output.pins {
     Some(_) =>
       @step_cad.write_text_file(comp.to_pin_map_csv(), stdout_path(output.pins))
+    None => ()
+  }
+  match output.build_package {
+    Some(dir) => {
+      @fs.mkdir(dir, recursive=true, allow_exist=true)
+      for file in comp.build_package_files() {
+        @step_cad.write_text_file(file.content, Some(dir + "/" + file.path))
+      }
+      design.write_step_file(Some(dir + "/assembly.step"))
+      comp.to_urdf_bundle().write_to_dir(dir + "/bundle", checked=true)
+    }
     None => ()
   }
 }

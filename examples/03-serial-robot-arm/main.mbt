@@ -556,6 +556,7 @@ async fn main {
       child_mate="mount",
       spec=@cad.JointSpec::fixed(),
     )
+    .with_robot_name("serial_robot_arm")
   // Control map: six CAN joint modules plus the gripper's STEP/DIR channel.
   let arm_bindings : Array[(String, String)] = [
     ("waist_joint", "waist"),

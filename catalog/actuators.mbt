@@ -75,6 +75,7 @@ pub fn nema_stepper(
     "NEMA stepper " + frame_size_mm.to_string() + " mm",
     "mixed",
     unit_cost_usd,
+    supplier_url="https://www.omc-stepperonline.com/",
   )
   let nema_small_frame_mm = 25.0
   let small_rated_current_a = 0.6
@@ -191,6 +192,7 @@ pub fn bldc_actuator_pod(
     "QDD actuator pod " + housing_diam_mm.to_string() + " mm",
     "mixed",
     unit_cost_usd,
+    supplier_url="https://www.odriverobotics.com/",
   )
   let spec = @cad.ActuatorSpec::new(
     @cad.ActuatorKind::Bldc,
@@ -287,6 +289,7 @@ pub fn hub_motor_assembly(
     "Hub motor wheel " + tire_diam_mm.to_string() + " mm",
     "mixed",
     unit_cost_usd,
+    supplier_url="https://www.alibaba.com/",
   )
   let spec = @cad.ActuatorSpec::new(
     @cad.ActuatorKind::Hub,

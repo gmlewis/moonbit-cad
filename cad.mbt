@@ -169,6 +169,21 @@
 /// let warnings = assembly.control_checks()
 /// ```
 ///
+/// ## Build package
+///
+/// `Component::build_package_files()` returns the text files for a complete
+/// build package: the manifest, BOM, sourcing with supplier links, print/cut
+/// list with process settings, fastener torque table, assembly and test
+/// procedure, power/IO report, `ros2_control` configuration, and pin map. The
+/// example CLI's `--package <dir>` also writes the posed assembly STEP and the
+/// URDF/glTF/per-link-STEP bundle.
+///
+/// ```mbt
+/// for file in assembly.build_package_files() {
+///   write_text_file(file.content, Some(dir + "/" + file.path))
+/// }
+/// ```
+///
 /// ## Module map
 ///
 /// | File | Contents |
@@ -178,6 +193,7 @@
 /// | `assembly.mbt` | `PartMeta`, `Port`, `Fit`, `Fastener`, assembly plans, and bill-of-materials roll-up/CSV. |
 /// | `electronics.mbt` | `ActuatorSpec`, `SensorSpec`, `PcbSpec`, `WireRun`, and the power/IO budget report. |
 /// | `control.mbt` | `ControlBinding`, `ros2_control` YAML, firmware pin map, and control-completeness checks. |
+/// | `build.mbt` | Sourcing, print/cut list, fastener torque table, procedure, and build-package manifest. |
 /// | `compile-step.mbt` | `Component` → posed `@step_cad.Design` through forward kinematics. |
 /// | `compile-urdf.mbt` | `Component` → `@urdf.Robot` and `@urdf.UrdfBundle` (with real `.gltf` and `.step` assets). |
 /// | `catalog/fasteners.mbt` | Standoffs, bushings, bearings, couplers, and L/U/flange brackets. |
