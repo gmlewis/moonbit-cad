@@ -298,6 +298,69 @@ pub fn Component::build_procedure_text(self : Component) -> String {
 }
 
 ///|
+fn Component::collect_link_parts(
+  self : Component,
+  rows : Array[(String, String, Int32, Bool)],
+) -> Unit {
+  let part_numbers : Array[String] = []
+  let mut fabricated = false
+  match self.part {
+    Some(part) => {
+      part_numbers.push(part.part_number)
+      if part.process != "purchased" {
+        fabricated = true
+      }
+    }
+    None => ()
+  }
+  for body in self.bodies {
+    match body.part {
+      Some(part) =>
+        if !array_has(part_numbers, part.part_number) {
+          part_numbers.push(part.part_number)
+          if part.process != "purchased" {
+            fabricated = true
+          }
+        }
+      None => ()
+    }
+  }
+  rows.push(
+    (
+      self.name,
+      array_join(part_numbers, "; "),
+      self.bodies.length(),
+      fabricated,
+    ),
+  )
+  for att in self.attachments {
+    att.child.collect_link_parts(rows)
+  }
+}
+
+///|
+/// Maps each exportable link (component) to the BOM part numbers of its bodies.
+pub fn Component::link_parts_csv(self : Component) -> String {
+  let header : Array[String] = [
+    "link", "part_numbers", "body_count", "fabricated",
+  ]
+  let rows : Array[String] = [csv_row(header.map(fn(v) { csv_field(v) }))]
+  let entries : Array[(String, String, Int32, Bool)] = []
+  self.collect_link_parts(entries)
+  for entry in entries {
+    rows.push(
+      csv_row([
+        csv_field(entry.0),
+        csv_field(entry.1),
+        entry.2.to_string(),
+        csv_field(if entry.3 { "true" } else { "false" }),
+      ]),
+    )
+  }
+  rows.fold(init="", fn(acc, row) { acc + row + "\n" })
+}
+
+///|
 fn Component::collect_pcb_specs(
   self : Component,
   path : String,
@@ -432,6 +495,8 @@ pub fn Component::build_manifest(
   out = out + "| `pins.csv` | Firmware pin map. |\n"
   out = out + "| `pcb-connectors.csv` | Imported PCB connector placements. |\n"
   out = out +
+    "| `link-parts.csv` | Link-to-part map for drawing generation. |\n"
+  out = out +
     "| `bundle/` | URDF, `package.xml`, glTF meshes, and per-link STEP parts. |\n"
   out = out + "\n## Validation\n\n"
   out = out + "```bash\n"
@@ -460,5 +525,6 @@ pub fn Component::build_package_files(
     BuildFile::new("control.yaml", self.to_ros2_control_yaml()),
     BuildFile::new("pins.csv", self.to_pin_map_csv()),
     BuildFile::new("pcb-connectors.csv", self.pcb_placements_csv()),
+    BuildFile::new("link-parts.csv", self.link_parts_csv()),
   ]
 }

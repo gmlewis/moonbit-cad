@@ -196,6 +196,7 @@ pub fn Component::format_documentation(Self) -> String
 pub fn Component::get_mate(Self, String) -> @urdf.MateConnector?
 pub fn Component::harness_checks(Self) -> Array[String]
 pub fn Component::link_design(Self, String) -> @gmlewis/step/cad.Design?
+pub fn Component::link_parts_csv(Self) -> String
 pub fn Component::new(String, description? : String) -> Self
 pub fn Component::pcb_placements_csv(Self) -> String
 pub fn Component::power_budget(Self) -> PowerBudget

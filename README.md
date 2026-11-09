@@ -192,6 +192,7 @@ test one example:
 | `report.txt` | Power, IO, and wiring budget. |
 | `control.yaml`, `pins.csv` | `ros2_control` configuration and firmware pin map. |
 | `pcb-connectors.csv` | Imported PCB connector placements (reference, value, footprint, position, side). |
+| `link-parts.csv` | Link-to-part map used by the drawing generator. |
 | `assembly.step` | Posed assembly STEP. |
 | `bundle/` | URDF, `package.xml`, glTF meshes, and per-link STEP parts. |
 
@@ -199,6 +200,20 @@ test one example:
 ./run-example.sh 03 --package build/03 --check
 python3 scripts/validate_step.py --no-mesh build/03/assembly.step
 python3 scripts/validate_urdf.py --check-meshes build/03/bundle/urdf/*.urdf
+```
+
+### Drawings
+
+`scripts/make_drawings.py` turns a package into formal A3 drawing sheets. For
+every fabricated link it exports front, top, right, and isometric DXF views
+with SolidCraft (near-orthographic cameras), composes an SVG sheet with a title
+block and print settings, converts it to PDF when Inkscape is available, and
+writes `drawings/index.md`. The raw DXF views are kept in `drawings/dxf/`.
+
+```bash
+python3 scripts/make_drawings.py build/03
+# drawings/index.md, <link>.svg, <link>.pdf,
+# drawings/dxf/<link>-{front,top,right,iso}.dxf
 ```
 
 ### KiCad PCB import
@@ -232,7 +247,8 @@ budgets, cable-route length and wire checks, control export and
 joint-completeness checks, forward-kinematics pose smoke tests, build-package
 generation (sourcing, print list, torque table, manifest), KiCad placement
 import, every catalog component, the sensor and harness catalogs, the
-mimic-coupled gearbox, and the 17-link quadruped.
+mimic-coupled gearbox, and the 17-link quadruped. Drawing sheets are generated
+by `scripts/make_drawings.py` from a built package.
 
 Validation and rendering helpers live in `scripts/` (they run from a clone of
 this repository alone; only the external tools named below are required):
@@ -242,6 +258,7 @@ python3 scripts/validate_step.py --no-mesh model.step
 python3 scripts/validate_urdf.py --check-meshes model.urdf
 python3 scripts/render_step.py model.step preview.png          # OCCT + Inkscape
 python3 scripts/render_solidcraft.py model.step preview-shaded.png  # SolidCraft + Inkscape
+python3 scripts/make_drawings.py build/03                            # SolidCraft (+ Inkscape for PDF)
 ```
 
 `render_step.py` uses OCCT `DRAWEXE` (plus `sips` or ImageMagick for PPM

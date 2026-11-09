@@ -120,7 +120,7 @@ test "build package files cover sourcing, print list, torque, and procedure" {
   assert_true(manifest.contains("`sourcing.csv`"))
   assert_true(manifest.contains("bundle/parts"))
   let files = root.build_package_files(name="demo")
-  assert_eq(files.length(), 10)
+  assert_eq(files.length(), 11)
   let names : Array[String] = files.map(fn(file) { file.path })
   for
     name in [

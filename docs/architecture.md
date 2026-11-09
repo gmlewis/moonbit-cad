@@ -24,7 +24,7 @@ living document: add to it as the layers below gain content.
 | Sensing | Limit switches, encoders, IMUs, cameras, force sensors | `gmlewis/cad` (`electronics.mbt`) + `catalog/sensors` |
 | Electronics | PCB envelopes, connectors, keepouts, wiring/harness | `gmlewis/cad` (`electronics.mbt`); KiCad import future |
 | Assembly | BOM, fastener schedules, fits/clearances, assembly steps, part numbers | `gmlewis/cad` (`assembly.mbt`; steps future) |
-| Export | STEP/URDF/SDF/glTF, `ros2_control`, firmware pin maps, BOM, build package | `gmlewis/cad` (`control.mbt`, `assembly.mbt`, `electronics.mbt`, `build.mbt`); drawings future |
+| Export | STEP/URDF/SDF/glTF, `ros2_control`, firmware pin maps, BOM, build package, drawings | `gmlewis/cad` (`control.mbt`, `assembly.mbt`, `electronics.mbt`, `build.mbt`) + `scripts/make_drawings.py` |
 
 Create a future package only when it has real content; do not add empty
 placeholder packages.
