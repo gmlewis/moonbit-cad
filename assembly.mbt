@@ -111,6 +111,7 @@ pub(all) enum PortKind {
   Bus
   Fluid
   Sensor
+  Ground
 }
 
 ///|
@@ -512,6 +513,10 @@ fn Component::collect_component_names(
 ) -> Unit {
   names.push(self.name)
   for att in self.attachments {
+    // A fastener that references the joint that installs it is a mounting
+    // fastener, so it belongs to the attach step rather than this component's
+    // internal build.
+    names.push(att.joint_name)
     att.child.collect_component_names(names)
   }
 }
@@ -759,6 +764,7 @@ fn Component::collect_assembly_checks(
       }
     }
   }
+  self.collect_electronics_checks(path, warnings)
   for att in self.attachments {
     // An internal attachment belongs to this purchased/assembled item; an
     // external one is a separate item even when the parent has a part.

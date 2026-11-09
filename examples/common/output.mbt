@@ -15,6 +15,7 @@ pub(all) struct OutputPaths {
   bundle : String?
   bom : String?
   plan : String?
+  report : String?
   check : Bool
 }
 
@@ -75,6 +76,12 @@ pub fn with_output_args(spec : Map[String, @cli.Arg]) -> Map[String, @cli.Arg] {
     ),
   )
   spec.set(
+    "report",
+    @cli.opt_string(
+      help="Write power/IO/wiring report to path ('-' for stdout)",
+    ),
+  )
+  spec.set(
     "check",
     @cli.flag(help="Print assembly/hardware warnings to stderr"),
   )
@@ -95,6 +102,7 @@ pub fn output_paths(args : @cli.Args) -> OutputPaths {
     bundle: args.string_opt("bundle"),
     bom: args.string_opt("bom"),
     plan: args.string_opt("plan"),
+    report: args.string_opt("report"),
     check: args.flag("check"),
   }
 }
@@ -110,7 +118,8 @@ fn any_output(output : OutputPaths) -> Bool {
   output.urdf is Some(_) ||
   output.bundle is Some(_) ||
   output.bom is Some(_) ||
-  output.plan is Some(_)
+  output.plan is Some(_) ||
+  output.report is Some(_)
 }
 
 ///|
@@ -198,6 +207,11 @@ pub async fn write_output(
         comp.assembly_plan_text(),
         stdout_path(output.plan),
       )
+    None => ()
+  }
+  match output.report {
+    Some(_) =>
+      @step_cad.write_text_file(comp.report_text(), stdout_path(output.report))
     None => ()
   }
 }

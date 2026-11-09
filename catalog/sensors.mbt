@@ -1,0 +1,408 @@
+///|
+/// Sensors and electronics envelopes: limit switches, encoders, IMUs, cameras,
+/// force sensors, and PCB outlines.
+
+///|
+/// Builds a micro limit switch: a small body on a `mount` face at `Z = 0`.
+///
+/// The body extends along `+Z`, so attaching the `mount` mate to a shelf makes
+/// the switch sit on that shelf.  Ports: `signal`, `power`, `ground`.
+pub fn limit_switch(
+  name~ : String = "limit_switch",
+  body_len_mm~ : Double = 10.0,
+  body_w_mm~ : Double = 6.0,
+  body_h_mm~ : Double = 3.0,
+  voltage_v~ : Double = 5.0,
+  current_ma~ : Double = 10.0,
+  color~ : @step_cad.Rgb = @step_cad.Rgb::red(),
+) -> @cad.Component {
+  let unit_cost_usd = 2.5
+  let part = purchased_part(
+    "LIMIT-SW-MICRO", "Micro limit switch", "mixed", unit_cost_usd,
+  )
+  let sensor = @cad.SensorSpec::new(
+    @cad.SensorKind::LimitSwitch,
+    model="microswitch",
+    interface="GPIO",
+    voltage_v~,
+    current_ma~,
+    range="5 mm",
+    resolution="binary",
+  )
+  let screw = purchased_part(
+    "SHCS-M2x6", "Socket head cap screw M2 x 6", "steel", 0.2,
+  )
+  @cad.Component::new(name, description="Micro limit switch")
+  .with_param("voltage_v", voltage_v.to_string())
+  .with_param("current_ma", current_ma.to_string())
+  .add_body(
+    @cad.BodyPart::box_mm(
+      name + "_body",
+      body_len_mm,
+      body_w_mm,
+      body_h_mm,
+      z_mm=body_h_mm / 2.0,
+      density=@urdf.Density::pla(),
+      color~,
+    ),
+  )
+  .add_mate_mm_deg("mount")
+  .with_part(part)
+  .with_sensor(sensor)
+  .add_port(@cad.Port::new("signal", @cad.PortKind::Signal, spec="NO to GND"))
+  .add_port(
+    @cad.Port::new(
+      "power",
+      @cad.PortKind::Power,
+      spec=voltage_v.to_string() + " V, " + current_ma.to_string() + " mA",
+    ),
+  )
+  .add_port(@cad.Port::new("ground", @cad.PortKind::Ground, spec="0 V"))
+  .add_fastener(
+    @cad.Fastener::new(
+      "mount_screws",
+      @cad.FastenerKind::Screw,
+      thread="M2",
+      length_mm=6.0,
+      engagement_mm=3.0,
+      quantity=2,
+      torque_nm=0.3,
+      references=[name + "_body"],
+      part=Some(screw),
+    ),
+  )
+}
+
+///|
+/// Builds a magnetic encoder: a code disc under a small readout board.
+pub fn magnetic_encoder(
+  name~ : String = "magnetic_encoder",
+  disc_diam_mm~ : Double = 22.0,
+  board_len_mm~ : Double = 20.0,
+  voltage_v~ : Double = 3.3,
+  current_ma~ : Double = 15.0,
+) -> @cad.Component {
+  let unit_cost_usd = 8.0
+  let part = purchased_part(
+    "ENC-MAG-14BIT", "Magnetic encoder 14-bit", "mixed", unit_cost_usd,
+  )
+  let sensor = @cad.SensorSpec::new(
+    @cad.SensorKind::Encoder,
+    model="magnetic 14-bit",
+    interface="SPI",
+    voltage_v~,
+    current_ma~,
+    range="360 deg",
+    resolution="0.022 deg",
+  )
+  @cad.Component::new(name, description="Magnetic encoder")
+  .with_param("disc_diam_mm", disc_diam_mm.to_string())
+  .with_param("voltage_v", voltage_v.to_string())
+  .with_param("current_ma", current_ma.to_string())
+  .add_body(
+    @cad.BodyPart::cylinder_mm(
+      name + "_disc",
+      disc_diam_mm,
+      2.0,
+      z_mm=-1.0,
+      density=@urdf.Density::aluminum_6061(),
+      color=@step_cad.Rgb::grey(),
+    ),
+  )
+  .add_body(
+    @cad.BodyPart::box_mm(
+      name + "_board",
+      board_len_mm,
+      board_len_mm,
+      1.6,
+      z_mm=4.0,
+      density=@urdf.Density::pla(),
+      color=@step_cad.Rgb::green(),
+    ),
+  )
+  .add_mate_mm_deg("shaft", z=-2.0)
+  .add_mate_mm_deg("mount", z=4.8)
+  .with_part(part)
+  .with_sensor(sensor)
+  .add_port(
+    @cad.Port::new(
+      "power",
+      @cad.PortKind::Power,
+      spec=voltage_v.to_string() + " V, " + current_ma.to_string() + " mA",
+    ),
+  )
+  .add_port(@cad.Port::new("spi", @cad.PortKind::Bus, spec="SPI, 10 MHz"))
+  .add_port(@cad.Port::new("ground", @cad.PortKind::Ground, spec="0 V"))
+}
+
+///|
+/// Builds a six-axis IMU board.
+pub fn imu_module(
+  name~ : String = "imu_module",
+  board_mm~ : Double = 16.0,
+  voltage_v~ : Double = 3.3,
+  current_ma~ : Double = 5.0,
+) -> @cad.Component {
+  let unit_cost_usd = 6.0
+  let part = purchased_part("IMU-6AXIS", "6-axis IMU", "mixed", unit_cost_usd)
+  let sensor = @cad.SensorSpec::new(
+    @cad.SensorKind::Imu,
+    model="6-axis IMU",
+    interface="I2C",
+    voltage_v~,
+    current_ma~,
+    range="+/-16 g, +/-2000 deg/s",
+    resolution="16-bit",
+  )
+  @cad.Component::new(name, description="Six-axis IMU")
+  .with_param("voltage_v", voltage_v.to_string())
+  .with_param("current_ma", current_ma.to_string())
+  .add_body(
+    @cad.BodyPart::box_mm(
+      name + "_board",
+      board_mm,
+      board_mm,
+      1.6,
+      z_mm=0.8,
+      density=@urdf.Density::pla(),
+      color=@step_cad.Rgb::green(),
+    ),
+  )
+  .add_mate_mm_deg("mount")
+  .with_part(part)
+  .with_sensor(sensor)
+  .add_port(
+    @cad.Port::new(
+      "power",
+      @cad.PortKind::Power,
+      spec=voltage_v.to_string() + " V, " + current_ma.to_string() + " mA",
+    ),
+  )
+  .add_port(@cad.Port::new("i2c", @cad.PortKind::Bus, spec="I2C, 400 kHz"))
+  .add_port(@cad.Port::new("ground", @cad.PortKind::Ground, spec="0 V"))
+}
+
+///|
+/// Builds a camera module: a housing with a lens and a CSI/USB interface.
+pub fn camera_module(
+  name~ : String = "camera_module",
+  body_mm~ : Double = 30.0,
+  body_h_mm~ : Double = 12.0,
+  lens_diam_mm~ : Double = 12.0,
+  voltage_v~ : Double = 5.0,
+  current_ma~ : Double = 250.0,
+) -> @cad.Component {
+  let unit_cost_usd = 35.0
+  let part = purchased_part(
+    "CAM-1080P", "1080p camera module", "mixed", unit_cost_usd,
+  )
+  let sensor = @cad.SensorSpec::new(
+    @cad.SensorKind::Camera,
+    model="1080p camera",
+    interface="MIPI CSI-2",
+    voltage_v~,
+    current_ma~,
+    range="1920 x 1080",
+    resolution="60 fps",
+  )
+  @cad.Component::new(name, description="Camera module")
+  .with_param("voltage_v", voltage_v.to_string())
+  .with_param("current_ma", current_ma.to_string())
+  .add_body(
+    @cad.BodyPart::box_mm(
+      name + "_body",
+      body_mm,
+      body_mm,
+      body_h_mm,
+      z_mm=body_h_mm / 2.0,
+      density=@urdf.Density::pla(),
+      color=@step_cad.Rgb::black(),
+    ),
+  )
+  .add_body(
+    @cad.BodyPart::cylinder_mm(
+      name + "_lens",
+      lens_diam_mm,
+      6.0,
+      z_mm=body_h_mm + 3.0,
+      density=@urdf.Density::pla(),
+      color=@step_cad.Rgb::blue(),
+    ),
+  )
+  .add_mate_mm_deg("mount")
+  .add_mate_mm_deg("lens_axis", z=body_h_mm + 6.0)
+  .with_part(part)
+  .with_sensor(sensor)
+  .add_port(
+    @cad.Port::new(
+      "power",
+      @cad.PortKind::Power,
+      spec=voltage_v.to_string() + " V, " + current_ma.to_string() + " mA",
+    ),
+  )
+  .add_port(
+    @cad.Port::new("csi", @cad.PortKind::Bus, spec="MIPI CSI-2, 2 lanes"),
+  )
+  .add_port(@cad.Port::new("ground", @cad.PortKind::Ground, spec="0 V"))
+}
+
+///|
+/// Builds a force sensor (load cell or FSR) with an analog output.
+pub fn force_sensor(
+  name~ : String = "force_sensor",
+  body_len_mm~ : Double = 20.0,
+  body_w_mm~ : Double = 10.0,
+  body_h_mm~ : Double = 5.0,
+  voltage_v~ : Double = 5.0,
+  current_ma~ : Double = 5.0,
+) -> @cad.Component {
+  let unit_cost_usd = 9.0
+  let part = purchased_part(
+    "FSR-50N", "Force sensor 0-50 N", "mixed", unit_cost_usd,
+  )
+  let sensor = @cad.SensorSpec::new(
+    @cad.SensorKind::Force,
+    model="FSR 0-50 N",
+    interface="analog",
+    voltage_v~,
+    current_ma~,
+    range="0-50 N",
+    resolution="0.1 N",
+  )
+  @cad.Component::new(name, description="Force sensor")
+  .with_param("voltage_v", voltage_v.to_string())
+  .with_param("current_ma", current_ma.to_string())
+  .add_body(
+    @cad.BodyPart::box_mm(
+      name + "_body",
+      body_len_mm,
+      body_w_mm,
+      body_h_mm,
+      z_mm=body_h_mm / 2.0,
+      density=@urdf.Density::pla(),
+      color=@step_cad.Rgb::orange(),
+    ),
+  )
+  .add_mate_mm_deg("mount")
+  .add_mate_mm_deg("sense_face", z=body_h_mm)
+  .with_part(part)
+  .with_sensor(sensor)
+  .add_port(
+    @cad.Port::new(
+      "power",
+      @cad.PortKind::Power,
+      spec=voltage_v.to_string() + " V, " + current_ma.to_string() + " mA",
+    ),
+  )
+  .add_port(
+    @cad.Port::new("signal", @cad.PortKind::Signal, spec="analog 0-5 V"),
+  )
+  .add_port(@cad.Port::new("ground", @cad.PortKind::Ground, spec="0 V"))
+}
+
+///|
+/// Builds a PCB envelope: a thin board with four mounting holes.
+///
+/// The board's back face is at `Z = 0` and it extends along `+Z`, so attaching
+/// `mount` to a wall face puts the board flat against that wall.  The four
+/// `bolt_*` mates sit at the mounting holes.
+pub fn pcb_board(
+  name~ : String = "controller_pcb",
+  length_mm~ : Double = 40.0,
+  width_mm~ : Double = 30.0,
+  thickness_mm~ : Double = 1.6,
+  mounting_hole_diam_mm~ : Double = 2.7,
+  hole_inset_mm~ : Double = 3.5,
+  max_component_height_mm~ : Double = 12.0,
+  connectors~ : Array[String] = [],
+) -> @cad.Component {
+  let half_l = length_mm / 2.0
+  let half_w = width_mm / 2.0
+  let hx = half_l - hole_inset_mm
+  let hy = half_w - hole_inset_mm
+  let profile = @step_cad.Profile2D::new(
+      @step_cad.Profile2D::centered_rect(length_mm, width_mm),
+    )
+    .with_hole_at(hx, hy, mounting_hole_diam_mm)
+    .with_hole_at(-hx, hy, mounting_hole_diam_mm)
+    .with_hole_at(-hx, -hy, mounting_hole_diam_mm)
+    .with_hole_at(hx, -hy, mounting_hole_diam_mm)
+  let unit_cost_usd = 18.0
+  let part = fabricated_part(
+    "PCB-" + length_mm.to_string() + "x" + width_mm.to_string(),
+    "Controller PCB " + length_mm.to_string() + " x " + width_mm.to_string(),
+    "FR-4",
+    "assembly",
+    unit_cost_usd,
+  )
+  let spec = @cad.PcbSpec::new(
+    model="CTRL-" + length_mm.to_string() + "x" + width_mm.to_string(),
+    length_mm~,
+    width_mm~,
+    thickness_mm~,
+    mounting_holes=4,
+    mounting_hole_diam_mm~,
+    max_component_height_mm~,
+    connectors~,
+  )
+  let screw = purchased_part(
+    "SHCS-M2.5x6", "Socket head cap screw M2.5 x 6", "steel", 0.25,
+  )
+  let comp = @cad.Component::new(name, description="Controller PCB")
+    .with_param("length_mm", length_mm.to_string())
+    .with_param("width_mm", width_mm.to_string())
+    .with_param("thickness_mm", thickness_mm.to_string())
+    .add_body(
+      @cad.BodyPart::extruded_profile_mm(
+        name + "_board",
+        profile.outer,
+        thickness_mm,
+        holes=profile.holes,
+        z_mm=thickness_mm / 2.0,
+        density=@urdf.Density::pla(),
+        color=@step_cad.Rgb::green(),
+      ),
+    )
+    .add_mate_mm_deg("mount")
+    .with_part(part)
+    .with_pcb(spec)
+    .add_port(@cad.Port::new("power", @cad.PortKind::Power, spec="24 V, 3 A"))
+    .add_port(
+      @cad.Port::new("motor", @cad.PortKind::Signal, spec="STEP/DIR, TTL"),
+    )
+    .add_port(@cad.Port::new("limit_home", @cad.PortKind::Sensor, spec="GPIO"))
+    .add_port(
+      @cad.Port::new("limit_closed", @cad.PortKind::Sensor, spec="GPIO"),
+    )
+    .add_port(
+      @cad.Port::new("can", @cad.PortKind::Bus, spec="CAN 2.0B, 1 Mbps"),
+    )
+    .add_fastener(
+      @cad.Fastener::new(
+        "pcb_screws",
+        @cad.FastenerKind::Screw,
+        thread="M2.5",
+        length_mm=6.0,
+        engagement_mm=3.0,
+        quantity=4,
+        torque_nm=0.4,
+        references=[name + "_board"],
+        part=Some(screw),
+      ),
+    )
+  let holes : Array[(Double, Double)] = [
+    (-hx, -hy),
+    (hx, -hy),
+    (hx, hy),
+    (-hx, hy),
+  ]
+  let mut with_mates = comp
+  for i in 0..<holes.length() {
+    with_mates = with_mates.add_mate_mm_deg(
+      "bolt_" + i.to_string(),
+      x=holes[i].0,
+      y=holes[i].1,
+    )
+  }
+  with_mates
+}

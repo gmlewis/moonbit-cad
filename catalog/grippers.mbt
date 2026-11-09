@@ -106,7 +106,9 @@ pub fn parallel_gripper(
 /// threaded lead screw through a coupler; the screw drives a nut on the moving
 /// carriage; two guide rails take the moment; the screw's far end runs in a
 /// ball bearing.  The jaw is a prismatic joint **mimicking the motor rotor**:
-/// command the motor and the jaw follows through the screw lead.
+/// command the motor and the jaw follows through the screw lead.  Two limit
+/// switches sit on brackets above the carriage, and a controller PCB mounts on
+/// the outside of the bottom beam; `--report` prints their power/IO budget.
 ///
 /// Layout (local frame):
 /// - `mount` is on the rear flange at `Z = 0`, normal `+Z`.
@@ -186,6 +188,24 @@ pub fn lead_screw_gripper(
   let bracket_thick_mm = 8.0
   let bracket_setback_mm = 2.0
   let slide_axis = (1.0, 0.0, 0.0)
+  // Limit-switch brackets sit above the moving carriage, welded to the bottom
+  // beam; the switches ride on the brackets.  The PCB sits on the beam's
+  // outside face.
+  let switch_body_len_mm = 10.0
+  let switch_bracket_w_mm = 10.0
+  let switch_bracket_depth_mm = 11.0
+  let switch_bracket_t_mm = 2.0
+  let switch_bracket_y_mm = -base_h_mm / 2.0 +
+    wall_mm +
+    switch_bracket_depth_mm / 2.0
+  let switch_bracket_z_mm = carriage_plate_z_mm +
+    carriage_plate_thick_mm / 2.0 +
+    switch_bracket_t_mm / 2.0
+  let switch_mount_z_mm = switch_bracket_z_mm + switch_bracket_t_mm / 2.0
+  let home_switch_x_mm = -base_w_mm / 2.0 + wall_mm + switch_body_len_mm / 2.0
+  let closed_switch_x_mm = travel_mm + bracket_setback_mm
+  let pcb_len_mm = 44.0
+  let pcb_w_mm = 32.0
   // Derived geometry.
   let half_open = opening_mm / 2.0
   let half_base = base_w_mm / 2.0
@@ -398,6 +418,32 @@ pub fn lead_screw_gripper(
         color~,
       ),
     )
+    .add_body(
+      @cad.BodyPart::box_mm(
+        name + "_home_switch_bracket",
+        switch_bracket_w_mm,
+        switch_bracket_depth_mm,
+        switch_bracket_t_mm,
+        x_mm=home_switch_x_mm,
+        y_mm=switch_bracket_y_mm,
+        z_mm=switch_bracket_z_mm,
+        density~,
+        color~,
+      ),
+    )
+    .add_body(
+      @cad.BodyPart::box_mm(
+        name + "_closed_switch_bracket",
+        switch_bracket_w_mm,
+        switch_bracket_depth_mm,
+        switch_bracket_t_mm,
+        x_mm=closed_switch_x_mm,
+        y_mm=switch_bracket_y_mm,
+        z_mm=switch_bracket_z_mm,
+        density~,
+        color~,
+      ),
+    )
     .add_mate_mm_deg("mount")
     .add_mate_mm_deg("jaw_slide", z=screw_z, axis=slide_axis)
     .add_mate_mm_deg(
@@ -411,6 +457,24 @@ pub fn lead_screw_gripper(
       x=bearing_x,
       z=screw_z,
       ry_deg=right_angle_deg,
+    )
+    .add_mate_mm_deg(
+      "home_switch_mount",
+      x=home_switch_x_mm,
+      y=switch_bracket_y_mm,
+      z=switch_mount_z_mm,
+    )
+    .add_mate_mm_deg(
+      "closed_switch_mount",
+      x=closed_switch_x_mm,
+      y=switch_bracket_y_mm,
+      z=switch_mount_z_mm,
+    )
+    .add_mate_mm_deg(
+      "pcb_mount",
+      y=-base_h_mm / 2.0,
+      z=base_depth_mm / 2.0,
+      rx_deg=right_angle_deg,
     )
   // Moving jaw: nut, bushings, compact carriage plate, post, identical finger,
   // and grip pad.  It is an L so the post travels behind the fixed jaw.
@@ -567,6 +631,11 @@ pub fn lead_screw_gripper(
   tag_body(jaw, jaw_name + "_post", post_part)
   tag_body(jaw, jaw_name + "_finger", finger_part)
   tag_body(jaw, jaw_name + "_pad", pad_part)
+  let switch_bracket_part = fabricated_part(
+    "GRIP-SWITCH-BRACKET", "Limit-switch bracket", "6061-T6", "CNC", 3.0,
+  )
+  tag_body(base, name + "_home_switch_bracket", switch_bracket_part)
+  tag_body(base, name + "_closed_switch_bracket", switch_bracket_part)
   let motor_bolt_length_mm = 12.0
   let bearing_bolt_length_mm = 10.0
   let wrist_bolt_length_mm = 12.0
@@ -655,6 +724,51 @@ pub fn lead_screw_gripper(
       max_mm=screw_diam_mm + bearing_fit_mm,
     ),
   )
+  let controller_name = name + "_controller"
+  let _ = base.add_wire_run(
+    @cad.WireRun::new(
+      "motor_power",
+      from_component=controller_name,
+      from_port="power",
+      to_component=motor_name + "_stator",
+      to_port="power",
+      gauge_awg=20,
+      length_mm=180.0,
+    ),
+  )
+  let _ = base.add_wire_run(
+    @cad.WireRun::new(
+      "motor_step_dir",
+      from_component=controller_name,
+      from_port="motor",
+      to_component=motor_name + "_stator",
+      to_port="step_dir",
+      gauge_awg=26,
+      length_mm=180.0,
+    ),
+  )
+  let _ = base.add_wire_run(
+    @cad.WireRun::new(
+      "home_signal",
+      from_component=name + "_home_switch",
+      from_port="signal",
+      to_component=controller_name,
+      to_port="limit_home",
+      gauge_awg=26,
+      length_mm=120.0,
+    ),
+  )
+  let _ = base.add_wire_run(
+    @cad.WireRun::new(
+      "closed_signal",
+      from_component=name + "_closed_switch",
+      from_port="signal",
+      to_component=controller_name,
+      to_port="limit_closed",
+      gauge_awg=26,
+      length_mm=120.0,
+    ),
+  )
   let motor = nema_stepper(
     name=motor_name,
     frame_size_mm=motor_frame_mm,
@@ -714,6 +828,14 @@ pub fn lead_screw_gripper(
     outer_diam_mm=bearing_outer_mm,
     width_mm=bearing_width_mm,
   )
+  let home_switch = limit_switch(name=name + "_home_switch")
+  let closed_switch = limit_switch(name=name + "_closed_switch")
+  let controller = pcb_board(
+    name=controller_name,
+    length_mm=pcb_len_mm,
+    width_mm=pcb_w_mm,
+    connectors=["power", "motor", "limit_home", "limit_closed", "can"],
+  )
   let multiplier = lead_mm / mm_per_m / rad_per_rev
   base
   .attach(
@@ -760,6 +882,27 @@ pub fn lead_screw_gripper(
       ),
       mimic=Some(@urdf.JointMimic::new(motor_joint, multiplier~)),
     ),
+  )
+  .attach(
+    "home_switch_mount",
+    parent_mate="home_switch_mount",
+    home_switch,
+    child_mate="mount",
+    spec=@cad.JointSpec::fixed(),
+  )
+  .attach(
+    "closed_switch_mount",
+    parent_mate="closed_switch_mount",
+    closed_switch,
+    child_mate="mount",
+    spec=@cad.JointSpec::fixed(),
+  )
+  .attach(
+    "pcb_mount",
+    parent_mate="pcb_mount",
+    controller,
+    child_mate="mount",
+    spec=@cad.JointSpec::fixed(),
   )
 }
 

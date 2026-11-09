@@ -20,9 +20,9 @@ living document: add to it as the layers below gain content.
 | --- | --- | --- |
 | Core | Shapes, scene graph, `Component`, `BodyPart`, mates, joints, transforms, units, compilers | `gmlewis/cad` (root) |
 | Mechanical catalog | Structural members, fasteners, bearings, couplers, brackets, mechanisms, grippers | `gmlewis/cad/catalog` |
-| Actuation | Motors, drivers, encoders, transmissions, brake/limit hardware | `gmlewis/cad/actuation` (future) |
-| Sensing | Limit switches, encoders, IMUs, cameras, force sensors | `gmlewis/cad/sensing` (future) |
-| Electronics | PCB envelopes, connectors, keepouts, wiring/harness | `gmlewis/cad/electronics` (future) |
+| Actuation | Motors, drivers, encoders, transmissions, brake/limit hardware | `gmlewis/cad` (`electronics.mbt`) + `catalog/actuators` |
+| Sensing | Limit switches, encoders, IMUs, cameras, force sensors | `gmlewis/cad` (`electronics.mbt`) + `catalog/sensors` |
+| Electronics | PCB envelopes, connectors, keepouts, wiring/harness | `gmlewis/cad` (`electronics.mbt`); KiCad import future |
 | Assembly | BOM, fastener schedules, fits/clearances, assembly steps, part numbers | `gmlewis/cad` (`assembly.mbt`; steps future) |
 | Export | STEP/URDF/SDF/glTF, `ros2_control`, firmware pin maps, BOM, drawings | `gmlewis/cad/export` (future) |
 
@@ -43,13 +43,17 @@ realistic layers add orthogonal records rather than bloating `Component`:
   **Implemented**, with a fastener catalog in `catalog/fasteners.mbt`.
 - `Fit` — nominal, clearance, transition, interference; per-face clearance is
   already present in the profile helpers. **Implemented** (`Fit` records).
-- `ActuatorSpec` — voltage, current (stall/rated), torque constant, driver,
-  control interface (PWM/STEP-DIR/CAN), encoder type.
-- `SensorSpec` — type, range, resolution, interface, mounting.
-- `PcbEnvelope` — outline, thickness, mounting holes, keepouts, connector
-  positions; imported from KiCad STEP rather than rebuilt in B-rep.
+- `ActuatorSpec` — voltage, current (stall/rated), torque, driver, control
+  interface (PWM/STEP-DIR/CAN), encoder type. **Implemented.**
+- `SensorSpec` — type, range, resolution, interface, supply, current draw.
+  **Implemented**, with builders in `catalog/sensors.mbt`.
+- `PcbSpec` / `pcb_board` — outline, thickness, mounting holes, height limit,
+  connectors, and bolt-hole mates. **Implemented**; KiCad STEP import is still
+  future.
+- `WireRun` — endpoints, gauge, length, notes; collected into the power/IO
+  report. **Implemented.**
 - `ControlBinding` — joint → actuator channel → MCU pin/bus; direction, gear
-  ratio, soft limits, homing/limit inputs.
+  ratio, soft limits, homing/limit inputs. Still future.
 - `BomLine` — aggregated roll-ups, **implemented** with CSV export.
 - `AssemblyStep` — ordered assembly instructions with tools and torque,
   **implemented** (`Component::assembly_plan()`), with consistency checks in
@@ -66,7 +70,8 @@ Run these in order; each layer has a check:
    overlaps are marked, accidental clashes are errors).
 2. Mass, centre of mass, and inertia (`measure`, URDF).
 3. Joint limits, mimic/transmission consistency, diagnostics (`to_robot`).
-4. Power and thermal budget per actuator and per bus.
+4. Power budget per actuator and per bus (`Component::power_budget()`);
+   thermal budgeting is still future.
 5. Structural check (FEA or hand calculations) at the worst pose.
 6. Manufacturing rules: minimum wall, hole sizes, print orientation, CNC radii.
 7. Assembly rules: tool access, insertion order, fastener reach.

@@ -26,6 +26,10 @@
 /// | `ports : Array[Port]` | Typed electrical/mechanical interfaces (power, signal, bus, sensor). |
 /// | `fasteners : Array[Fastener]` | Fastener schedule: thread, length, engagement, quantity, torque, references. |
 /// | `fits : Array[Fit]` | Named fits with a nominal size and allowed min/max range. |
+/// | `actuator : ActuatorSpec?` | Voltage, current, torque, driver, control interface, and encoder for a motor. |
+/// | `sensor : SensorSpec?` | Kind, interface, supply, current draw, range, and resolution for a sensor. |
+/// | `pcb : PcbSpec?` | Board outline, thickness, mounting holes, height limit, and connectors. |
+/// | `wiring : Array[WireRun]` | Point-to-point cable runs with gauge, length, and endpoints. |
 ///
 /// A `BodyPart` stores both representations of one solid: a
 /// `@step_cad.SceneNode` in millimeters/degrees and a `@urdf.Inertial` in
@@ -80,7 +84,9 @@
 ///   a 17-link wheeled quadruped, and an assistive mobility scooter.
 /// - `catalog/grippers` — a 1-DOF parallel-jaw gripper and a motorized,
 ///   threaded lead-screw gripper (exposed screw/nut/rails, matched jaws,
-///   bolt-ready plates).
+///   bolt-ready plates, limit switches, and a controller PCB).
+/// - `catalog/sensors` — limit switches, magnetic encoders, IMUs, cameras,
+///   force sensors, and PCB envelopes with mounting holes.
 ///
 /// ## Quick start
 ///
@@ -130,13 +136,30 @@
 /// and torque. `Component::assembly_checks()` reports inconsistent hardware
 /// data such as engagement longer than the screw or an invalid fit range.
 ///
+/// ## Power and IO budget
+///
+/// Actuators carry an `ActuatorSpec` (voltage, rated/stall current, torque,
+/// driver, control interface, encoder), sensors carry a `SensorSpec`, and
+/// boards carry a `PcbSpec`. Ports and `WireRun`s declare the electrical
+/// interfaces and harness. `Component::power_budget()` collects all of it,
+/// with per-voltage rated/stall current and power totals, and
+/// `PowerBudget::to_text()` renders the actuator, power, sensor, port, and
+/// wiring report.
+///
+/// ```mbt
+/// let budget = assembly.power_budget()
+/// let report = budget.to_text()
+/// let same = assembly.report_text()
+/// ```
+///
 /// ## Module map
 ///
 /// | File | Contents |
 /// | --- | --- |
 /// | `primitives.mbt` | Centered CAD/URDF primitive bridges and `SceneNode` transform helpers. |
 /// | `component.mbt` | `BodyPart`, `JointSpec`, `Attachment`, the `Component` AST, and builders. |
-/// | `assembly.mbt` | `PartMeta`, `Port`, `Fit`, `Fastener`, and bill-of-materials roll-up/CSV. |
+/// | `assembly.mbt` | `PartMeta`, `Port`, `Fit`, `Fastener`, assembly plans, and bill-of-materials roll-up/CSV. |
+/// | `electronics.mbt` | `ActuatorSpec`, `SensorSpec`, `PcbSpec`, `WireRun`, and the power/IO budget report. |
 /// | `compile-step.mbt` | `Component` → posed `@step_cad.Design` through forward kinematics. |
 /// | `compile-urdf.mbt` | `Component` → `@urdf.Robot` and `@urdf.UrdfBundle` (with real `.gltf` and `.step` assets). |
 /// | `catalog/fasteners.mbt` | Standoffs, bushings, bearings, couplers, and L/U/flange brackets. |

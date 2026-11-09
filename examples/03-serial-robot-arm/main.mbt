@@ -3,7 +3,9 @@
 ///
 /// A six-revolute-joint modular serial arm assembled from flange plates, QDD
 /// actuator pods, reinforced box-tube links, right-angle joint flanges, and a
-/// 1-DOF motorized, threaded lead-screw parallel-jaw gripper.
+/// 1-DOF motorized, threaded lead-screw parallel-jaw gripper.  The gripper
+/// carries two limit switches on welded brackets and a controller PCB on the
+/// bottom beam, with declared power, STEP/DIR, and limit-switch wiring.
 ///
 /// Every link is a box tube with **solid end plates** welded into both ends
 /// (the plate overlaps the tube by 4 mm and extends past it), and every

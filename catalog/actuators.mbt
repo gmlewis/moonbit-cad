@@ -76,7 +76,40 @@ pub fn nema_stepper(
     "mixed",
     unit_cost_usd,
   )
+  let nema_small_frame_mm = 25.0
+  let small_rated_current_a = 0.6
+  let large_rated_current_a = 1.5
+  let stall_factor = 1.25
+  let rated_current_a = if frame_size_mm <= nema_small_frame_mm {
+    small_rated_current_a
+  } else {
+    large_rated_current_a
+  }
+  let spec = @cad.ActuatorSpec::new(
+    @cad.ActuatorKind::Stepper,
+    model="NEMA " + frame_size_mm.to_string(),
+    voltage_v=24.0,
+    current_rated_a=rated_current_a,
+    current_stall_a=rated_current_a * stall_factor,
+    torque_rated_nm=max_effort_nm,
+    driver="A4988",
+    interface="STEP/DIR",
+    encoder="none",
+  )
   stator
+  .with_actuator(spec)
+  .add_port(
+    @cad.Port::new(
+      "power",
+      @cad.PortKind::Power,
+      spec="24 V, " + rated_current_a.to_string() + " A",
+    ),
+  )
+  .add_port(
+    @cad.Port::new("step_dir", @cad.PortKind::Signal, spec="TTL STEP/DIR"),
+  )
+  .add_port(@cad.Port::new("enable", @cad.PortKind::Signal, spec="TTL"))
+  .add_port(@cad.Port::new("ground", @cad.PortKind::Ground, spec="0 V"))
   .attach(
     "\{name}_shaft_joint",
     parent_mate="shaft_base",
@@ -159,7 +192,22 @@ pub fn bldc_actuator_pod(
     "mixed",
     unit_cost_usd,
   )
+  let spec = @cad.ActuatorSpec::new(
+    @cad.ActuatorKind::Bldc,
+    model="QDD " + housing_diam_mm.to_string(),
+    voltage_v=48.0,
+    current_rated_a=8.0,
+    current_stall_a=20.0,
+    torque_rated_nm=max_effort_nm,
+    driver="ODrive",
+    interface="CAN",
+    encoder="magnetic 14-bit",
+  )
   stator
+  .with_actuator(spec)
+  .add_port(@cad.Port::new("power", @cad.PortKind::Power, spec="48 V, 8 A"))
+  .add_port(@cad.Port::new("can", @cad.PortKind::Bus, spec="CAN 2.0B, 1 Mbps"))
+  .add_port(@cad.Port::new("ground", @cad.PortKind::Ground, spec="0 V"))
   .attach(
     "\{name}_joint",
     parent_mate="bearing_seat",
@@ -240,7 +288,22 @@ pub fn hub_motor_assembly(
     "mixed",
     unit_cost_usd,
   )
+  let spec = @cad.ActuatorSpec::new(
+    @cad.ActuatorKind::Hub,
+    model="HUB " + tire_diam_mm.to_string(),
+    voltage_v=36.0,
+    current_rated_a=10.0,
+    current_stall_a=25.0,
+    torque_rated_nm=max_effort_nm,
+    driver="integrated",
+    interface="CAN",
+    encoder="hall",
+  )
   hub
+  .with_actuator(spec)
+  .add_port(@cad.Port::new("power", @cad.PortKind::Power, spec="36 V, 10 A"))
+  .add_port(@cad.Port::new("can", @cad.PortKind::Bus, spec="CAN 2.0B, 1 Mbps"))
+  .add_port(@cad.Port::new("ground", @cad.PortKind::Ground, spec="0 V"))
   .attach(
     "\{name}_spin_joint",
     parent_mate="axle",

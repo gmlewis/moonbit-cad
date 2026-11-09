@@ -414,6 +414,14 @@ pub(all) struct Component {
   fasteners : Array[Fastener]
   /// Explicit fit records (nominal and allowed range).
   fits : Array[Fit]
+  /// Electrical ratings when this component is an actuator.
+  actuator : ActuatorSpec?
+  /// Measuring characteristics when this component is a sensor.
+  sensor : SensorSpec?
+  /// PCB envelope metadata when this component is a circuit board.
+  pcb : PcbSpec?
+  /// Point-to-point cable runs belonging to this component.
+  wiring : Array[WireRun]
 }
 
 ///|
@@ -436,6 +444,10 @@ pub fn Component::new(name : String, description~ : String = "") -> Component {
     ports: [],
     fasteners: [],
     fits: [],
+    actuator: None,
+    sensor: None,
+    pcb: None,
+    wiring: [],
   }
 }
 
