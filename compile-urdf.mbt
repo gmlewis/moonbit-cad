@@ -115,12 +115,12 @@ priv struct CompileCtx {
 }
 
 ///|
-/// Merges a child component's bodies and mates into an existing link frame.
+/// Merges a child component's bodies and mates into an existing link frame,
+/// queuing any non-merged sub-attachments onto `kinematic_out`.
 fn merge_rigid_into(
-  ctx : CompileCtx,
-  link_name : String,
   bodies : Array[BodyPart],
   mates : Map[String, @urdf.MateConnector],
+  kinematic_out : Array[Attachment],
   att : Attachment,
   p_mate : @urdf.MateConnector,
   c_mate : @urdf.MateConnector,
@@ -156,7 +156,31 @@ fn merge_rigid_into(
       ..sub,
       parent_mate: "\{att.child.name}.\{sub.parent_mate}",
     }
-    process_attachment(ctx, link_name, bodies, mates, remapped)
+    collect_attachment(bodies, mates, kinematic_out, remapped)
+  }
+}
+
+///|
+/// First pass over a link's attachments: folds `MergeRigid` children into
+/// `bodies` and `mates` immediately and queues kinematic attachments for the
+/// second pass.
+fn collect_attachment(
+  bodies : Array[BodyPart],
+  mates : Map[String, @urdf.MateConnector],
+  kinematic_out : Array[Attachment],
+  att : Attachment,
+) -> Unit {
+  match att.spec.kind {
+    MergeRigid => {
+      let p_mate = mates
+        .get(att.parent_mate)
+        .unwrap_or(identity_mate(att.parent_mate))
+      let c_mate = att.child
+        .get_mate(att.child_mate)
+        .unwrap_or(identity_mate(att.child_mate))
+      merge_rigid_into(bodies, mates, kinematic_out, att, p_mate, c_mate)
+    }
+    _ => kinematic_out.push(att)
   }
 }
 
@@ -231,30 +255,8 @@ fn attach_kinematic(
 }
 
 ///|
-/// Dispatches one attachment according to its connection kind.
-fn process_attachment(
-  ctx : CompileCtx,
-  link_name : String,
-  bodies : Array[BodyPart],
-  mates : Map[String, @urdf.MateConnector],
-  att : Attachment,
-) -> Unit {
-  let p_mate = mates
-    .get(att.parent_mate)
-    .unwrap_or(identity_mate(att.parent_mate))
-  let c_mate = att.child
-    .get_mate(att.child_mate)
-    .unwrap_or(identity_mate(att.child_mate))
-  match att.spec.kind {
-    MergeRigid =>
-      merge_rigid_into(ctx, link_name, bodies, mates, att, p_mate, c_mate)
-    _ => attach_kinematic(ctx, link_name, att, p_mate, c_mate)
-  }
-}
-
-///|
-/// Collects bodies and mates (following rigid merges), then emits the link and
-/// recursively compiles its children.
+/// Collects bodies and mates (following rigid merges), emits this link in
+/// topological pre-order, and then recursively compiles its kinematic children.
 fn compile_link(
   ctx : CompileCtx,
   link_name : String,
@@ -262,11 +264,21 @@ fn compile_link(
   mates : Map[String, @urdf.MateConnector],
   attachments : Array[Attachment],
 ) -> Unit {
+  let kinematic_atts : Array[Attachment] = []
   for att in attachments {
-    process_attachment(ctx, link_name, bodies, mates, att)
+    collect_attachment(bodies, mates, kinematic_atts, att)
   }
   let urdf_link = build_urdf_link(link_name, bodies, ctx.mode)
   ctx.links.push({ name: link_name, bodies, urdf_link, })
+  for att in kinematic_atts {
+    let p_mate = mates
+      .get(att.parent_mate)
+      .unwrap_or(identity_mate(att.parent_mate))
+    let c_mate = att.child
+      .get_mate(att.child_mate)
+      .unwrap_or(identity_mate(att.child_mate))
+    attach_kinematic(ctx, link_name, att, p_mate, c_mate)
+  }
 }
 
 ///|

@@ -29,6 +29,8 @@ fn two_link_arm() -> @cad.Component {
 test "two link robot has two links and one joint" {
   let robot = two_link_arm().to_robot()
   assert_eq(robot.links.length(), 2)
+  assert_eq(robot.links[0].name, "base")
+  assert_eq(robot.links[1].name, "arm")
   assert_eq(robot.joints.length(), 1)
   assert_false(robot.has_errors())
   assert_eq(robot.joints[0].name, "shoulder_joint")
