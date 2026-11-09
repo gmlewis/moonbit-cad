@@ -48,14 +48,16 @@ realistic layers add orthogonal records rather than bloating `Component`:
 - `SensorSpec` — type, range, resolution, interface, supply, current draw.
   **Implemented**, with builders in `catalog/sensors.mbt`.
 - `PcbSpec` / `pcb_board` — outline, thickness, mounting holes, height limit,
-  connectors, and bolt-hole mates. **Implemented**; KiCad STEP import is still
-  future.
+  connectors, placements, and bolt-hole mates. **Implemented.**
+- KiCad position-file import (`parse_kicad_pos`, `pcb_from_kicad`) — board
+  envelope, mounting holes, connector placements, and ports. **Implemented**;
+  full STEP B-Rep geometry import remains future.
 - `WireRun` — endpoints, gauge, length, notes; collected into the power/IO
   report. **Implemented.**
 - `CableRoute` — polyline jacket geometry, diameter, material, and the wire
   runs it carries; checked for length against each wire. **Implemented** in
-  `harness.mbt` + `catalog/harness.mbt`. Connector mating checks remain
-  future.
+  `harness.mbt` + `catalog/harness.mbt`. Connector mating is checked by
+  `Component::wiring_checks()`.
 - `ControlBinding` — joint → actuator channel → MCU pins/bus; direction, gear
   ratio, soft limits, homing/limit inputs. **Implemented**, with
   `ros2_control` YAML, a firmware pin map, and completeness checks.
@@ -80,7 +82,8 @@ Run these in order; each layer has a check:
 5. Structural check (FEA or hand calculations) at the worst pose.
 6. Manufacturing rules: minimum wall, hole sizes, print orientation, CNC radii.
 7. Assembly rules: tool access, insertion order, fastener reach.
-8. Electrical rules: voltage/current/bus compatibility; connector mate.
+8. Electrical rules: voltage/current/bus compatibility; connector mate
+   (`Component::wiring_checks()`).
 9. Control sanity: every commandable joint has a binding; every sensor has an
    input; firmware pin map matches the harness. `Component::control_checks()`
    covers the first two.

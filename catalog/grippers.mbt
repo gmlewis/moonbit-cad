@@ -172,6 +172,9 @@ pub fn lead_screw_gripper(
   bearing_bolt_pitch_mm~ : Double = 24.0,
   jaw_effort_n~ : Double = 200.0,
   jaw_velocity_mps~ : Double = 0.05,
+  /// Optional KiCad `.pos` CSV: build the controller board from placements
+  /// (mounting holes, connectors) instead of the procedural board.
+  controller_pos_csv~ : String = "",
   density~ : @urdf.Density = @urdf.Density::aluminum_6061(),
   color~ : @step_cad.Rgb = @step_cad.Rgb::grey(),
 ) -> @cad.Component {
@@ -830,12 +833,23 @@ pub fn lead_screw_gripper(
   )
   let home_switch = limit_switch(name=name + "_home_switch")
   let closed_switch = limit_switch(name=name + "_closed_switch")
-  let controller = pcb_board(
-    name=controller_name,
-    length_mm=pcb_len_mm,
-    width_mm=pcb_w_mm,
-    connectors=["power", "motor", "limit_home", "limit_closed", "can"],
-  )
+  let controller = if controller_pos_csv == "" {
+    pcb_board(name=controller_name, length_mm=pcb_len_mm, width_mm=pcb_w_mm, connectors=[
+      "power", "motor", "limit_home", "limit_closed", "can",
+    ])
+  } else {
+    let footprints = parse_kicad_pos(controller_pos_csv)
+    pcb_from_kicad(
+      name=controller_name,
+      footprints~,
+      board_len_mm=pcb_len_mm,
+      board_w_mm=pcb_w_mm,
+      origin_x_mm=pcb_len_mm / 2.0,
+      origin_y_mm=pcb_w_mm / 2.0,
+      mounting_hole_diam_mm=2.7,
+      max_component_height_mm=10.0,
+    )
+  }
   // External motor harness: outside the frame from the controller down to the
   // motor's -Y side, clear of the beam, motor plate, and moving jaw.
   let motor_harness = cable_route(
@@ -851,6 +865,8 @@ pub fn lead_screw_gripper(
     jacket_diameter_mm=6.0,
     wire_names=["motor_power", "motor_step_dir"],
     material="PVC",
+    from_component=controller_name,
+    to_component=motor_name + "_stator",
   )
   let multiplier = lead_mm / mm_per_m / rad_per_rev
   base

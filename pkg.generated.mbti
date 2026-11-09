@@ -134,9 +134,13 @@ pub(all) struct CableRoute {
   jacket_diameter_mm : Double
   wire_names : Array[String]
   material : String
+  from_component : String
+  from_port : String
+  to_component : String
+  to_port : String
 }
 pub fn CableRoute::length_mm(Self) -> Double
-pub fn CableRoute::new(String, points? : Array[(Double, Double, Double)], jacket_diameter_mm? : Double, wire_names? : Array[String], material? : String) -> Self
+pub fn CableRoute::new(String, points? : Array[(Double, Double, Double)], jacket_diameter_mm? : Double, wire_names? : Array[String], material? : String, from_component? : String, from_port? : String, to_component? : String, to_port? : String) -> Self
 
 pub(all) struct CompiledLink {
   name : String
@@ -193,6 +197,7 @@ pub fn Component::get_mate(Self, String) -> @urdf.MateConnector?
 pub fn Component::harness_checks(Self) -> Array[String]
 pub fn Component::link_design(Self, String) -> @gmlewis/step/cad.Design?
 pub fn Component::new(String, description? : String) -> Self
+pub fn Component::pcb_placements_csv(Self) -> String
 pub fn Component::power_budget(Self) -> PowerBudget
 pub fn Component::print_list_csv(Self) -> String
 pub fn Component::report_text(Self) -> String
@@ -208,6 +213,7 @@ pub fn Component::to_ros2_control_yaml(Self, controller_name? : String, update_r
 pub fn Component::to_step_file(Self, joint_positions? : Map[String, Double]) -> String
 pub fn Component::to_urdf_bundle(Self, package_name? : String, include_step_parts? : Bool) -> @urdf.UrdfBundle
 pub fn Component::total_mass_kg(Self) -> Double
+pub fn Component::wiring_checks(Self) -> Array[String]
 pub fn Component::with_actuator(Self, ActuatorSpec) -> Self
 pub fn Component::with_cable_route(Self, CableRoute) -> Self
 pub fn Component::with_description(Self, String) -> Self
@@ -313,6 +319,17 @@ pub fn PartMeta::new(String, description? : String, supplier? : String, supplier
 pub fn PartMeta::with_notes(Self, String) -> Self
 pub fn PartMeta::with_supplier_url(Self, String) -> Self
 
+pub(all) struct PcbPlacement {
+  reference : String
+  value : String
+  footprint : String
+  x_mm : Double
+  y_mm : Double
+  rotation_deg : Double
+  side : String
+}
+pub fn PcbPlacement::new(reference? : String, value? : String, footprint? : String, x_mm? : Double, y_mm? : Double, rotation_deg? : Double, side? : String) -> Self
+
 pub(all) struct PcbSpec {
   model : String
   length_mm : Double
@@ -322,8 +339,9 @@ pub(all) struct PcbSpec {
   mounting_hole_diam_mm : Double
   max_component_height_mm : Double
   connectors : Array[String]
+  placements : Array[PcbPlacement]
 }
-pub fn PcbSpec::new(model? : String, length_mm? : Double, width_mm? : Double, thickness_mm? : Double, mounting_holes? : Int32, mounting_hole_diam_mm? : Double, max_component_height_mm? : Double, connectors? : Array[String]) -> Self
+pub fn PcbSpec::new(model? : String, length_mm? : Double, width_mm? : Double, thickness_mm? : Double, mounting_holes? : Int32, mounting_hole_diam_mm? : Double, max_component_height_mm? : Double, connectors? : Array[String], placements? : Array[PcbPlacement]) -> Self
 
 pub(all) struct Port {
   name : String

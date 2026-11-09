@@ -92,6 +92,31 @@ pub fn SensorSpec::new(
 }
 
 ///|
+/// One component placement from a KiCad position file or equivalent.
+pub(all) struct PcbPlacement {
+  reference : String
+  value : String
+  footprint : String
+  x_mm : Double
+  y_mm : Double
+  rotation_deg : Double
+  side : String
+}
+
+///|
+pub fn PcbPlacement::new(
+  reference~ : String = "",
+  value~ : String = "",
+  footprint~ : String = "",
+  x_mm~ : Double = 0.0,
+  y_mm~ : Double = 0.0,
+  rotation_deg~ : Double = 0.0,
+  side~ : String = "",
+) -> PcbPlacement {
+  { reference, value, footprint, x_mm, y_mm, rotation_deg, side, }
+}
+
+///|
 /// A PCB envelope: outline, thickness, mounting holes, height limit, and the
 /// connectors that must be reachable.
 pub(all) struct PcbSpec {
@@ -103,6 +128,7 @@ pub(all) struct PcbSpec {
   mounting_hole_diam_mm : Double
   max_component_height_mm : Double
   connectors : Array[String]
+  placements : Array[PcbPlacement]
 }
 
 ///|
@@ -115,6 +141,7 @@ pub fn PcbSpec::new(
   mounting_hole_diam_mm~ : Double = 2.7,
   max_component_height_mm~ : Double = 0.0,
   connectors~ : Array[String] = [],
+  placements~ : Array[PcbPlacement] = [],
 ) -> PcbSpec {
   {
     model,
@@ -125,6 +152,7 @@ pub fn PcbSpec::new(
     mounting_hole_diam_mm,
     max_component_height_mm,
     connectors,
+    placements,
   }
 }
 

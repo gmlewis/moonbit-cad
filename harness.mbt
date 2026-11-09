@@ -12,6 +12,12 @@ pub(all) struct CableRoute {
   /// Wire runs carried by this bundle.
   wire_names : Array[String]
   material : String
+  /// Component and port at the source connector (empty when not modeled).
+  from_component : String
+  from_port : String
+  /// Component and port at the destination connector.
+  to_component : String
+  to_port : String
 }
 
 ///|
@@ -21,8 +27,22 @@ pub fn CableRoute::new(
   jacket_diameter_mm~ : Double = 0.0,
   wire_names~ : Array[String] = [],
   material~ : String = "",
+  from_component~ : String = "",
+  from_port~ : String = "",
+  to_component~ : String = "",
+  to_port~ : String = "",
 ) -> CableRoute {
-  { name, points, jacket_diameter_mm, wire_names, material, }
+  {
+    name,
+    points,
+    jacket_diameter_mm,
+    wire_names,
+    material,
+    from_component,
+    from_port,
+    to_component,
+    to_port,
+  }
 }
 
 ///|
@@ -191,6 +211,155 @@ pub fn Component::harness_checks(self : Component) -> Array[String] {
           warnings.push(
             "cable route '" + label + "' references unknown wire '" + name + "'",
           )
+      }
+    }
+  }
+  warnings
+}
+
+///|
+fn Component::collect_component_ports(
+  self : Component,
+  entries : Array[(String, Array[String])],
+) -> Unit {
+  let ports : Array[String] = []
+  for port in self.ports {
+    ports.push(port.name)
+  }
+  entries.push((self.name, ports))
+  for att in self.attachments {
+    att.child.collect_component_ports(entries)
+  }
+}
+
+///|
+fn ports_for(
+  entries : Array[(String, Array[String])],
+  component : String,
+) -> Array[String]? {
+  for entry in entries {
+    if entry.0 == component {
+      return Some(entry.1)
+    }
+  }
+  None
+}
+
+///|
+fn check_connector(
+  warnings : Array[String],
+  components : Array[(String, Array[String])],
+  owner : String,
+  end : String,
+  component : String,
+  port : String,
+) -> Unit {
+  if component == "" {
+    warnings.push(owner + " has no " + end + " component")
+    return
+  }
+  match ports_for(components, component) {
+    Some(ports) =>
+      if port != "" && !array_has(ports, port) {
+        warnings.push(
+          owner +
+          " " +
+          end +
+          " references unknown port '" +
+          port +
+          "' on component '" +
+          component +
+          "'",
+        )
+      }
+    None =>
+      warnings.push(
+        owner + " " + end + " references unknown component '" + component + "'",
+      )
+  }
+}
+
+///|
+/// Connector mating checks: every wire and cable-route endpoint must resolve to
+/// a component and (when given) a port, and every wire carried by a route must
+/// actually connect that route's two components.
+pub fn Component::wiring_checks(self : Component) -> Array[String] {
+  let warnings : Array[String] = []
+  let components : Array[(String, Array[String])] = []
+  self.collect_component_ports(components)
+  let wires : Array[(String, WireRun)] = []
+  self.collect_wire_entries(self.name, wires)
+  for entry in wires {
+    let run = entry.1
+    let owner = "wire '" + run.name + "'"
+    check_connector(
+      warnings,
+      components,
+      owner,
+      "source",
+      run.from_component,
+      run.from_port,
+    )
+    check_connector(
+      warnings,
+      components,
+      owner,
+      "destination",
+      run.to_component,
+      run.to_port,
+    )
+    if run.from_component != "" && run.from_component == run.to_component {
+      warnings.push(owner + " connects a component to itself")
+    }
+  }
+  let routes : Array[(String, CableRoute)] = []
+  self.collect_cable_entries(self.name, routes)
+  for entry in routes {
+    let route = entry.1
+    let owner = "cable route '" + route.name + "'"
+    if route.from_component != "" || route.from_port != "" {
+      check_connector(
+        warnings,
+        components,
+        owner,
+        "source",
+        route.from_component,
+        route.from_port,
+      )
+    }
+    if route.to_component != "" || route.to_port != "" {
+      check_connector(
+        warnings,
+        components,
+        owner,
+        "destination",
+        route.to_component,
+        route.to_port,
+      )
+    }
+    if route.from_component != "" && route.to_component != "" {
+      for name in route.wire_names {
+        match wire_named(wires, name) {
+          Some(run) => {
+            let forward = run.from_component == route.from_component &&
+              run.to_component == route.to_component
+            let reverse = run.from_component == route.to_component &&
+              run.to_component == route.from_component
+            if !forward && !reverse {
+              warnings.push(
+                owner +
+                " carries wire '" +
+                name +
+                "', which connects '" +
+                run.from_component +
+                "' to '" +
+                run.to_component +
+                "'",
+              )
+            }
+          }
+          None => ()
+        }
       }
     }
   }

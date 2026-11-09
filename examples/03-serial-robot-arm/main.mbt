@@ -187,6 +187,9 @@ async fn main {
     "wristRollDeg": @cli.opt_double(60.0, help="Wrist roll angle in degrees"),
     "toolPitchDeg": @cli.opt_double(25.0, help="Tool pitch angle in degrees"),
     "gripMm": @cli.opt_double(12.0, help="Gripper jaw travel in mm (0-28)"),
+    "kicadPos": @cli.opt_string(
+      help="KiCad .pos CSV for the gripper controller board",
+    ),
   }
   let spec = @common.with_output_args(base_spec)
   guard @cli.parse(
@@ -422,6 +425,10 @@ async fn main {
     pad_overlap,
     tool_out_len / 2.0 - 22.0,
   )
+  let kicad_pos_csv = match args.string_opt("kicadPos") {
+    Some(path) => @fs.read_file(path).text()
+    None => ""
+  }
   let grip_lead_mm = 2.0
   let grip_travel_mm = 28.0
   let joint_gear_ratio = 6.0
@@ -435,6 +442,7 @@ async fn main {
     finger_len_mm=45.0,
     finger_width_mm=45.0,
     finger_thick_mm=8.0,
+    controller_pos_csv=kicad_pos_csv,
   )
   let comp = base
     .attach(

@@ -89,6 +89,8 @@ tree, so a load can be snapped onto a motor's nested rotor link.
   IMUs, camera modules, force sensors, and PCB envelopes with mounting holes.
 - **`catalog/harness`** — polyline cable bundles with jacket diameter, carried
   wire runs, a length-based purchased part number, and jacket geometry.
+- **`catalog/kicad`** — KiCad `.pos` CSV import: board envelope with mounting
+  holes, connector placements, and ports.
 
 ## Showcase examples
 
@@ -148,6 +150,9 @@ actuator ratings (voltage, rated/stall current, torque, driver, control
 interface, encoder), per-voltage totals and power, sensor supply/draw/interface,
 the full port map, the declared wire runs (endpoints, gauge, length), and the
 routed cable bundles (jacket diameter, path length, carried wires).
+`Component::wiring_checks()` verifies that every wire and route endpoint
+resolves to a declared component and port, that no wire connects a component to
+itself, and that each carried wire matches its route's components.
 
 ```bash
 ./run-example.sh 03 --report 03-report.txt
@@ -186,6 +191,7 @@ test one example:
 | `assembly.txt` | Ordered steps, torque table, electrical checkout, and test sequence. |
 | `report.txt` | Power, IO, and wiring budget. |
 | `control.yaml`, `pins.csv` | `ros2_control` configuration and firmware pin map. |
+| `pcb-connectors.csv` | Imported PCB connector placements (reference, value, footprint, position, side). |
 | `assembly.step` | Posed assembly STEP. |
 | `bundle/` | URDF, `package.xml`, glTF meshes, and per-link STEP parts. |
 
@@ -194,6 +200,23 @@ test one example:
 python3 scripts/validate_step.py --no-mesh build/03/assembly.step
 python3 scripts/validate_urdf.py --check-meshes build/03/bundle/urdf/*.urdf
 ```
+
+### KiCad PCB import
+
+`parse_kicad_pos()` reads a KiCad position-file CSV and `pcb_from_kicad()`
+builds a board envelope with mounting holes, connector placements, ports, and
+mounting hardware. The build package then includes `pcb-connectors.csv` with
+each connector's reference, value, footprint, position, rotation, and side.
+Example 03 ships a fixture:
+
+```bash
+./run-example.sh 03 \
+  --kicadPos examples/03-serial-robot-arm/kicad/gripper.pos \
+  --package build/03-kicad --check
+```
+
+This imports the placement layer; full STEP B-Rep geometry import remains
+future work.
 
 ## Development
 
@@ -207,9 +230,9 @@ composition, URDF compilation (including rigid merges), posed STEP export,
 bill-of-materials roll-up, assembly plans and hardware checks, power/IO
 budgets, cable-route length and wire checks, control export and
 joint-completeness checks, forward-kinematics pose smoke tests, build-package
-generation (sourcing, print list, torque table, manifest), every catalog
-component, the sensor and harness catalogs, the mimic-coupled gearbox, and the
-17-link quadruped.
+generation (sourcing, print list, torque table, manifest), KiCad placement
+import, every catalog component, the sensor and harness catalogs, the
+mimic-coupled gearbox, and the 17-link quadruped.
 
 Validation and rendering helpers live in `scripts/` (they run from a clone of
 this repository alone; only the external tools named below are required):

@@ -184,11 +184,16 @@ pub async fn write_output(
     for warning in harness_warnings {
       @cli.eprintln("warning: " + warning)
     }
+    let wiring_warnings = comp.wiring_checks()
+    for warning in wiring_warnings {
+      @cli.eprintln("warning: " + warning)
+    }
     @cli.eprintln(
       "hardware checks: " +
       (warnings.length() +
         control_warnings.length() +
-        harness_warnings.length()).to_string() +
+        harness_warnings.length() +
+        wiring_warnings.length()).to_string() +
       " warning(s)",
     )
   }

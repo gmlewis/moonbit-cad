@@ -91,6 +91,8 @@
 ///   force sensors, and PCB envelopes with mounting holes.
 /// - `catalog/harness` — polyline cable bundles with jacket geometry, carried
 ///   wire runs, and a length-based purchased part number.
+/// - `catalog/kicad` — KiCad `.pos` CSV import: board envelope, mounting holes,
+///   connector placements, and ports.
 ///
 /// ## Quick start
 ///
@@ -147,7 +149,9 @@
 /// boards carry a `PcbSpec`. Ports and `WireRun`s declare the electrical
 /// interfaces and harness. `CableRoute` adds routed jacket geometry with its
 /// carried wire runs, and `Component::harness_checks()` verifies route geometry
-/// and that each wire is long enough for its route. `Component::power_budget()`
+/// and that each wire is long enough for its route. `Component::wiring_checks()`
+/// resolves every wire and route endpoint to a component and port, rejects
+/// self-connections, and confirms each carried wire matches its route. `Component::power_budget()`
 /// collects all of it, with per-voltage rated/stall current and power totals,
 /// and `PowerBudget::to_text()` renders the actuator, power, sensor, port,
 /// wiring, and cable-route report.
@@ -179,9 +183,9 @@
 /// `Component::build_package_files()` returns the text files for a complete
 /// build package: the manifest, BOM, sourcing with supplier links, print/cut
 /// list with process settings, fastener torque table, assembly and test
-/// procedure, power/IO report, `ros2_control` configuration, and pin map. The
-/// example CLI's `--package <dir>` also writes the posed assembly STEP and the
-/// URDF/glTF/per-link-STEP bundle.
+/// procedure, power/IO report, `ros2_control` configuration, pin map, and
+/// PCB connector placements. The example CLI's `--package <dir>` also writes the
+/// posed assembly STEP and the URDF/glTF/per-link-STEP bundle.
 ///
 /// ```mbt
 /// for file in assembly.build_package_files() {
@@ -207,6 +211,8 @@
 /// | `catalog/gears.mbt` | Herringbone involute planetary gearbox (STEP + mimic URDF). |
 /// | `catalog/mobility.mbt` | Structural tubes, leg segments, wheels, chassis, and scooter frame. |
 /// | `catalog/grippers.mbt` | Parallel-jaw and lead-screw grippers. |
+/// | `catalog/harness.mbt` | Polyline cable-route bundles with jacket geometry and part metadata. |
+/// | `catalog/kicad.mbt` | KiCad position-file parser and PCB envelope builder. |
 ///
 /// ## Booleans are nominal in the STEP backend
 ///

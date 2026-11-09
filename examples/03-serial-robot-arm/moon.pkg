@@ -4,6 +4,7 @@ import {
   "gmlewis/cad/examples/common",
   "gmlewis/step/cli",
   "moonbitlang/async",
+  "moonbitlang/async/fs",
   "moonbitlang/core/math",
 }
 

@@ -17,6 +17,10 @@ pub fn cable_route(
   jacket_diameter_mm~ : Double = 5.0,
   wire_names~ : Array[String] = [],
   material~ : String = "PVC",
+  from_component~ : String = "",
+  from_port~ : String = "",
+  to_component~ : String = "",
+  to_port~ : String = "",
   density~ : @urdf.Density = @urdf.Density::kg_per_m3(1400.0),
   color~ : @step_cad.Rgb = @step_cad.Rgb::black(),
 ) -> @cad.Component {
@@ -26,6 +30,10 @@ pub fn cable_route(
     jacket_diameter_mm~,
     wire_names~,
     material~,
+    from_component~,
+    from_port~,
+    to_component~,
+    to_port~,
   )
   let mut comp = @cad.Component::new(name, description="Cable route")
     .with_param("jacket_diameter_mm", jacket_diameter_mm.to_string())
