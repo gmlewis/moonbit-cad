@@ -11,6 +11,8 @@ pub(all) struct BodyPart {
   density : @urdf.Density
   inertial : @urdf.Inertial
   collisions : Array[@urdf.Collision]
+  /// Purchasing/manufacturing metadata for this solid.
+  part : PartMeta?
 }
 
 ///|
@@ -54,7 +56,7 @@ pub fn BodyPart::box_mm(
     name=Some(name),
     origin~,
   )
-  { name, node, density, inertial, collisions: [collision], }
+  { name, node, density, inertial, collisions: [collision], part: None, }
 }
 
 ///|
@@ -95,7 +97,7 @@ pub fn BodyPart::cylinder_mm(
     name=Some(name),
     origin~,
   )
-  { name, node, density, inertial, collisions: [collision], }
+  { name, node, density, inertial, collisions: [collision], part: None, }
 }
 
 ///|
@@ -146,7 +148,7 @@ pub fn BodyPart::tube_mm(
     name=Some(name),
     origin~,
   )
-  { name, node, density, inertial, collisions: [collision], }
+  { name, node, density, inertial, collisions: [collision], part: None, }
 }
 
 ///|
@@ -209,7 +211,7 @@ pub fn BodyPart::extruded_profile_mm(
     name=Some(name),
     origin~,
   )
-  { name, node, density, inertial, collisions: [collision], }
+  { name, node, density, inertial, collisions: [collision], part: None, }
 }
 
 ///|
@@ -220,8 +222,9 @@ pub fn BodyPart::custom(
   inertial : @urdf.Inertial,
   collisions~ : Array[@urdf.Collision] = [],
   density~ : @urdf.Density = @urdf.Density::aluminum_6061(),
+  part~ : PartMeta? = None,
 ) -> BodyPart {
-  { name, node, density, inertial, collisions, }
+  { name, node, density, inertial, collisions, part, }
 }
 
 ///|
@@ -239,6 +242,12 @@ pub fn BodyPart::transform_by(
     { ..c, origin: new_origin, }
   })
   { ..self, node, inertial, collisions, }
+}
+
+///|
+/// Attaches purchasing/manufacturing metadata to this body.
+pub fn BodyPart::with_part(self : BodyPart, part : PartMeta) -> BodyPart {
+  { ..self, part: Some(part), }
 }
 
 ///|
@@ -377,6 +386,9 @@ pub(all) struct Attachment {
   child : Component
   child_mate : String
   spec : JointSpec
+  /// False for children that belong to the parent as a purchased/assembled
+  /// item (e.g. a motor rotor), so the BOM does not count them separately.
+  bom_external : Bool
 }
 
 ///|
@@ -394,6 +406,14 @@ pub(all) struct Component {
   /// Optional name for the exported robot/design when the root link name
   /// differs from the assembly name (e.g. `base_link` inside a Galileo robot).
   robot_name : String?
+  /// Purchasing/manufacturing metadata when the whole component is one part.
+  part : PartMeta?
+  /// Typed electrical/mechanical/fluid/sensor interfaces.
+  ports : Array[Port]
+  /// Fastener schedule entries for this component.
+  fasteners : Array[Fastener]
+  /// Explicit fit records (nominal and allowed range).
+  fits : Array[Fit]
 }
 
 ///|
@@ -412,6 +432,10 @@ pub fn Component::new(name : String, description~ : String = "") -> Component {
     mates,
     attachments: [],
     robot_name: None,
+    part: None,
+    ports: [],
+    fasteners: [],
+    fits: [],
   }
 }
 
@@ -522,8 +546,16 @@ pub fn Component::attach(
   child : Component,
   child_mate~ : String = "origin",
   spec~ : JointSpec = JointSpec::fixed(),
+  bom_external~ : Bool = true,
 ) -> Component {
-  self.attachments.push({ joint_name, parent_mate, child, child_mate, spec, })
+  self.attachments.push({
+    joint_name,
+    parent_mate,
+    child,
+    child_mate,
+    spec,
+    bom_external,
+  })
   self
 }
 
@@ -541,9 +573,17 @@ pub fn Component::attach_to(
   child : Component,
   child_mate~ : String = "origin",
   spec~ : JointSpec = JointSpec::fixed(),
+  bom_external~ : Bool = true,
 ) -> Component {
   if self.name == target_name {
-    return self.attach(joint_name, parent_mate~, child, child_mate~, spec~)
+    return self.attach(
+      joint_name,
+      parent_mate~,
+      child,
+      child_mate~,
+      spec~,
+      bom_external~,
+    )
   }
   for att in self.attachments {
     let _ = att.child.attach_to(
@@ -553,6 +593,7 @@ pub fn Component::attach_to(
       child,
       child_mate~,
       spec~,
+      bom_external~,
     )
   }
   self

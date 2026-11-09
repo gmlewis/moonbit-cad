@@ -20,7 +20,11 @@ pub fn flange_plate(name? : String, outer_diam_mm? : Double, center_bore_mm? : D
 
 pub fn galileo_quadruped_robot(name? : String, body_len_mm? : Double, body_width_mm? : Double, body_height_mm? : Double, thigh_len_mm? : Double, calf_len_mm? : Double, wheel_radius_mm? : Double) -> @gmlewis/cad.Component
 
+pub fn heat_set_insert(name? : String, outer_diam_mm? : Double, inner_diam_mm? : Double, length_mm? : Double, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/cad.Component
+
 pub fn herringbone_gear_component(String, gear_module~ : Double, num_teeth~ : Int32, gear_length_mm~ : Double, helix_angle_deg? : Double, bore_radius_mm? : Double, num_elbows? : Int32, resolution? : Int32, direction? : Double, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/cad.Component
+
+pub fn hex_nut(name? : String, thread? : String, across_flats_mm? : Double, height_mm? : Double, bore_diam_mm? : Double, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/cad.Component
 
 pub fn hex_standoff(name? : String, outer_flat_mm? : Double, bore_mm? : Double, length_mm? : Double, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/cad.Component
 
@@ -42,9 +46,13 @@ pub fn robot_leg_segment(String, length_mm~ : Double, width_mm? : Double, thickn
 
 pub fn shaft_coupler(name? : String, outer_diam_mm? : Double, bore_in_mm? : Double, bore_out_mm? : Double, length_mm? : Double, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/cad.Component
 
+pub fn socket_head_screw(name? : String, thread? : String, length_mm? : Double, head_diam_mm? : Double, head_height_mm? : Double, shank_diam_mm? : Double, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/cad.Component
+
 pub fn treaded_wheel(String, radius_mm? : Double, width_mm? : Double, hub_radius_mm? : Double, density? : @urdf.Density) -> @gmlewis/cad.Component
 
 pub fn u_bracket(name? : String, inner_span_mm? : Double, arm_length_mm? : Double, width_mm? : Double, thickness_mm? : Double, bore_mm? : Double, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/cad.Component
+
+pub fn washer(name? : String, inner_diam_mm? : Double, outer_diam_mm? : Double, thickness_mm? : Double, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/cad.Component
 
 // Errors
 

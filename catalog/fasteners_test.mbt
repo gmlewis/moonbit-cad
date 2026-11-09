@@ -75,3 +75,21 @@ test "u bracket" {
   let pivot = comp.get_mate("pivot").unwrap()
   assert_true((pivot.axis.0 - 1.0).abs() < 1.0e-12)
 }
+
+///|
+test "fastener catalog parts are buildable and priced" {
+  let screw = @catalog.socket_head_screw()
+  check_component(screw, ["seat", "head"])
+  let nut = @catalog.hex_nut()
+  check_component(nut, ["seat", "top"])
+  let washer = @catalog.washer()
+  check_component(washer, ["seat", "top"])
+  let insert = @catalog.heat_set_insert()
+  check_component(insert, ["seat", "top"])
+  assert_true(
+    match screw.part {
+      Some(_) => true
+      None => false
+    },
+  )
+}

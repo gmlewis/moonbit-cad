@@ -21,6 +21,10 @@ or an entire robot. It contains:
 | `bodies : Array[BodyPart]` | Rigid solids with CAD geometry, density, exact inertia, and collision primitives. |
 | `mates : Map[String, @urdf.MateConnector]` | Named attachment frames other components snap onto. |
 | `attachments : Array[Attachment]` | Child components plus the joint that connects them. |
+| `part : PartMeta?` | Purchasing/manufacturing data (part number, supplier, material, process, cost). |
+| `ports : Array[Port]` | Typed electrical/mechanical interfaces (power, signal, bus, sensor). |
+| `fasteners : Array[Fastener]` | Fastener schedule: thread, length, engagement, quantity, torque, references. |
+| `fits : Array[Fit]` | Named fits with a nominal size and allowed min/max range. |
 
 A **`BodyPart`** stores both representations of one solid: a
 `@step_cad.SceneNode` in millimeters/degrees and a `@urdf.Inertial` in
@@ -62,7 +66,9 @@ tree, so a load can be snapped onto a motor's nested rotor link.
 ## Hardware catalog
 
 - **`catalog/fasteners`** — hex standoffs, cylindrical spacers, ball bearings,
-  shaft couplers, flange plates, L brackets, and U brackets.
+  shaft couplers, flange plates, L brackets, and U brackets, plus a fastener
+  catalog of socket-head screws, hex nuts, washers, and heat-set inserts. Each
+  carries `PartMeta` so it can flow into a bill of materials.
 - **`catalog/actuators`** — NEMA steppers, quasi-direct-drive BLDC actuator pods,
   and hub-motor wheels. Each is a stator/rotor `Component` pair with a joint and
   transmission.
@@ -103,6 +109,28 @@ python3 scripts/validate_urdf.py --check-meshes \
   /tmp/galileo_bundle/urdf/galileo_quadruped.urdf
 ```
 
+### Bill of materials and assembly plan
+
+Every example accepts `--bom <file.csv>`, which rolls the component tree up
+into aggregated part lines (part number, description, quantity, supplier,
+material, process, finish, unit and total cost, notes). Components with their
+own `part` are counted as one purchased/assembled item and their bodies are not
+double-counted; attachments marked `bom_external=false` (such as a motor's
+rotor) stay internal, while bolted-on children are collected. Any body or
+fastener without `PartMeta` is reported in an `UNASSIGNED` row rather than
+silently dropped.
+
+`--plan <file.txt>` writes the ordered assembly plan derived from the same
+tree: each child subassembly is built before it is attached, fasteners are
+installed at the step that joins the components they reference, and every step
+names its tool (e.g. `2.5 mm hex key`) and torque. `--check` prints warnings
+for inconsistent hardware data (engagement longer than the screw, invalid fits,
+duplicate names, missing part metadata); example 03 reports zero warnings.
+
+```bash
+./run-example.sh 03 --bom 03-bom.csv --plan 03-plan.txt
+```
+
 ## Development
 
 ```bash
@@ -112,7 +140,8 @@ python3 scripts/validate_urdf.py --check-meshes \
 `test-all.sh` formats the root package, regenerates its interface, and runs the
 native unit tests. The unit tests cover primitive bridges, component
 composition, URDF compilation (including rigid merges), posed STEP export,
-every catalog component, the mimic-coupled gearbox, and the 17-link quadruped.
+bill-of-materials roll-up, assembly plans and hardware checks, every catalog
+component, the mimic-coupled gearbox, and the 17-link quadruped.
 
 Validation and rendering helpers live in `scripts/` (they run from a clone of
 this repository alone; only the external tools named below are required):

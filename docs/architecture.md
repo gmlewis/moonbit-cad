@@ -23,25 +23,26 @@ living document: add to it as the layers below gain content.
 | Actuation | Motors, drivers, encoders, transmissions, brake/limit hardware | `gmlewis/cad/actuation` (future) |
 | Sensing | Limit switches, encoders, IMUs, cameras, force sensors | `gmlewis/cad/sensing` (future) |
 | Electronics | PCB envelopes, connectors, keepouts, wiring/harness | `gmlewis/cad/electronics` (future) |
-| Assembly | BOM, fastener schedules, fits/clearances, assembly steps, part numbers | `gmlewis/cad/assembly` (future) |
+| Assembly | BOM, fastener schedules, fits/clearances, assembly steps, part numbers | `gmlewis/cad` (`assembly.mbt`; steps future) |
 | Export | STEP/URDF/SDF/glTF, `ros2_control`, firmware pin maps, BOM, drawings | `gmlewis/cad/export` (future) |
 
 Create a future package only when it has real content; do not add empty
 placeholder packages.
 
-## Data model (planned)
+## Data model
 
 The current `Component`/`BodyPart` model is geometry + inertia + mates. The
 realistic layers add orthogonal records rather than bloating `Component`:
 
 - `PartMeta` — part number, name, supplier, material, process (print/CNC/
-  purchased), cost, mass, finish.
+  purchased), cost, mass, finish. **Implemented** in `assembly.mbt`.
 - `Port` — a typed interface: mechanical mate, electrical port (power, signal,
-  bus), fluid/pneumatic, or sensor port; direction and specs.
+  bus), fluid/pneumatic, or sensor port; direction and specs. **Implemented.**
 - `Fastener` — bolt/screw/insert/washer; thread, length, clearance hole,
   engagement, torque, quantity; references the fastened bodies/mates.
+  **Implemented**, with a fastener catalog in `catalog/fasteners.mbt`.
 - `Fit` — nominal, clearance, transition, interference; per-face clearance is
-  already present in the profile helpers.
+  already present in the profile helpers. **Implemented** (`Fit` records).
 - `ActuatorSpec` — voltage, current (stall/rated), torque constant, driver,
   control interface (PWM/STEP-DIR/CAN), encoder type.
 - `SensorSpec` — type, range, resolution, interface, mounting.
@@ -49,7 +50,10 @@ realistic layers add orthogonal records rather than bloating `Component`:
   positions; imported from KiCad STEP rather than rebuilt in B-rep.
 - `ControlBinding` — joint → actuator channel → MCU pin/bus; direction, gear
   ratio, soft limits, homing/limit inputs.
-- `BomLine`, `AssemblyStep` — roll-ups and ordered assembly instructions.
+- `BomLine` — aggregated roll-ups, **implemented** with CSV export.
+- `AssemblyStep` — ordered assembly instructions with tools and torque,
+  **implemented** (`Component::assembly_plan()`), with consistency checks in
+  `Component::assembly_checks()`. Tool-access geometry checks are still future.
 
 These are additive: a `Component` can carry `PartMeta`, `Port`s, and
 `ControlBinding`s alongside its bodies and mates.

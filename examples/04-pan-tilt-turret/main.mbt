@@ -72,6 +72,16 @@ async fn main {
         color=@step_cad.Rgb::blue(),
       ),
     )
+    .with_part(
+      @cad.PartMeta::new(
+        "SENSOR-PAYLOAD",
+        description="Camera and lidar payload",
+        supplier="in-house",
+        material="PLA/glass",
+        process="print/assembly",
+        unit_cost_usd=90.0,
+      ),
+    )
   let tilt_limit = @urdf.JointLimit::new(
     lower=Some(-1.2),
     upper=Some(1.2),

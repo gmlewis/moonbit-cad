@@ -501,6 +501,160 @@ pub fn lead_screw_gripper(
       ),
     )
     .add_mate_mm_deg("mount")
+  // Part metadata and fastener schedule for the BOM.
+  let flange_cost_usd = 18.0
+  let beam_cost_usd = 12.0
+  let plate_cost_usd = 14.0
+  let bracket_cost_usd = 10.0
+  let finger_cost_usd = 8.0
+  let pad_cost_usd = 4.0
+  let carriage_cost_usd = 12.0
+  let post_cost_usd = 8.0
+  let rail_cost_usd = 3.0
+  let nut_cost_usd = 6.0
+  let bushing_cost_usd = 4.0
+  let bolt_m3_cost_usd = 0.35
+  let bolt_m4_cost_usd = 0.45
+  let flange_part = fabricated_part(
+    "GRIP-WRIST-FLANGE", "Gripper wrist flange", "6061-T6", "CNC", flange_cost_usd,
+  )
+  let beam_part = fabricated_part(
+    "GRIP-BOTTOM-BEAM", "Gripper bottom beam", "6061-T6", "CNC", beam_cost_usd,
+  )
+  let motor_plate_part = fabricated_part(
+    "GRIP-MOTOR-PLATE", "Gripper motor plate", "6061-T6", "CNC", plate_cost_usd,
+  )
+  let bearing_plate_part = fabricated_part(
+    "GRIP-BEARING-PLATE", "Gripper bearing plate", "6061-T6", "CNC", plate_cost_usd,
+  )
+  let bracket_part = fabricated_part(
+    "GRIP-FIXED-BRACKET", "Fixed jaw bracket", "6061-T6", "CNC", bracket_cost_usd,
+  )
+  let finger_part = fabricated_part(
+    "GRIP-FINGER", "Gripper finger", "6061-T6", "CNC", finger_cost_usd,
+  )
+  let pad_part = fabricated_part(
+    "GRIP-PAD", "Gripper grip pad", "POM", "CNC", pad_cost_usd,
+  )
+  let rail_part = purchased_part(
+    "GRIP-RAIL-6", "Guide rail 6 mm", "hardened steel", rail_cost_usd,
+  )
+  let nut_part = purchased_part(
+    "GRIP-NUT-M6x2", "Lead-screw nut M6 x 2", "bronze", nut_cost_usd,
+  )
+  let bushing_part = purchased_part(
+    "GRIP-BUSHING-6", "Guide bushing 6 mm", "bronze", bushing_cost_usd,
+  )
+  let carriage_part = fabricated_part(
+    "GRIP-CARRIAGE", "Moving jaw carriage", "6061-T6", "CNC", carriage_cost_usd,
+  )
+  let post_part = fabricated_part(
+    "GRIP-POST", "Moving jaw post", "6061-T6", "CNC", post_cost_usd,
+  )
+  tag_body(base, name + "_wrist_flange", flange_part)
+  tag_body(base, name + "_bottom_beam", beam_part)
+  tag_body(base, name + "_motor_plate", motor_plate_part)
+  tag_body(base, name + "_bearing_plate", bearing_plate_part)
+  tag_body(base, name + "_fixed_bracket", bracket_part)
+  tag_body(base, name + "_fixed_finger", finger_part)
+  tag_body(base, name + "_fixed_pad", pad_part)
+  tag_body(base, name + "_rail_left", rail_part)
+  tag_body(base, name + "_rail_right", rail_part)
+  tag_body(jaw, jaw_name + "_nut", nut_part)
+  tag_body(jaw, jaw_name + "_bushing_left", bushing_part)
+  tag_body(jaw, jaw_name + "_bushing_right", bushing_part)
+  tag_body(jaw, jaw_name + "_carriage", carriage_part)
+  tag_body(jaw, jaw_name + "_post", post_part)
+  tag_body(jaw, jaw_name + "_finger", finger_part)
+  tag_body(jaw, jaw_name + "_pad", pad_part)
+  let motor_bolt_length_mm = 12.0
+  let bearing_bolt_length_mm = 10.0
+  let wrist_bolt_length_mm = 12.0
+  let _ = base.add_fastener(
+    @cad.Fastener::new(
+      "motor_bolts",
+      @cad.FastenerKind::Screw,
+      thread="M3",
+      length_mm=motor_bolt_length_mm,
+      engagement_mm=6.0,
+      quantity=4,
+      torque_nm=1.2,
+      references=["motor_plate", "motor_mount"],
+      part=Some(
+        purchased_part(
+          "SHCS-M3x12", "Socket head cap screw M3 x 12", "steel", bolt_m3_cost_usd,
+        ),
+      ),
+    ),
+  )
+  let _ = base.add_fastener(
+    @cad.Fastener::new(
+      "bearing_bolts",
+      @cad.FastenerKind::Screw,
+      thread="M3",
+      length_mm=bearing_bolt_length_mm,
+      engagement_mm=5.0,
+      quantity=4,
+      torque_nm=1.0,
+      references=["bearing_plate", "screw_bearing"],
+      part=Some(
+        purchased_part(
+          "SHCS-M3x10", "Socket head cap screw M3 x 10", "steel", bolt_m3_cost_usd,
+        ),
+      ),
+    ),
+  )
+  let _ = base.add_fastener(
+    @cad.Fastener::new(
+      "wrist_bolts",
+      @cad.FastenerKind::Screw,
+      thread="M4",
+      length_mm=wrist_bolt_length_mm,
+      engagement_mm=8.0,
+      quantity=4,
+      torque_nm=2.5,
+      references=["wrist_flange", "tool_out"],
+      part=Some(
+        purchased_part(
+          "SHCS-M4x12", "Socket head cap screw M4 x 12", "steel", bolt_m4_cost_usd,
+        ),
+      ),
+    ),
+  )
+  // Electrical interfaces and explicit fits (sensors/PCB come later).
+  let _ = base.add_port(
+    @cad.Port::new("motor_power", @cad.PortKind::Power, spec="24 V DC, 1.5 A"),
+  )
+  let _ = base.add_port(
+    @cad.Port::new("motor_step_dir", @cad.PortKind::Signal, spec="TTL STEP/DIR"),
+  )
+  let _ = base.add_fit(
+    @cad.Fit::new(
+      "screw_nut",
+      @cad.FitClass::Clearance,
+      nominal_mm=screw_diam_mm,
+      min_mm=screw_diam_mm,
+      max_mm=screw_diam_mm + nut_fit_mm,
+    ),
+  )
+  let _ = base.add_fit(
+    @cad.Fit::new(
+      "rail_bushing",
+      @cad.FitClass::Clearance,
+      nominal_mm=rail_diam_mm,
+      min_mm=rail_diam_mm,
+      max_mm=rail_diam_mm + bushing_fit_mm,
+    ),
+  )
+  let _ = base.add_fit(
+    @cad.Fit::new(
+      "screw_bearing",
+      @cad.FitClass::Clearance,
+      nominal_mm=screw_diam_mm,
+      min_mm=screw_diam_mm,
+      max_mm=screw_diam_mm + bearing_fit_mm,
+    ),
+  )
   let motor = nema_stepper(
     name=motor_name,
     frame_size_mm=motor_frame_mm,
@@ -549,6 +703,11 @@ pub fn lead_screw_gripper(
   screw = screw
     .add_mate_mm_deg("input", z=-screw_len / 2.0)
     .add_mate_mm_deg("output", z=screw_len / 2.0)
+  screw = screw.with_part(
+    fabricated_part(
+      "LEAD-SCREW-M6x2", "Threaded lead screw M6 x 2 mm", "steel", "machined", 9.0,
+    ),
+  )
   let bearing = ball_bearing(
     name=name + "_screw_bearing",
     inner_diam_mm=screw_diam_mm + bearing_fit_mm,
@@ -602,4 +761,18 @@ pub fn lead_screw_gripper(
       mimic=Some(@urdf.JointMimic::new(motor_joint, multiplier~)),
     ),
   )
+}
+
+///|
+/// Attaches part metadata to one body by its generated body name.
+fn tag_body(
+  comp : @cad.Component,
+  body_name : String,
+  part : @cad.PartMeta,
+) -> Unit {
+  for i in 0..<comp.bodies.length() {
+    if comp.bodies[i].name == body_name {
+      comp.bodies[i] = comp.bodies[i].with_part(part)
+    }
+  }
 }

@@ -18,6 +18,24 @@ pub fn box_tube_strut(
     width_mm - 2.0 * wall_mm,
     height_mm - 2.0 * wall_mm,
   )
+  let unit_cost_usd = 8.0
+  let part = fabricated_part(
+    "TUBE-" +
+    width_mm.to_string() +
+    "x" +
+    height_mm.to_string() +
+    "x" +
+    length_mm.to_string(),
+    "Box tube " +
+    width_mm.to_string() +
+    " x " +
+    height_mm.to_string() +
+    " x " +
+    length_mm.to_string(),
+    "6061-T6",
+    "extruded/cut",
+    unit_cost_usd,
+  )
   @cad.Component::new(name, description="Box tube strut")
   .with_param("width_mm", width_mm.to_string())
   .with_param("height_mm", height_mm.to_string())
@@ -35,6 +53,7 @@ pub fn box_tube_strut(
   )
   .add_mate_mm_deg("start", z=-length_mm / 2.0)
   .add_mate_mm_deg("end", z=length_mm / 2.0)
+  .with_part(part)
 }
 
 ///|
@@ -48,6 +67,7 @@ pub fn robot_leg_segment(
   density~ : @urdf.Density = @urdf.Density::carbon_fiber(),
   color~ : @step_cad.Rgb = @step_cad.Rgb::grey(),
 ) -> @cad.Component {
+  let leg_cost_usd = 12.0
   @cad.Component::new(name, description="Robot leg segment")
   .with_param("length_mm", length_mm.to_string())
   .with_param("width_mm", width_mm.to_string())
@@ -86,6 +106,15 @@ pub fn robot_leg_segment(
   )
   .add_mate_mm_deg("proximal_joint", axis=(0.0, 1.0, 0.0))
   .add_mate_mm_deg("distal_joint", z=-length_mm, axis=(0.0, 1.0, 0.0))
+  .with_part(
+    fabricated_part(
+      "LEG-" + length_mm.to_string(),
+      "Robot leg segment",
+      "carbon fiber",
+      "cut/drilled",
+      leg_cost_usd,
+    ),
+  )
 }
 
 ///|
@@ -97,6 +126,7 @@ pub fn treaded_wheel(
   hub_radius_mm~ : Double = 35.0,
   density~ : @urdf.Density = @urdf.Density::tpu(),
 ) -> @cad.Component {
+  let wheel_cost_usd = 22.0
   @cad.Component::new(name, description="Treaded wheel")
   .with_param("radius_mm", radius_mm.to_string())
   .with_param("width_mm", width_mm.to_string())
@@ -122,6 +152,14 @@ pub fn treaded_wheel(
     ),
   )
   .add_mate_mm_deg("axle", axis=(0.0, 1.0, 0.0))
+  .with_part(
+    purchased_part(
+      "WHEEL-" + radius_mm.to_string(),
+      "Treaded wheel",
+      "aluminum/TPU",
+      wheel_cost_usd,
+    ),
+  )
 }
 
 ///|
@@ -135,6 +173,7 @@ pub fn quadruped_leg_assembly(
   wheel_radius_mm~ : Double = 90.0,
 ) -> @cad.Component {
   let sign = if is_left { 1.0 } else { -1.0 }
+  let hip_cost_usd = 18.0
   let hip_name = prefix + "_hip_link"
   let thigh_name = prefix + "_thigh_link"
   let calf_name = prefix + "_calf_link"
@@ -168,6 +207,15 @@ pub fn quadruped_leg_assembly(
       "thigh_mount",
       y=sign * hip_offset_y_mm,
       axis=(0.0, 1.0, 0.0),
+    )
+    .with_part(
+      fabricated_part(
+        "HIP-LINK-" + hip_offset_y_mm.to_string(),
+        "Quadruped hip link",
+        "6061-T6",
+        "CNC",
+        hip_cost_usd,
+      ),
     )
   let thigh = robot_leg_segment(thigh_name, length_mm=thigh_len_mm)
   let calf = robot_leg_segment(calf_name, length_mm=calf_len_mm)
@@ -227,6 +275,8 @@ pub fn galileo_quadruped_robot(
 ) -> @cad.Component {
   let half_len = body_len_mm / 2.0
   let half_width = body_width_mm / 2.0
+  let chassis_cost_usd = 60.0
+  let lidar_cost_usd = 90.0
   let mut base = @cad.Component::new("base_link", description="Galileo chassis")
     .with_robot_name(name)
     .with_param("body_len_mm", body_len_mm.to_string())
@@ -241,6 +291,10 @@ pub fn galileo_quadruped_robot(
         body_height_mm,
         density=@urdf.Density::aluminum_6061(),
         color=@step_cad.Rgb::grey(),
+      ).with_part(
+        fabricated_part(
+          "GALILEO-CHASSIS", "Galileo chassis", "6061-T6", "CNC", chassis_cost_usd,
+        ),
       ),
     )
     .add_body(
@@ -251,6 +305,8 @@ pub fn galileo_quadruped_robot(
         z_mm=body_height_mm / 2.0 + 20.0,
         density=@urdf.Density::pla(),
         color=@step_cad.Rgb::black(),
+      ).with_part(
+        purchased_part("LIDAR-2D", "2D lidar", "mixed", lidar_cost_usd),
       ),
     )
   let corners = [
@@ -310,6 +366,10 @@ pub fn assistive_scooter_robot(
   let rear_right_name = "rear_right_wheel_link"
   let seat_x = -wheelbase_mm * 0.15
   let deck_top = 90.0
+  let deck_cost_usd = 60.0
+  let seat_post_cost_usd = 8.0
+  let seat_cost_usd = 35.0
+  let backrest_cost_usd = 25.0
   let chassis = @cad.Component::new(chassis_name, description="Scooter chassis")
     .with_robot_name(name)
     .with_param("wheelbase_mm", wheelbase_mm.to_string())
@@ -324,6 +384,10 @@ pub fn assistive_scooter_robot(
         z_mm=deck_top / 2.0,
         density=@urdf.Density::aluminum_6061(),
         color=@step_cad.Rgb::grey(),
+      ).with_part(
+        fabricated_part(
+          "SCOOTER-DECK", "Scooter deck", "6061-T6", "CNC", deck_cost_usd,
+        ),
       ),
     )
     .add_body(
@@ -335,6 +399,10 @@ pub fn assistive_scooter_robot(
         z_mm=deck_top + (seat_height_mm - deck_top) / 2.0,
         density=@urdf.Density::steel_mild(),
         color=@step_cad.Rgb::black(),
+      ).with_part(
+        fabricated_part(
+          "SEAT-POST", "Seat post", "mild steel", "cut/weld", seat_post_cost_usd,
+        ),
       ),
     )
     .add_body(
@@ -347,6 +415,10 @@ pub fn assistive_scooter_robot(
         z_mm=seat_height_mm + 40.0,
         density=@urdf.Density::pla(),
         color=@step_cad.Rgb::black(),
+      ).with_part(
+        purchased_part(
+          "SCOOTER-SEAT", "Scooter seat", "foam/vinyl", seat_cost_usd,
+        ),
       ),
     )
     .add_body(
@@ -359,6 +431,10 @@ pub fn assistive_scooter_robot(
         z_mm=seat_height_mm + 150.0,
         density=@urdf.Density::pla(),
         color=@step_cad.Rgb::black(),
+      ).with_part(
+        purchased_part(
+          "SCOOTER-BACKREST", "Scooter backrest", "foam/vinyl", backrest_cost_usd,
+        ),
       ),
     )
     .add_mate_mm_deg("steering_mount", x=wheelbase_mm * 0.4, z=deck_top)
@@ -376,6 +452,8 @@ pub fn assistive_scooter_robot(
       z=rear_wheel_r_mm,
       axis=(0.0, 1.0, 0.0),
     )
+  let column_cost_usd = 12.0
+  let handlebar_cost_usd = 15.0
   let steering = @cad.Component::new(
       steering_name,
       description="Scooter steering column",
@@ -389,6 +467,10 @@ pub fn assistive_scooter_robot(
         z_mm=seat_height_mm / 2.0,
         density=@urdf.Density::aluminum_6061(),
         color=@step_cad.Rgb::grey(),
+      ).with_part(
+        fabricated_part(
+          "SCOOTER-COLUMN", "Steering column", "6061-T6", "cut/weld", column_cost_usd,
+        ),
       ),
     )
     .add_body(
@@ -400,6 +482,10 @@ pub fn assistive_scooter_robot(
         z_mm=seat_height_mm,
         density=@urdf.Density::steel_mild(),
         color=@step_cad.Rgb::black(),
+      ).with_part(
+        purchased_part(
+          "SCOOTER-HANDLEBAR", "Handlebar", "mild steel", handlebar_cost_usd,
+        ),
       ),
     )
     .add_mate_mm_deg("mount")

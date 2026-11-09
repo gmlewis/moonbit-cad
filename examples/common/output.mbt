@@ -13,6 +13,9 @@ pub(all) struct OutputPaths {
   blend : String?
   urdf : String?
   bundle : String?
+  bom : String?
+  plan : String?
+  check : Bool
 }
 
 ///|
@@ -59,6 +62,22 @@ pub fn with_output_args(spec : Map[String, @cli.Arg]) -> Map[String, @cli.Arg] {
       help="Write ROS 2 URDF bundle (with .gltf & .step link assets) to directory",
     ),
   )
+  spec.set(
+    "bom",
+    @cli.opt_string(
+      help="Write bill-of-materials CSV to path ('-' for stdout)",
+    ),
+  )
+  spec.set(
+    "plan",
+    @cli.opt_string(
+      help="Write ordered assembly plan to path ('-' for stdout)",
+    ),
+  )
+  spec.set(
+    "check",
+    @cli.flag(help="Print assembly/hardware warnings to stderr"),
+  )
   spec
 }
 
@@ -74,6 +93,9 @@ pub fn output_paths(args : @cli.Args) -> OutputPaths {
     blend: args.string_opt("blend"),
     urdf: args.string_opt("urdf"),
     bundle: args.string_opt("bundle"),
+    bom: args.string_opt("bom"),
+    plan: args.string_opt("plan"),
+    check: args.flag("check"),
   }
 }
 
@@ -86,7 +108,9 @@ fn any_output(output : OutputPaths) -> Bool {
   output.bpy is Some(_) ||
   output.blend is Some(_) ||
   output.urdf is Some(_) ||
-  output.bundle is Some(_)
+  output.bundle is Some(_) ||
+  output.bom is Some(_) ||
+  output.plan is Some(_)
 }
 
 ///|
@@ -113,7 +137,17 @@ pub async fn write_output(
     }
     abort("")
   }
+  if output.check {
+    let warnings = comp.assembly_checks()
+    for warning in warnings {
+      @cli.eprintln("warning: " + warning)
+    }
+    @cli.eprintln("assembly checks: " + warnings.length().to_string() + " warning(s)")
+  }
   if !any_output(output) {
+    if output.check {
+      return
+    }
     comp.to_design(joint_positions~).write_step_file(None)
     return
   }
@@ -152,6 +186,18 @@ pub async fn write_output(
   }
   match output.bundle {
     Some(dir) => comp.to_urdf_bundle().write_to_dir(dir, checked=true)
+    None => ()
+  }
+  match output.bom {
+    Some(_) => @step_cad.write_text_file(comp.to_bom_csv(), stdout_path(output.bom))
+    None => ()
+  }
+  match output.plan {
+    Some(_) =>
+      @step_cad.write_text_file(
+        comp.assembly_plan_text(),
+        stdout_path(output.plan),
+      )
     None => ()
   }
 }

@@ -69,7 +69,15 @@ pub fn nema_stepper(
     )
     .add_mate_mm_deg("base", z=-shaft_length_mm / 2.0)
     .add_mate_mm_deg("shaft_tip", z=shaft_length_mm / 2.0)
-  stator.attach(
+  let unit_cost_usd = 12.0
+  let part = purchased_part(
+    "NEMA-" + frame_size_mm.to_string(),
+    "NEMA stepper " + frame_size_mm.to_string() + " mm",
+    "mixed",
+    unit_cost_usd,
+  )
+  stator
+  .attach(
     "\{name}_shaft_joint",
     parent_mate="shaft_base",
     rotor,
@@ -81,7 +89,9 @@ pub fn nema_stepper(
       dynamics=Some(@urdf.JointDynamics::new(damping=0.02, friction=0.01)),
       transmission_reduction=Some(1.0),
     ),
+    bom_external=false,
   )
+  .with_part(part)
 }
 
 ///|
@@ -142,7 +152,15 @@ pub fn bldc_actuator_pod(
     )
     .add_mate_mm_deg("base", z=-output_thickness_mm / 2.0)
     .add_mate_mm_deg("output_flange", z=output_thickness_mm / 2.0)
-  stator.attach(
+  let unit_cost_usd = 120.0
+  let part = purchased_part(
+    "QDD-" + housing_diam_mm.to_string(),
+    "QDD actuator pod " + housing_diam_mm.to_string() + " mm",
+    "mixed",
+    unit_cost_usd,
+  )
+  stator
+  .attach(
     "\{name}_joint",
     parent_mate="bearing_seat",
     rotor,
@@ -157,7 +175,9 @@ pub fn bldc_actuator_pod(
       dynamics=Some(@urdf.JointDynamics::new(damping=0.4, friction=0.08)),
       transmission_reduction=Some(reduction),
     ),
+    bom_external=false,
   )
+  .with_part(part)
 }
 
 ///|
@@ -213,7 +233,15 @@ pub fn hub_motor_assembly(
     )
     .add_mate_mm_deg("spin")
     .add_mate_mm_deg("outer_face", z=tire_width_mm / 2.0)
-  hub.attach(
+  let unit_cost_usd = 85.0
+  let part = purchased_part(
+    "HUB-" + tire_diam_mm.to_string(),
+    "Hub motor wheel " + tire_diam_mm.to_string() + " mm",
+    "mixed",
+    unit_cost_usd,
+  )
+  hub
+  .attach(
     "\{name}_spin_joint",
     parent_mate="axle",
     wheel,
@@ -224,5 +252,7 @@ pub fn hub_motor_assembly(
       ),
       transmission_reduction=Some(1.0),
     ),
+    bom_external=false,
   )
+  .with_part(part)
 }

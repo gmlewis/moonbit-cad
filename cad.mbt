@@ -22,6 +22,10 @@
 /// | `bodies : Array[BodyPart]` | Rigid solids with CAD geometry, density, exact inertia, and collision primitives. |
 /// | `mates : Map[String, @urdf.MateConnector]` | Named attachment frames other components snap onto. |
 /// | `attachments : Array[Attachment]` | Child components plus the joint that connects them. |
+/// | `part : PartMeta?` | Purchasing/manufacturing data (part number, supplier, material, process, cost). |
+/// | `ports : Array[Port]` | Typed electrical/mechanical interfaces (power, signal, bus, sensor). |
+/// | `fasteners : Array[Fastener]` | Fastener schedule: thread, length, engagement, quantity, torque, references. |
+/// | `fits : Array[Fit]` | Named fits with a nominal size and allowed min/max range. |
 ///
 /// A `BodyPart` stores both representations of one solid: a
 /// `@step_cad.SceneNode` in millimeters/degrees and a `@urdf.Inertial` in
@@ -65,7 +69,8 @@
 /// ## Hardware catalog
 ///
 /// - `catalog/fasteners` — hex standoffs, cylindrical spacers, ball bearings,
-///   shaft couplers, flange plates, L brackets, and U brackets.
+///   shaft couplers, flange plates, L brackets, and U brackets, plus socket-head
+///   screws, hex nuts, washers, and heat-set inserts (all with `PartMeta`).
 /// - `catalog/actuators` — NEMA steppers, quasi-direct-drive BLDC actuator
 ///   pods, and hub-motor wheels. Each is a stator/rotor `Component` pair with a
 ///   joint and transmission.
@@ -104,12 +109,34 @@
 /// let robot = assembly.to_robot()
 /// ```
 ///
+/// ## Bill of materials
+///
+/// `Component::bom()` aggregates every part once: a component with its own
+/// `part` is one purchased/assembled item (its bodies are not double-counted),
+/// internal attachments such as a motor rotor are skipped, and external ones
+/// are collected. Fastener schedules add their quantities. Any body or
+/// fastener without `PartMeta` is counted in `Bom::unassigned` and appears as
+/// an `UNASSIGNED` row rather than being silently dropped.
+///
+/// ```mbt
+/// let bom = assembly.bom()
+/// let csv = bom.to_csv()
+/// let total = bom.total_cost_usd()
+/// ```
+///
+/// `Component::assembly_plan()` derives an ordered build sequence from the
+/// same tree (children before the attach step, fasteners at the step that
+/// joins their components), and `assembly_plan_text()` renders it with tools
+/// and torque. `Component::assembly_checks()` reports inconsistent hardware
+/// data such as engagement longer than the screw or an invalid fit range.
+///
 /// ## Module map
 ///
 /// | File | Contents |
 /// | --- | --- |
 /// | `primitives.mbt` | Centered CAD/URDF primitive bridges and `SceneNode` transform helpers. |
 /// | `component.mbt` | `BodyPart`, `JointSpec`, `Attachment`, the `Component` AST, and builders. |
+/// | `assembly.mbt` | `PartMeta`, `Port`, `Fit`, `Fastener`, and bill-of-materials roll-up/CSV. |
 /// | `compile-step.mbt` | `Component` → posed `@step_cad.Design` through forward kinematics. |
 /// | `compile-urdf.mbt` | `Component` → `@urdf.Robot` and `@urdf.UrdfBundle` (with real `.gltf` and `.step` assets). |
 /// | `catalog/fasteners.mbt` | Standoffs, bushings, bearings, couplers, and L/U/flange brackets. |

@@ -609,6 +609,7 @@ pub fn herringbone_gear_component(
   density~ : @urdf.Density = @urdf.Density::pla(),
   color~ : @step_cad.Rgb = @step_cad.Rgb::orange(),
 ) -> @cad.Component {
+  let gear_cost_usd = 6.0
   let dims = gear_dimensions(gear_module, gear_deg2rad(20.0), num_teeth)
   let outline = gear_outline(gear_module, 20.0, num_teeth, resolution)
   let holes = if bore_radius_mm > 0.0 {
@@ -655,6 +656,15 @@ pub fn herringbone_gear_component(
   .add_mate_mm_deg("center")
   .add_mate_mm_deg("bottom", z=-gear_length_mm / 2.0)
   .add_mate_mm_deg("top", z=gear_length_mm / 2.0)
+  .with_part(
+    fabricated_part(
+      "GEAR-" + num_teeth.to_string() + "T",
+      "Herringbone gear",
+      "PLA",
+      "print",
+      gear_cost_usd,
+    ),
+  )
 }
 
 ///|
@@ -664,6 +674,7 @@ fn ring_housing_component(
   cfg : GearboxConfig,
   p : PlanetaryGearboxParams,
 ) -> @cad.Component {
+  let ring_cost_usd = 12.0
   let ring = gear_ring_geometry(cfg)
   let outer_circle = gear_circle_outline(
     ring.outer_radius,
@@ -719,7 +730,11 @@ fn ring_housing_component(
       y=-cfg.center_distance * @math.sin(theta),
     )
   }
-  comp
+  comp.with_part(
+    fabricated_part(
+      "PGB-RING", "Planetary ring housing", "PLA", "print", ring_cost_usd,
+    ),
+  )
 }
 
 ///|
@@ -729,6 +744,7 @@ fn sun_component(
   cfg : GearboxConfig,
   p : PlanetaryGearboxParams,
 ) -> @cad.Component {
+  let sun_cost_usd = 5.0
   let outline = gear_outline(
     cfg.gear_module,
     cfg.pressure_angle,
@@ -776,6 +792,11 @@ fn sun_component(
   .add_mate_mm_deg("center")
   .add_mate_mm_deg("bottom", z=-cfg.gear_length / 2.0)
   .add_mate_mm_deg("top", z=cfg.gear_length / 2.0)
+  .with_part(
+    fabricated_part(
+      "PGB-SUN", "Planetary sun gear", "PLA", "print", sun_cost_usd,
+    ),
+  )
 }
 
 ///|
@@ -786,6 +807,7 @@ fn planet_component(
   p : PlanetaryGearboxParams,
   phi_deg : Double,
 ) -> @cad.Component {
+  let planet_cost_usd = 4.0
   let outline = gear_outline(
     cfg.gear_module,
     cfg.pressure_angle,
@@ -839,6 +861,11 @@ fn planet_component(
   .add_mate_mm_deg("center")
   .add_mate_mm_deg("bottom", z=-cfg.gear_length / 2.0)
   .add_mate_mm_deg("top", z=cfg.gear_length / 2.0)
+  .with_part(
+    fabricated_part(
+      "PGB-PLANET", "Planetary planet gear", "PLA", "print", planet_cost_usd,
+    ),
+  )
 }
 
 ///|
@@ -848,6 +875,7 @@ fn carrier_component(
   cfg : GearboxConfig,
   p : PlanetaryGearboxParams,
 ) -> @cad.Component {
+  let carrier_cost_usd = 8.0
   let thickness = 8.0
   let plate_radius = cfg.center_distance + cfg.planet.outer_radius + 4.0
   let mut comp = @cad.Component::new(
@@ -880,7 +908,14 @@ fn carrier_component(
       ),
     )
   }
-  comp.add_mate_mm_deg("bottom").add_mate_mm_deg("output_shaft", z=thickness)
+  comp
+  .add_mate_mm_deg("bottom")
+  .add_mate_mm_deg("output_shaft", z=thickness)
+  .with_part(
+    fabricated_part(
+      "PGB-CARRIER", "Planetary carrier", "PLA", "print", carrier_cost_usd,
+    ),
+  )
 }
 
 ///|
