@@ -3,7 +3,7 @@
 ///
 /// A six-revolute-joint modular serial arm assembled from flange plates, QDD
 /// actuator pods, reinforced box-tube links, right-angle joint flanges, and a
-/// U-bracket wrist gripper.
+/// 1-DOF parallel-jaw gripper.
 ///
 /// Every link is a box tube with **solid end plates** welded into both ends
 /// (the plate overlaps the tube by 4 mm and extends past it), and every
@@ -187,12 +187,13 @@ async fn main {
     ),
     "wristRollDeg": @cli.opt_double(60.0, help="Wrist roll angle in degrees"),
     "toolPitchDeg": @cli.opt_double(25.0, help="Tool pitch angle in degrees"),
+    "gripMm": @cli.opt_double(12.0, help="Gripper jaw travel in mm (0-28)"),
   }
   let spec = @common.with_output_args(base_spec)
   guard @cli.parse(
       spec,
       prog="03-serial-robot-arm",
-      description="Six-DOF modular serial robot arm.",
+      description="Six-axis modular serial robot arm with a parallel jaw.",
     )
     is Some(args) else {
     return
@@ -461,11 +462,14 @@ async fn main {
     pad_overlap,
     tool_out_len / 2.0 - 22.0,
   )
-  let gripper = @cad.u_bracket(
+  let gripper = @cad.parallel_gripper(
     name="gripper",
-    inner_span_mm=70.0,
-    arm_length_mm=60.0,
-    width_mm=45.0,
+    opening_mm=30.0,
+    travel_mm=28.0,
+    finger_len_mm=45.0,
+    finger_width_mm=45.0,
+    finger_thick_mm=8.0,
+    base_thick_mm=12.0,
   )
   let comp = base
     .attach(
@@ -584,7 +588,7 @@ async fn main {
       "gripper_mount",
       parent_mate="gripper_port",
       gripper,
-      child_mate="base_mount",
+      child_mate="mount",
       spec=@cad.JointSpec::fixed(),
     )
   let deg = @math.PI / 180.0
@@ -595,6 +599,15 @@ async fn main {
   positions.set("wrist_pitch_joint", args.double("wristPitchDeg") * deg)
   positions.set("wrist_roll_joint", args.double("wristRollDeg") * deg)
   positions.set("tool_pitch_joint", args.double("toolPitchDeg") * deg)
+  let grip_mm = args.double("gripMm")
+  let grip_mm = if grip_mm < 0.0 {
+    0.0
+  } else if grip_mm > 28.0 {
+    28.0
+  } else {
+    grip_mm
+  }
+  positions.set("gripper_jaw", grip_mm / 1000.0)
   @common.write_output(
     comp,
     @common.output_paths(args),

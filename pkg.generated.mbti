@@ -39,6 +39,8 @@ pub fn l_bracket(name? : String, width_mm? : Double, leg_a_mm? : Double, leg_b_m
 
 pub fn nema_stepper(name? : String, frame_size_mm? : Double, body_length_mm? : Double, boss_diam_mm? : Double, boss_height_mm? : Double, shaft_diam_mm? : Double, shaft_length_mm? : Double, max_effort_nm? : Double, max_vel_rad_s? : Double) -> Component
 
+pub fn parallel_gripper(name? : String, opening_mm? : Double, travel_mm? : Double, finger_len_mm? : Double, finger_width_mm? : Double, finger_thick_mm? : Double, base_thick_mm? : Double, finger_overlap_mm? : Double, effort_n? : Double, velocity_mps? : Double, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> Component
+
 pub fn planetary_gearbox(name? : String, params? : PlanetaryGearboxParams) -> Component
 
 pub fn quadruped_leg_assembly(String, is_left~ : Bool, hip_offset_y_mm? : Double, thigh_len_mm? : Double, calf_len_mm? : Double, wheel_radius_mm? : Double) -> Component

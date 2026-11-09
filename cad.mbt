@@ -73,6 +73,8 @@
 ///   true involute swept B-Rep gears, with mimic-coupled planets and carrier.
 /// - `catalog-mobility` — box-tube struts, robot leg segments, treaded wheels,
 ///   a 17-link wheeled quadruped, and an assistive mobility scooter.
+/// - `catalog-grippers` — a 1-DOF parallel-jaw gripper with a prismatic moving
+///   finger.
 ///
 /// ## Quick start
 ///
@@ -113,6 +115,7 @@
 /// | `catalog-actuators.mbt` | NEMA steppers, BLDC actuator pods, hub motors, and servos. |
 /// | `catalog-gears.mbt` | Herringbone involute planetary gearbox (STEP + mimic URDF). |
 /// | `catalog-mobility.mbt` | Structural tubes, leg segments, wheels, chassis, and scooter frame. |
+/// | `catalog-grippers.mbt` | A 1-DOF parallel-jaw gripper with a prismatic moving finger. |
 ///
 /// ## Booleans are nominal in the STEP backend
 ///
