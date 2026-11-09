@@ -86,7 +86,7 @@ name:
 | --- | --- |
 | `01-bracket-assembly` | L bracket with a rigidly merged flange, NEMA stepper, coupler, and bearing. |
 | `02-planetary-actuator` | NEMA stepper driving a herringbone planetary gearbox. |
-| `03-serial-robot-arm` | Six-axis modular arm built from actuator pods and box-tube links. |
+| `03-serial-robot-arm` | Six-axis modular arm: waist yaw, shoulder/elbow pitch, and a pitch-roll-pitch wrist with a U-bracket gripper. |
 | `04-pan-tilt-turret` | Two-axis gimbal with `MergeRigid` stator mounting and a revolute tilt axis. |
 | `05-galileo-quadruped` | Flagship 17-link wheeled quadruped; STEP, glTF, URDF, or full ROS 2 bundle. |
 | `06-assistive-scooter` | Rider-parameterized mobility scooter with a steerable front column. |

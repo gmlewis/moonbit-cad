@@ -314,7 +314,7 @@ pub fn u_bracket(
       width_mm,
       arm_length_mm,
       x_mm=-half_span,
-      z_mm=arm_length_mm / 2.0,
+      z_mm=thickness_mm / 2.0 + arm_length_mm / 2.0,
       density~,
       color~,
     ),
@@ -326,11 +326,15 @@ pub fn u_bracket(
       width_mm,
       arm_length_mm,
       x_mm=half_span,
-      z_mm=arm_length_mm / 2.0,
+      z_mm=thickness_mm / 2.0 + arm_length_mm / 2.0,
       density~,
       color~,
     ),
   )
   .add_mate_mm_deg("base_mount", z=-thickness_mm / 2.0)
-  .add_mate_mm_deg("pivot", z=arm_length_mm * 0.7, axis=(1.0, 0.0, 0.0))
+  .add_mate_mm_deg(
+    "pivot",
+    z=thickness_mm / 2.0 + arm_length_mm * 0.7,
+    axis=(1.0, 0.0, 0.0),
+  )
 }
