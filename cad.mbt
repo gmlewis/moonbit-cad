@@ -73,8 +73,9 @@
 ///   true involute swept B-Rep gears, with mimic-coupled planets and carrier.
 /// - `catalog/mobility` — box-tube struts, robot leg segments, treaded wheels,
 ///   a 17-link wheeled quadruped, and an assistive mobility scooter.
-/// - `catalog/grippers` — a 1-DOF parallel-jaw gripper and a motorized
-///   lead-screw gripper (NEMA stepper, screw, nut, guide rails, mimic jaw).
+/// - `catalog/grippers` — a 1-DOF parallel-jaw gripper and a motorized,
+///   threaded lead-screw gripper (exposed screw/nut/rails, matched jaws,
+///   bolt-ready plates).
 ///
 /// ## Quick start
 ///

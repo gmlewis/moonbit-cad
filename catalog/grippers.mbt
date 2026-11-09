@@ -31,6 +31,7 @@ pub fn parallel_gripper(
   color~ : @step_cad.Rgb = @step_cad.Rgb::grey(),
 ) -> @cad.Component {
   let half_open = opening_mm / 2.0
+  let mm_per_m = 1000.0
   let base_w = opening_mm + 2.0 * finger_thick_mm
   let jaw_name = name + "_jaw"
   let base = @cad.Component::new(name, description="Parallel-jaw gripper")
@@ -90,25 +91,27 @@ pub fn parallel_gripper(
         effort=effort_n,
         velocity=velocity_mps,
         lower=Some(0.0),
-        upper=Some(travel_mm / 1000.0),
+        upper=Some(travel_mm / mm_per_m),
       ),
     ),
   )
 }
 
 ///|
-/// Builds a motorized lead-screw parallel-jaw gripper.
+/// Builds a motorized, threaded lead-screw parallel-jaw gripper.
 ///
-/// Unlike `parallel_gripper` (a bare kinematic jaw), this is a real mechanism:
-/// a NEMA stepper turns a lead screw through a coupler; the screw drives a nut
-/// on the moving carriage; two guide rails take the moment; the screw's far end
-/// runs in a ball bearing.  The jaw is a prismatic joint **mimicking the motor
-/// rotor**: command the motor joint and the jaw follows through the screw lead.
+/// The frame is deliberately skeletal: two end plates, a bottom beam, a rear
+/// wrist flange, and two guide rails.  The screw, nut, bushings, and drive
+/// train are visible from the sides and top.  A NEMA 8 stepper turns a
+/// threaded lead screw through a coupler; the screw drives a nut on the moving
+/// carriage; two guide rails take the moment; the screw's far end runs in a
+/// ball bearing.  The jaw is a prismatic joint **mimicking the motor rotor**:
+/// command the motor and the jaw follows through the screw lead.
 ///
 /// Layout (local frame):
-/// - `mount` is on the rear plate at `Z = 0`, normal `+Z`.
+/// - `mount` is on the rear flange at `Z = 0`, normal `+Z`.
 /// - The jaws extend along `+Z`; the carriage slides along `X`.
-/// - The motor sits on the `-X` wall; the screw runs along `X`.
+/// - The motor is on the `-X` end plate; the screw runs along `X`.
 ///
 /// Mates: `"mount"`, `"jaw_slide"` (axis `+X`), `"motor_mount"`, and
 /// `"bearing_seat"`.  Joints: `"<name>_motor_shaft_joint"` (continuous) and
@@ -121,24 +124,72 @@ pub fn lead_screw_gripper(
   finger_len_mm~ : Double = 45.0,
   finger_width_mm~ : Double = 45.0,
   finger_thick_mm~ : Double = 8.0,
+  grip_pad_mm~ : Double = 3.0,
   base_depth_mm~ : Double = 70.0,
-  base_h_mm~ : Double = 64.0,
-  base_w_mm~ : Double = 110.0,
+  base_h_mm~ : Double = 58.0,
+  base_w_mm~ : Double = 84.0,
   wall_mm~ : Double = 6.0,
   screw_diam_mm~ : Double = 6.0,
+  thread_od_mm~ : Double = 7.2,
   rail_diam_mm~ : Double = 6.0,
-  rail_y_mm~ : Double = 20.0,
-  motor_frame_mm~ : Double = 28.2,
-  motor_body_mm~ : Double = 32.0,
-  motor_shaft_mm~ : Double = 20.0,
-  motor_shaft_diam_mm~ : Double = 5.0,
-  motor_effort_nm~ : Double = 0.1,
+  rail_y_mm~ : Double = 16.0,
+  motor_frame_mm~ : Double = 20.3,
+  motor_body_mm~ : Double = 20.0,
+  motor_shaft_mm~ : Double = 12.0,
+  motor_shaft_diam_mm~ : Double = 4.0,
+  motor_boss_diam_mm~ : Double = 15.0,
+  motor_boss_height_mm~ : Double = 1.5,
+  motor_effort_nm~ : Double = 0.05,
   motor_vel_rad_s~ : Double = 20.0,
+  coupler_len_mm~ : Double = 8.0,
+  coupler_outer_mm~ : Double = 10.0,
+  motor_shaft_fit_mm~ : Double = 0.2,
+  screw_fit_mm~ : Double = 0.2,
+  nut_outer_mm~ : Double = 16.0,
+  nut_len_mm~ : Double = 12.0,
+  nut_fit_mm~ : Double = 0.4,
+  bushing_outer_mm~ : Double = 12.0,
+  bushing_len_mm~ : Double = 14.0,
+  bushing_fit_mm~ : Double = 0.2,
+  bearing_outer_mm~ : Double = 16.0,
+  bearing_width_mm~ : Double = 5.0,
+  bearing_fit_mm~ : Double = 0.2,
+  thread_crest_width_mm~ : Double = 1.0,
+  thread_crest_fit_mm~ : Double = 0.05,
+  thread_journal_mm~ : Double = 12.5,
+  bearing_journal_mm~ : Double = 4.0,
+  grip_finger_overlap_mm~ : Double = 1.0,
+  flange_bolt_diam_mm~ : Double = 4.5,
+  flange_bolt_pitch_x_mm~ : Double = 60.0,
+  flange_bolt_pitch_y_mm~ : Double = 36.0,
+  motor_hole_diam_mm~ : Double = 17.0,
+  motor_bolt_diam_mm~ : Double = 3.0,
+  motor_bolt_pitch_mm~ : Double = 20.0,
+  bearing_hole_diam_mm~ : Double = 16.4,
+  bearing_bolt_diam_mm~ : Double = 3.0,
+  bearing_bolt_pitch_mm~ : Double = 24.0,
+  jaw_effort_n~ : Double = 200.0,
+  jaw_velocity_mps~ : Double = 0.05,
   density~ : @urdf.Density = @urdf.Density::aluminum_6061(),
   color~ : @step_cad.Rgb = @step_cad.Rgb::grey(),
 ) -> @cad.Component {
+  // Units and layout constants.
+  let mm_per_m = 1000.0
+  let right_angle_deg = 90.0
+  let rad_per_rev = 2.0 * @math.PI
+  let jaw_lower_mm = 0.0
+  let rail_engagement_mm = 4.0
+  let carriage_plate_z_mm = 8.0
+  let carriage_plate_thick_mm = 8.0
+  let post_start_z_mm = 8.0
+  let carriage_width_inset_mm = 4.0
+  let bracket_thick_mm = 8.0
+  let bracket_setback_mm = 2.0
+  let slide_axis = (1.0, 0.0, 0.0)
+  // Derived geometry.
   let half_open = opening_mm / 2.0
   let half_base = base_w_mm / 2.0
+  let plate_z = wall_mm / 2.0
   let screw_z = base_depth_mm / 2.0
   let wall_inner = half_base - wall_mm
   let jaw_name = name + "_jaw"
@@ -146,106 +197,183 @@ pub fn lead_screw_gripper(
   let coupler_name = name + "_coupler"
   let screw_name = name + "_screw"
   let motor_joint = motor_name + "_shaft_joint"
-  // The motor face sits on the -X wall; the shaft tip and coupler occupy the
-  // first part of the frame, then the screw runs to the far bearing.
-  let shaft_tip_x = -half_base + 1.5 + motor_shaft_mm
-  let coupler_out_x = shaft_tip_x + 20.0
-  let screw_len = wall_inner - coupler_out_x
+  // The motor face sits on the -X end plate; the shaft and coupler occupy the
+  // first part of the frame, then the threaded screw runs to the far bearing.
+  let motor_face_x = -half_base
+  let shaft_tip_x = motor_face_x + motor_boss_height_mm + motor_shaft_mm
+  let coupler_out_x = shaft_tip_x + coupler_len_mm
   let bearing_x = wall_inner
-  let rail_len = base_w_mm - 2.0 * wall_mm + 8.0
+  let screw_len = bearing_x - coupler_out_x
+  let screw_center_x = (coupler_out_x + bearing_x) / 2.0
+  let rail_len = base_w_mm - 2.0 * wall_mm + 2.0 * rail_engagement_mm
   let finger_z = base_depth_mm + finger_len_mm / 2.0 - screw_z
-  let arm_x = half_open + finger_thick_mm / 2.0
-  let carriage_z = 8.0
-  let carriage_thick = 8.0
-  let post_z0 = 8.0
-  let motor_hole = @step_cad.Profile2D::circle(24.0).rev()
-  let bearing_hole = @step_cad.Profile2D::circle(16.4).rev()
+  let finger_center_x = half_open + grip_pad_mm + finger_thick_mm / 2.0
+  let arm_x = finger_center_x - grip_finger_overlap_mm
+  let fixed_inner_x = arm_x - finger_thick_mm / 2.0
+  let bracket_x0 = fixed_inner_x
+  let bracket_w = half_base - bracket_x0
+  let bracket_xc = (half_base + bracket_x0) / 2.0
+  let thread_start_x = coupler_out_x + thread_journal_mm
+  let thread_end_x = bearing_x - bearing_journal_mm
+  let thread_count = ((thread_end_x - thread_start_x) / lead_mm).to_int()
+  let half_lead_mm = lead_mm / 2.0
+  let flange_bolt_dx = flange_bolt_pitch_x_mm / 2.0
+  let flange_bolt_dy = flange_bolt_pitch_y_mm / 2.0
+  let flange_pts : Array[(Double, Double)] = [
+    (-flange_bolt_dx, -flange_bolt_dy),
+    (flange_bolt_dx, -flange_bolt_dy),
+    (flange_bolt_dx, flange_bolt_dy),
+    (-flange_bolt_dx, flange_bolt_dy),
+  ]
+  let flange_holes = flange_pts.map(fn(p) {
+    @step_cad.translate_pts(
+      @step_cad.Profile2D::circle(flange_bolt_diam_mm),
+      p.0,
+      p.1,
+    ).rev()
+  })
+  let motor_bolt_d = motor_bolt_pitch_mm / 2.0
+  let motor_holes : Array[Array[(Double, Double)]] = [
+    @step_cad.Profile2D::circle(motor_hole_diam_mm).rev(),
+  ]
+  for
+    p in [
+      (-motor_bolt_d, -motor_bolt_d),
+      (motor_bolt_d, -motor_bolt_d),
+      (motor_bolt_d, motor_bolt_d),
+      (-motor_bolt_d, motor_bolt_d),
+    ] {
+    motor_holes.push(
+      @step_cad.translate_pts(
+        @step_cad.Profile2D::circle(motor_bolt_diam_mm),
+        p.0,
+        p.1,
+      ).rev(),
+    )
+  }
+  let bearing_bolt_d = bearing_bolt_pitch_mm / 2.0
+  let bearing_holes : Array[Array[(Double, Double)]] = [
+    @step_cad.Profile2D::circle(bearing_hole_diam_mm).rev(),
+  ]
+  for
+    p in [
+      (-bearing_bolt_d, -bearing_bolt_d),
+      (bearing_bolt_d, -bearing_bolt_d),
+      (bearing_bolt_d, bearing_bolt_d),
+      (-bearing_bolt_d, bearing_bolt_d),
+    ] {
+    bearing_holes.push(
+      @step_cad.translate_pts(
+        @step_cad.Profile2D::circle(bearing_bolt_diam_mm),
+        p.0,
+        p.1,
+      ).rev(),
+    )
+  }
   let base = @cad.Component::new(name, description="Lead-screw gripper")
     .with_param("opening_mm", opening_mm.to_string())
     .with_param("travel_mm", travel_mm.to_string())
     .with_param("lead_mm", lead_mm.to_string())
     .with_param("finger_len_mm", finger_len_mm.to_string())
     .with_param("finger_width_mm", finger_width_mm.to_string())
+    .with_param("grip_pad_mm", grip_pad_mm.to_string())
     .with_param("screw_diam_mm", screw_diam_mm.to_string())
+    .with_param("thread_od_mm", thread_od_mm.to_string())
     .with_param("rail_diam_mm", rail_diam_mm.to_string())
+    .with_param("nut_len_mm", nut_len_mm.to_string())
+    .with_param("bushing_len_mm", bushing_len_mm.to_string())
+    .with_param("bearing_outer_mm", bearing_outer_mm.to_string())
+    // Bolt-ready wrist flange.
     .add_body(
-      @cad.BodyPart::box_mm(
-        name + "_rear_plate",
-        base_w_mm,
-        base_h_mm,
+      @cad.BodyPart::extruded_profile_mm(
+        name + "_wrist_flange",
+        @step_cad.Profile2D::centered_rect(base_w_mm, base_h_mm),
         wall_mm,
-        z_mm=wall_mm / 2.0,
+        holes=flange_holes,
+        z_mm=plate_z,
         density~,
         color~,
       ),
     )
     .add_body(
       @cad.BodyPart::box_mm(
-        name + "_bottom_plate",
+        name + "_bottom_beam",
         base_w_mm,
         wall_mm,
         base_depth_mm,
-        y_mm=-base_h_mm / 2.0 + wall_mm / 2.0,
+        y_mm=-base_h_mm / 2.0 + plate_z,
         z_mm=base_depth_mm / 2.0,
         density~,
         color~,
       ),
     )
-    // Side walls carry the motor and the far bearing; each has a clearance
-    // hole so the shaft/bearing passes through instead of into a solid wall.
+    // End plates carry the motor and the screw bearing; both have clearance
+    // holes and bolt patterns, and the guide rails weld into their inner faces.
     .add_body(
       @cad.BodyPart::extruded_profile_mm(
-        name + "_motor_wall",
+        name + "_motor_plate",
         @step_cad.Profile2D::centered_rect(base_depth_mm, base_h_mm),
         wall_mm,
-        holes=[motor_hole],
-        x_mm=-half_base + wall_mm / 2.0,
+        holes=motor_holes,
+        x_mm=-half_base + plate_z,
         z_mm=screw_z,
-        ry_deg=90.0,
+        ry_deg=right_angle_deg,
         density~,
         color~,
       ),
     )
     .add_body(
       @cad.BodyPart::extruded_profile_mm(
-        name + "_bearing_wall",
+        name + "_bearing_plate",
         @step_cad.Profile2D::centered_rect(base_depth_mm, base_h_mm),
         wall_mm,
-        holes=[bearing_hole],
-        x_mm=half_base - wall_mm / 2.0,
+        holes=bearing_holes,
+        x_mm=half_base - plate_z,
         z_mm=screw_z,
-        ry_deg=90.0,
+        ry_deg=right_angle_deg,
         density~,
         color~,
       ),
     )
-    // Fixed jaw: a front crossbar welded to the bottom plate and to the
-    // finger.  It stays outside the moving carriage's x path.
+    // Fixed jaw: a bracket from the +X end plate to an identical finger, with
+    // a bolt-ready grip pad.  The bracket stays outside the moving jaw's path.
     .add_body(
       @cad.BodyPart::box_mm(
-        name + "_fixed_jaw_crossbar",
-        finger_thick_mm,
-        base_h_mm - 8.0,
-        wall_mm,
-        x_mm=half_open + finger_thick_mm / 2.0,
-        z_mm=base_depth_mm - wall_mm / 2.0,
+        name + "_fixed_bracket",
+        bracket_w,
+        finger_width_mm,
+        bracket_thick_mm,
+        x_mm=bracket_xc,
+        z_mm=base_depth_mm - bracket_setback_mm,
         density~,
         color~,
       ),
     )
     .add_body(
       @cad.BodyPart::box_mm(
-        name + "_fixed_jaw",
+        name + "_fixed_finger",
         finger_thick_mm,
         finger_width_mm,
-        finger_len_mm + 4.0,
-        x_mm=half_open + finger_thick_mm / 2.0,
-        z_mm=base_depth_mm + finger_len_mm / 2.0 - 2.0,
+        finger_len_mm,
+        x_mm=arm_x,
+        z_mm=base_depth_mm + finger_len_mm / 2.0,
         density~,
         color~,
       ),
     )
-    // Two guide rails, welded into the side walls.
+    .add_body(
+      @cad.BodyPart::box_mm(
+        name + "_fixed_pad",
+        grip_pad_mm,
+        finger_width_mm,
+        finger_len_mm,
+        x_mm=half_open + grip_pad_mm / 2.0,
+        z_mm=base_depth_mm + finger_len_mm / 2.0,
+        density~,
+        color=@step_cad.Rgb::black(),
+      ),
+    )
+    // Two guide rails, welded into the end plates and visible between them.
     .add_body(
       @cad.BodyPart::cylinder_mm(
         name + "_rail_left",
@@ -253,7 +381,7 @@ pub fn lead_screw_gripper(
         rail_len,
         y_mm=rail_y_mm,
         z_mm=screw_z,
-        ry_deg=90.0,
+        ry_deg=right_angle_deg,
         density~,
         color~,
       ),
@@ -265,25 +393,37 @@ pub fn lead_screw_gripper(
         rail_len,
         y_mm=-rail_y_mm,
         z_mm=screw_z,
-        ry_deg=90.0,
+        ry_deg=right_angle_deg,
         density~,
         color~,
       ),
     )
     .add_mate_mm_deg("mount")
-    .add_mate_mm_deg("jaw_slide", z=screw_z, axis=(1.0, 0.0, 0.0))
-    .add_mate_mm_deg("motor_mount", x=-half_base, z=screw_z, ry_deg=90.0)
-    .add_mate_mm_deg("bearing_seat", x=bearing_x, z=screw_z, ry_deg=90.0)
+    .add_mate_mm_deg("jaw_slide", z=screw_z, axis=slide_axis)
+    .add_mate_mm_deg(
+      "motor_mount",
+      x=-half_base,
+      z=screw_z,
+      ry_deg=right_angle_deg,
+    )
+    .add_mate_mm_deg(
+      "bearing_seat",
+      x=bearing_x,
+      z=screw_z,
+      ry_deg=right_angle_deg,
+    )
+  // Moving jaw: nut, bushings, compact carriage plate, post, identical finger,
+  // and grip pad.  It is an L so the post travels behind the fixed jaw.
   let jaw = @cad.Component::new(jaw_name, description="Lead-screw jaw carriage")
     .with_param("opening_mm", opening_mm.to_string())
     .with_param("travel_mm", travel_mm.to_string())
     .add_body(
       @cad.BodyPart::tube_mm(
         jaw_name + "_nut",
-        16.0,
-        screw_diam_mm + 0.2,
-        12.0,
-        ry_deg=90.0,
+        nut_outer_mm,
+        thread_od_mm + nut_fit_mm,
+        nut_len_mm,
+        ry_deg=right_angle_deg,
         density~,
         color~,
       ),
@@ -291,11 +431,11 @@ pub fn lead_screw_gripper(
     .add_body(
       @cad.BodyPart::tube_mm(
         jaw_name + "_bushing_left",
-        12.0,
-        rail_diam_mm + 0.2,
-        14.0,
+        bushing_outer_mm,
+        rail_diam_mm + bushing_fit_mm,
+        bushing_len_mm,
         y_mm=rail_y_mm,
-        ry_deg=90.0,
+        ry_deg=right_angle_deg,
         density~,
         color~,
       ),
@@ -303,26 +443,23 @@ pub fn lead_screw_gripper(
     .add_body(
       @cad.BodyPart::tube_mm(
         jaw_name + "_bushing_right",
-        12.0,
-        rail_diam_mm + 0.2,
-        14.0,
+        bushing_outer_mm,
+        rail_diam_mm + bushing_fit_mm,
+        bushing_len_mm,
         y_mm=-rail_y_mm,
-        ry_deg=90.0,
+        ry_deg=right_angle_deg,
         density~,
         color~,
       ),
     )
-    // L-shaped carriage: a plate above the rails (welded to the nut and
-    // bushings), a vertical post, and the finger.  The post travels behind
-    // the fixed jaw's x range, so the two jaws never cross.
     .add_body(
       @cad.BodyPart::box_mm(
         jaw_name + "_carriage",
         arm_x,
-        finger_width_mm,
-        carriage_thick,
+        finger_width_mm - carriage_width_inset_mm,
+        carriage_plate_thick_mm,
         x_mm=-arm_x / 2.0,
-        z_mm=carriage_z,
+        z_mm=carriage_plate_z_mm,
         density~,
         color~,
       ),
@@ -332,9 +469,9 @@ pub fn lead_screw_gripper(
         jaw_name + "_post",
         finger_thick_mm,
         finger_width_mm,
-        finger_z - post_z0,
+        finger_z - post_start_z_mm,
         x_mm=-arm_x,
-        z_mm=post_z0 + (finger_z - post_z0) / 2.0,
+        z_mm=post_start_z_mm + (finger_z - post_start_z_mm) / 2.0,
         density~,
         color~,
       ),
@@ -351,13 +488,25 @@ pub fn lead_screw_gripper(
         color~,
       ),
     )
+    .add_body(
+      @cad.BodyPart::box_mm(
+        jaw_name + "_pad",
+        grip_pad_mm,
+        finger_width_mm,
+        finger_len_mm,
+        x_mm=-(half_open + grip_pad_mm / 2.0),
+        z_mm=finger_z,
+        density~,
+        color=@step_cad.Rgb::black(),
+      ),
+    )
     .add_mate_mm_deg("mount")
   let motor = nema_stepper(
     name=motor_name,
     frame_size_mm=motor_frame_mm,
     body_length_mm=motor_body_mm,
-    boss_diam_mm=22.0,
-    boss_height_mm=1.5,
+    boss_diam_mm=motor_boss_diam_mm,
+    boss_height_mm=motor_boss_height_mm,
     shaft_diam_mm=motor_shaft_diam_mm,
     shaft_length_mm=motor_shaft_mm,
     max_effort_nm=motor_effort_nm,
@@ -365,31 +514,48 @@ pub fn lead_screw_gripper(
   )
   let coupler = shaft_coupler(
     name=coupler_name,
-    outer_diam_mm=16.0,
-    bore_in_mm=motor_shaft_diam_mm + 0.2,
-    bore_out_mm=screw_diam_mm + 0.2,
-    length_mm=20.0,
+    outer_diam_mm=coupler_outer_mm,
+    bore_in_mm=motor_shaft_diam_mm + motor_shaft_fit_mm,
+    bore_out_mm=screw_diam_mm + screw_fit_mm,
+    length_mm=coupler_len_mm,
   )
-  let screw = @cad.Component::new(screw_name, description="Lead screw")
-    .with_param("lead_mm", lead_mm.to_string())
-    .add_body(
-      @cad.BodyPart::cylinder_mm(
-        screw_name + "_body",
-        screw_diam_mm,
-        screw_len,
+  // Threaded screw: a smooth journal at each end and crest rings between.
+  let mut screw = @cad.Component::new(
+    screw_name,
+    description="Threaded lead screw",
+  ).add_body(
+    @cad.BodyPart::cylinder_mm(
+      screw_name + "_body",
+      screw_diam_mm,
+      screw_len,
+      density~,
+      color~,
+    ),
+  )
+  for i in 0..<thread_count {
+    let ring_x = thread_start_x + i.to_double() * lead_mm + half_lead_mm
+    screw = screw.add_body(
+      @cad.BodyPart::tube_mm(
+        screw_name + "_thread_" + i.to_string(),
+        thread_od_mm,
+        screw_diam_mm + thread_crest_fit_mm,
+        thread_crest_width_mm,
+        z_mm=ring_x - screw_center_x,
         density~,
         color~,
       ),
     )
+  }
+  screw = screw
     .add_mate_mm_deg("input", z=-screw_len / 2.0)
     .add_mate_mm_deg("output", z=screw_len / 2.0)
   let bearing = ball_bearing(
     name=name + "_screw_bearing",
-    inner_diam_mm=screw_diam_mm + 0.2,
-    outer_diam_mm=16.0,
-    width_mm=5.0,
+    inner_diam_mm=screw_diam_mm + bearing_fit_mm,
+    outer_diam_mm=bearing_outer_mm,
+    width_mm=bearing_width_mm,
   )
-  let multiplier = lead_mm / 1000.0 / (2.0 * @math.PI)
+  let multiplier = lead_mm / mm_per_m / rad_per_rev
   base
   .attach(
     "motor_mount",
@@ -428,10 +594,10 @@ pub fn lead_screw_gripper(
     child_mate="mount",
     spec=@cad.JointSpec::prismatic(
       @urdf.JointLimit::new(
-        effort=200.0,
-        velocity=0.05,
-        lower=Some(0.0),
-        upper=Some(travel_mm / 1000.0),
+        effort=jaw_effort_n,
+        velocity=jaw_velocity_mps,
+        lower=Some(jaw_lower_mm / mm_per_m),
+        upper=Some(travel_mm / mm_per_m),
       ),
       mimic=Some(@urdf.JointMimic::new(motor_joint, multiplier~)),
     ),

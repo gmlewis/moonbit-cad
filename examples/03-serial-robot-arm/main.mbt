@@ -3,7 +3,7 @@
 ///
 /// A six-revolute-joint modular serial arm assembled from flange plates, QDD
 /// actuator pods, reinforced box-tube links, right-angle joint flanges, and a
-/// 1-DOF motorized lead-screw parallel-jaw gripper.
+/// 1-DOF motorized, threaded lead-screw parallel-jaw gripper.
 ///
 /// Every link is a box tube with **solid end plates** welded into both ends
 /// (the plate overlaps the tube by 4 mm and extends past it), and every
@@ -428,12 +428,6 @@ async fn main {
     finger_len_mm=45.0,
     finger_width_mm=45.0,
     finger_thick_mm=8.0,
-    motor_frame_mm=28.2,
-    motor_body_mm=32.0,
-    motor_shaft_mm=20.0,
-    motor_shaft_diam_mm=5.0,
-    motor_effort_nm=0.1,
-    motor_vel_rad_s=20.0,
   )
   let comp = base
     .attach(
