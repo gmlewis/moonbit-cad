@@ -64,17 +64,17 @@
 ///
 /// ## Hardware catalog
 ///
-/// - `catalog-fasteners` — hex standoffs, cylindrical spacers, ball bearings,
+/// - `catalog/fasteners` — hex standoffs, cylindrical spacers, ball bearings,
 ///   shaft couplers, flange plates, L brackets, and U brackets.
-/// - `catalog-actuators` — NEMA steppers, quasi-direct-drive BLDC actuator
+/// - `catalog/actuators` — NEMA steppers, quasi-direct-drive BLDC actuator
 ///   pods, and hub-motor wheels. Each is a stator/rotor `Component` pair with a
 ///   joint and transmission.
-/// - `catalog-gears` — a parameterized herringbone planetary gearbox built from
+/// - `catalog/gears` — a parameterized herringbone planetary gearbox built from
 ///   true involute swept B-Rep gears, with mimic-coupled planets and carrier.
-/// - `catalog-mobility` — box-tube struts, robot leg segments, treaded wheels,
+/// - `catalog/mobility` — box-tube struts, robot leg segments, treaded wheels,
 ///   a 17-link wheeled quadruped, and an assistive mobility scooter.
-/// - `catalog-grippers` — a 1-DOF parallel-jaw gripper with a prismatic moving
-///   finger.
+/// - `catalog/grippers` — a 1-DOF parallel-jaw gripper and a motorized
+///   lead-screw gripper (NEMA stepper, screw, nut, guide rails, mimic jaw).
 ///
 /// ## Quick start
 ///
@@ -111,11 +111,11 @@
 /// | `component.mbt` | `BodyPart`, `JointSpec`, `Attachment`, the `Component` AST, and builders. |
 /// | `compile-step.mbt` | `Component` → posed `@step_cad.Design` through forward kinematics. |
 /// | `compile-urdf.mbt` | `Component` → `@urdf.Robot` and `@urdf.UrdfBundle` (with real `.gltf` and `.step` assets). |
-/// | `catalog-fasteners.mbt` | Standoffs, bushings, bearings, couplers, and L/U/flange brackets. |
-/// | `catalog-actuators.mbt` | NEMA steppers, BLDC actuator pods, hub motors, and servos. |
-/// | `catalog-gears.mbt` | Herringbone involute planetary gearbox (STEP + mimic URDF). |
-/// | `catalog-mobility.mbt` | Structural tubes, leg segments, wheels, chassis, and scooter frame. |
-/// | `catalog-grippers.mbt` | A 1-DOF parallel-jaw gripper with a prismatic moving finger. |
+/// | `catalog/fasteners.mbt` | Standoffs, bushings, bearings, couplers, and L/U/flange brackets. |
+/// | `catalog/actuators.mbt` | NEMA steppers, BLDC actuator pods, hub motors, and servos. |
+/// | `catalog/gears.mbt` | Herringbone involute planetary gearbox (STEP + mimic URDF). |
+/// | `catalog/mobility.mbt` | Structural tubes, leg segments, wheels, chassis, and scooter frame. |
+/// | `catalog/grippers.mbt` | Parallel-jaw and lead-screw grippers. |
 ///
 /// ## Booleans are nominal in the STEP backend
 ///

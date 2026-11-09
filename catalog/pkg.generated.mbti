@@ -28,6 +28,8 @@ pub fn hub_motor_assembly(name? : String, stator_diam_mm? : Double, stator_width
 
 pub fn l_bracket(name? : String, width_mm? : Double, leg_a_mm? : Double, leg_b_mm? : Double, thickness_mm? : Double, hole_diam_mm? : Double, wall_hole_diam_mm? : Double, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/cad.Component
 
+pub fn lead_screw_gripper(name? : String, opening_mm? : Double, travel_mm? : Double, lead_mm? : Double, finger_len_mm? : Double, finger_width_mm? : Double, finger_thick_mm? : Double, base_depth_mm? : Double, base_h_mm? : Double, base_w_mm? : Double, wall_mm? : Double, screw_diam_mm? : Double, rail_diam_mm? : Double, rail_y_mm? : Double, motor_frame_mm? : Double, motor_body_mm? : Double, motor_shaft_mm? : Double, motor_shaft_diam_mm? : Double, motor_effort_nm? : Double, motor_vel_rad_s? : Double, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/cad.Component
+
 pub fn nema_stepper(name? : String, frame_size_mm? : Double, body_length_mm? : Double, boss_diam_mm? : Double, boss_height_mm? : Double, shaft_diam_mm? : Double, shaft_length_mm? : Double, max_effort_nm? : Double, max_vel_rad_s? : Double) -> @gmlewis/cad.Component
 
 pub fn parallel_gripper(name? : String, opening_mm? : Double, travel_mm? : Double, finger_len_mm? : Double, finger_width_mm? : Double, finger_thick_mm? : Double, base_thick_mm? : Double, finger_overlap_mm? : Double, effort_n? : Double, velocity_mps? : Double, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/cad.Component

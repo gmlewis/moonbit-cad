@@ -61,17 +61,17 @@ tree, so a load can be snapped onto a motor's nested rotor link.
 
 ## Hardware catalog
 
-- **`catalog-fasteners`** — hex standoffs, cylindrical spacers, ball bearings,
+- **`catalog/fasteners`** — hex standoffs, cylindrical spacers, ball bearings,
   shaft couplers, flange plates, L brackets, and U brackets.
-- **`catalog-actuators`** — NEMA steppers, quasi-direct-drive BLDC actuator pods,
+- **`catalog/actuators`** — NEMA steppers, quasi-direct-drive BLDC actuator pods,
   and hub-motor wheels. Each is a stator/rotor `Component` pair with a joint and
   transmission.
-- **`catalog-gears`** — a parameterized herringbone planetary gearbox built from
+- **`catalog/gears`** — a parameterized herringbone planetary gearbox built from
   true involute swept B-Rep gears, with mimic-coupled planets and carrier.
-- **`catalog-mobility`** — box-tube struts, robot leg segments, treaded wheels, a
+- **`catalog/mobility`** — box-tube struts, robot leg segments, treaded wheels, a
   17-link wheeled quadruped, and an assistive mobility scooter.
-- **`catalog-grippers`** — a 1-DOF parallel-jaw gripper with a prismatic moving
-  finger.
+- **`catalog/grippers`** — a 1-DOF parallel-jaw gripper and a motorized
+  lead-screw gripper (NEMA stepper, screw, nut, guide rails, mimic-driven jaw).
 
 ## Showcase examples
 
@@ -88,7 +88,7 @@ name:
 | --- | --- |
 | `01-bracket-assembly` | L bracket with a rigidly merged flange, NEMA stepper, coupler, and bearing. |
 | `02-planetary-actuator` | NEMA stepper driving a herringbone planetary gearbox. |
-| `03-serial-robot-arm` | Six-axis modular arm: waist yaw, shoulder/elbow pitch, and a pitch-roll-pitch wrist with a 1-DOF parallel-jaw gripper. |
+| `03-serial-robot-arm` | Six-axis modular arm: waist yaw, shoulder/elbow pitch, and a pitch-roll-pitch wrist with a motorized lead-screw parallel-jaw gripper. |
 | `04-pan-tilt-turret` | Two-axis gimbal with `MergeRigid` stator mounting and a revolute tilt axis. |
 | `05-galileo-quadruped` | Flagship 17-link wheeled quadruped; STEP, glTF, URDF, or full ROS 2 bundle. |
 | `06-assistive-scooter` | Rider-parameterized mobility scooter with a steerable front column. |

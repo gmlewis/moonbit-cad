@@ -20,3 +20,22 @@ test "parallel gripper compiles with a prismatic jaw" {
   assert_true((jaw.trans.0 - 0.02).abs() < 1.0e-9)
   assert_true((jaw.trans.1 - 0.0).abs() < 1.0e-9)
 }
+
+///|
+test "lead screw gripper is motor driven" {
+  let comp = @catalog.lead_screw_gripper()
+  check_component(comp, ["mount", "jaw_slide", "motor_mount", "bearing_seat"])
+  let robot = comp.to_robot()
+  let jaw = robot.get_joint("lead_screw_gripper_jaw").unwrap()
+  assert_eq(jaw.joint_type.to_urdf_str(), "prismatic")
+  let mimic = jaw.mimic.unwrap()
+  assert_eq(mimic.joint, "lead_screw_gripper_motor_shaft_joint")
+  let motor = robot.get_joint("lead_screw_gripper_motor_shaft_joint").unwrap()
+  assert_eq(motor.joint_type.to_urdf_str(), "continuous")
+  let positions : Map[String, Double] = Map([])
+  positions.set("lead_screw_gripper_motor_shaft_joint", 10.0)
+  let poses = robot.forward_kinematics(joint_positions=positions)
+  let jaw_tf = poses.get("lead_screw_gripper_jaw").unwrap()
+  let expected = 10.0 * (2.0 / 1000.0) / (2.0 * @math.PI)
+  assert_true((jaw_tf.trans.0 - expected).abs() < 1.0e-9)
+}

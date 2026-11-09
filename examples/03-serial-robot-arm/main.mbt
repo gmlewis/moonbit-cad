@@ -3,7 +3,7 @@
 ///
 /// A six-revolute-joint modular serial arm assembled from flange plates, QDD
 /// actuator pods, reinforced box-tube links, right-angle joint flanges, and a
-/// 1-DOF parallel-jaw gripper.
+/// 1-DOF motorized lead-screw parallel-jaw gripper.
 ///
 /// Every link is a box tube with **solid end plates** welded into both ends
 /// (the plate overlaps the tube by 4 mm and extends past it), and every
@@ -181,10 +181,7 @@ async fn main {
     "waistDeg": @cli.opt_double(25.0, help="Waist yaw angle in degrees"),
     "shoulderDeg": @cli.opt_double(35.0, help="Shoulder pitch angle in degrees"),
     "elbowDeg": @cli.opt_double(-55.0, help="Elbow pitch angle in degrees"),
-    "wristPitchDeg": @cli.opt_double(
-      30.0,
-      help="Wrist pitch angle in degrees",
-    ),
+    "wristPitchDeg": @cli.opt_double(30.0, help="Wrist pitch angle in degrees"),
     "wristRollDeg": @cli.opt_double(60.0, help="Wrist roll angle in degrees"),
     "toolPitchDeg": @cli.opt_double(25.0, help="Tool pitch angle in degrees"),
     "gripMm": @cli.opt_double(12.0, help="Gripper jaw travel in mm (0-28)"),
@@ -193,7 +190,7 @@ async fn main {
   guard @cli.parse(
       spec,
       prog="03-serial-robot-arm",
-      description="Six-axis modular serial robot arm with a parallel jaw.",
+      description="Six-axis modular serial robot arm with a motorized lead-screw jaw.",
     )
     is Some(args) else {
     return
@@ -250,14 +247,7 @@ async fn main {
   // Vertical upper arm with solid end plates and a shoulder boss on its +Y
   // side.  The boss keeps the pod's rear disc off the 5 mm tube wall.
   let upper_arm = plated_strut(
-    "upper_arm",
-    link1_w,
-    link1_h,
-    link1_len,
-    link_wall,
-    plate_t,
-    plate_margin,
-    plate_overlap,
+    "upper_arm", link1_w, link1_h, link1_len, link_wall, plate_t, plate_margin, plate_overlap,
   )
   let upper_arm = with_side_pad(
     upper_arm,
@@ -303,14 +293,7 @@ async fn main {
     adapter_len / 2.0 - 30.0,
   )
   let forearm = plated_strut(
-    "forearm",
-    link2_w,
-    link2_h,
-    link2_len,
-    link_wall,
-    plate_t,
-    plate_margin,
-    plate_overlap,
+    "forearm", link2_w, link2_h, link2_len, link_wall, plate_t, plate_margin, plate_overlap,
   )
   let forearm = with_side_pad(
     forearm,
@@ -353,25 +336,12 @@ async fn main {
     adapter_len / 2.0 - 30.0,
   )
   let wrist_link = plated_strut(
-    "wrist_link",
-    wrist_link_w,
-    wrist_link_h,
-    wrist_link_len,
-    adapter_wall,
-    adapter_plate_t,
-    adapter_margin,
-    plate_overlap,
+    "wrist_link", wrist_link_w, wrist_link_h, wrist_link_len, adapter_wall, adapter_plate_t,
+    adapter_margin, plate_overlap,
   )
   let wrist_link = with_side_pad(
-    wrist_link,
-    "wrist_pitch_port",
-    "-x",
-    wrist_link_w,
-    wrist_link_h,
-    wrist_pitch_diam,
-    pad_t,
-    pad_overlap,
-    0.0,
+    wrist_link, "wrist_pitch_port", "-x", wrist_link_w, wrist_link_h, wrist_pitch_diam,
+    pad_t, pad_overlap, 0.0,
   )
   let wrist_pitch = @catalog.bldc_actuator_pod(
     name="wrist_pitch",
@@ -413,25 +383,12 @@ async fn main {
   // the pod on its -X side boss, and the gripper leaves the pod's +X boss, so
   // the tool pitch is perpendicular to the wrist roll.
   let tool_link = plated_strut(
-    "tool_link",
-    tool_link_w,
-    tool_link_h,
-    tool_link_len,
-    adapter_wall,
-    adapter_plate_t,
-    adapter_margin,
-    plate_overlap,
+    "tool_link", tool_link_w, tool_link_h, tool_link_len, adapter_wall, adapter_plate_t,
+    adapter_margin, plate_overlap,
   )
   let tool_link = with_side_pad(
-    tool_link,
-    "tool_pitch_port",
-    "-x",
-    tool_link_w,
-    tool_link_h,
-    tool_pitch_diam,
-    pad_t,
-    pad_overlap,
-    -4.0,
+    tool_link, "tool_pitch_port", "-x", tool_link_w, tool_link_h, tool_pitch_diam,
+    pad_t, pad_overlap, -4.0,
   )
   let tool_pitch = @catalog.bldc_actuator_pod(
     name="tool_pitch",
@@ -462,14 +419,21 @@ async fn main {
     pad_overlap,
     tool_out_len / 2.0 - 22.0,
   )
-  let gripper = @catalog.parallel_gripper(
+  let grip_lead_mm = 2.0
+  let gripper = @catalog.lead_screw_gripper(
     name="gripper",
     opening_mm=30.0,
     travel_mm=28.0,
+    lead_mm=grip_lead_mm,
     finger_len_mm=45.0,
     finger_width_mm=45.0,
     finger_thick_mm=8.0,
-    base_thick_mm=12.0,
+    motor_frame_mm=28.2,
+    motor_body_mm=32.0,
+    motor_shaft_mm=20.0,
+    motor_shaft_diam_mm=5.0,
+    motor_effort_nm=0.1,
+    motor_vel_rad_s=20.0,
   )
   let comp = base
     .attach(
@@ -607,7 +571,10 @@ async fn main {
   } else {
     grip_mm
   }
-  positions.set("gripper_jaw", grip_mm / 1000.0)
+  positions.set(
+    "gripper_motor_shaft_joint",
+    grip_mm / grip_lead_mm * 2.0 * @math.PI,
+  )
   @common.write_output(
     comp,
     @common.output_paths(args),
