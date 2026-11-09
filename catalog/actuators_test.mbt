@@ -21,7 +21,7 @@ fn check_actuator(comp : @cad.Component) -> Unit raise {
 
 ///|
 test "nema stepper compiles to an actuated robot" {
-  let comp = @cad.nema_stepper()
+  let comp = @catalog.nema_stepper()
   check_actuator(comp)
   let robot = comp.to_robot()
   assert_eq(robot.joints[0].name, "nema17_shaft_joint")
@@ -31,7 +31,7 @@ test "nema stepper compiles to an actuated robot" {
 
 ///|
 test "bldc actuator pod compiles to an actuated robot" {
-  let comp = @cad.bldc_actuator_pod()
+  let comp = @catalog.bldc_actuator_pod()
   check_actuator(comp)
   let robot = comp.to_robot()
   assert_eq(robot.joints[0].name, "actuator_pod_joint")
@@ -40,7 +40,7 @@ test "bldc actuator pod compiles to an actuated robot" {
 
 ///|
 test "hub motor compiles to an actuated robot" {
-  let comp = @cad.hub_motor_assembly()
+  let comp = @catalog.hub_motor_assembly()
   check_actuator(comp)
   let robot = comp.to_robot()
   assert_eq(robot.joints[0].name, "hub_motor_spin_joint")

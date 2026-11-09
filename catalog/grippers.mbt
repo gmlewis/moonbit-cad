@@ -29,11 +29,11 @@ pub fn parallel_gripper(
   velocity_mps~ : Double = 0.05,
   density~ : @urdf.Density = @urdf.Density::aluminum_6061(),
   color~ : @step_cad.Rgb = @step_cad.Rgb::grey(),
-) -> Component {
+) -> @cad.Component {
   let half_open = opening_mm / 2.0
   let base_w = opening_mm + 2.0 * finger_thick_mm
   let jaw_name = name + "_jaw"
-  let base = Component::new(name, description="Parallel-jaw gripper")
+  let base = @cad.Component::new(name, description="Parallel-jaw gripper")
     .with_param("opening_mm", opening_mm.to_string())
     .with_param("travel_mm", travel_mm.to_string())
     .with_param("finger_len_mm", finger_len_mm.to_string())
@@ -42,7 +42,7 @@ pub fn parallel_gripper(
     .with_param("base_thick_mm", base_thick_mm.to_string())
     .with_param("finger_overlap_mm", finger_overlap_mm.to_string())
     .add_body(
-      BodyPart::box_mm(
+      @cad.BodyPart::box_mm(
         name + "_base",
         base_w,
         finger_width_mm,
@@ -53,7 +53,7 @@ pub fn parallel_gripper(
       ),
     )
     .add_body(
-      BodyPart::box_mm(
+      @cad.BodyPart::box_mm(
         name + "_fixed_finger",
         finger_thick_mm,
         finger_width_mm,
@@ -66,9 +66,9 @@ pub fn parallel_gripper(
     )
     .add_mate_mm_deg("mount")
     .add_mate_mm_deg("jaw_slide", z=base_thick_mm, axis=(1.0, 0.0, 0.0))
-  let jaw = Component::new(jaw_name, description="Moving gripper jaw")
+  let jaw = @cad.Component::new(jaw_name, description="Moving gripper jaw")
     .add_body(
-      BodyPart::box_mm(
+      @cad.BodyPart::box_mm(
         jaw_name + "_finger",
         finger_thick_mm,
         finger_width_mm,
@@ -85,7 +85,7 @@ pub fn parallel_gripper(
     parent_mate="jaw_slide",
     jaw,
     child_mate="mount",
-    spec=JointSpec::prismatic(
+    spec=@cad.JointSpec::prismatic(
       @urdf.JointLimit::new(
         effort=effort_n,
         velocity=velocity_mps,

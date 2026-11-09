@@ -1,7 +1,7 @@
 ///|
 /// Parametric fasteners, bearings, couplers, and brackets.
 ///
-/// Every builder returns a `Component` with centered bodies and named mates so
+/// Every builder returns a `@cad.Component` with centered bodies and named mates so
 /// assemblies can be snapped together without hand-computed coordinates.
 
 ///|
@@ -13,16 +13,16 @@ pub fn hex_standoff(
   length_mm~ : Double = 20.0,
   density~ : @urdf.Density = @urdf.Density::aluminum_6061(),
   color~ : @step_cad.Rgb = @step_cad.Rgb::orange(),
-) -> Component {
+) -> @cad.Component {
   let circumradius = outer_flat_mm / @math.cos(@math.PI / 6.0) / 2.0
   let outer = @step_cad.Profile2D::polygon(6, circumradius)
   let holes = [@step_cad.Profile2D::centered_circle(bore_mm)]
-  Component::new(name, description="Hex standoff")
+  @cad.Component::new(name, description="Hex standoff")
   .with_param("outer_flat_mm", outer_flat_mm.to_string())
   .with_param("bore_mm", bore_mm.to_string())
   .with_param("length_mm", length_mm.to_string())
   .add_body(
-    BodyPart::extruded_profile_mm(
+    @cad.BodyPart::extruded_profile_mm(
       name + "_body",
       outer,
       length_mm,
@@ -44,13 +44,13 @@ pub fn cylindrical_spacer(
   length_mm~ : Double = 10.0,
   density~ : @urdf.Density = @urdf.Density::aluminum_6061(),
   color~ : @step_cad.Rgb = @step_cad.Rgb::grey(),
-) -> Component {
-  Component::new(name, description="Cylindrical spacer")
+) -> @cad.Component {
+  @cad.Component::new(name, description="Cylindrical spacer")
   .with_param("outer_diam_mm", outer_diam_mm.to_string())
   .with_param("inner_diam_mm", inner_diam_mm.to_string())
   .with_param("length_mm", length_mm.to_string())
   .add_body(
-    BodyPart::tube_mm(
+    @cad.BodyPart::tube_mm(
       name + "_body",
       outer_diam_mm,
       inner_diam_mm,
@@ -72,17 +72,17 @@ pub fn ball_bearing(
   outer_diam_mm~ : Double = 22.0,
   width_mm~ : Double = 7.0,
   density~ : @urdf.Density = @urdf.Density::steel_mild(),
-) -> Component {
+) -> @cad.Component {
   let wall = (outer_diam_mm - inner_diam_mm) / 4.0
   let inner_race_od = inner_diam_mm + wall
   let outer_race_id = outer_diam_mm - wall
   let seal_width = width_mm * 0.85
-  Component::new(name, description="Ball bearing")
+  @cad.Component::new(name, description="Ball bearing")
   .with_param("inner_diam_mm", inner_diam_mm.to_string())
   .with_param("outer_diam_mm", outer_diam_mm.to_string())
   .with_param("width_mm", width_mm.to_string())
   .add_body(
-    BodyPart::tube_mm(
+    @cad.BodyPart::tube_mm(
       name + "_inner_race",
       inner_race_od,
       inner_diam_mm,
@@ -92,7 +92,7 @@ pub fn ball_bearing(
     ),
   )
   .add_body(
-    BodyPart::tube_mm(
+    @cad.BodyPart::tube_mm(
       name + "_seal",
       outer_race_id,
       inner_race_od,
@@ -102,7 +102,7 @@ pub fn ball_bearing(
     ),
   )
   .add_body(
-    BodyPart::tube_mm(
+    @cad.BodyPart::tube_mm(
       name + "_outer_race",
       outer_diam_mm,
       outer_race_id,
@@ -126,15 +126,15 @@ pub fn shaft_coupler(
   length_mm~ : Double = 25.0,
   density~ : @urdf.Density = @urdf.Density::aluminum_6061(),
   color~ : @step_cad.Rgb = @step_cad.Rgb::cyan(),
-) -> Component {
+) -> @cad.Component {
   let half = length_mm / 2.0
-  Component::new(name, description="Shaft coupler")
+  @cad.Component::new(name, description="Shaft coupler")
   .with_param("outer_diam_mm", outer_diam_mm.to_string())
   .with_param("bore_in_mm", bore_in_mm.to_string())
   .with_param("bore_out_mm", bore_out_mm.to_string())
   .with_param("length_mm", length_mm.to_string())
   .add_body(
-    BodyPart::tube_mm(
+    @cad.BodyPart::tube_mm(
       name + "_input",
       outer_diam_mm,
       bore_in_mm,
@@ -145,7 +145,7 @@ pub fn shaft_coupler(
     ),
   )
   .add_body(
-    BodyPart::tube_mm(
+    @cad.BodyPart::tube_mm(
       name + "_output",
       outer_diam_mm,
       bore_out_mm,
@@ -171,19 +171,19 @@ pub fn flange_plate(
   bolt_diam_mm~ : Double = 4.2,
   density~ : @urdf.Density = @urdf.Density::aluminum_6061(),
   color~ : @step_cad.Rgb = @step_cad.Rgb::grey(),
-) -> Component {
+) -> @cad.Component {
   let profile = @step_cad.Profile2D::new(
       @step_cad.Profile2D::centered_circle(outer_diam_mm),
     )
     .with_hole_at(0.0, 0.0, center_bore_mm)
     .with_bolt_circle(bolt_count, bolt_circle_mm / 2.0, bolt_diam_mm)
-  let mut comp = Component::new(name, description="Flange plate")
+  let mut comp = @cad.Component::new(name, description="Flange plate")
     .with_param("outer_diam_mm", outer_diam_mm.to_string())
     .with_param("center_bore_mm", center_bore_mm.to_string())
     .with_param("thickness_mm", thickness_mm.to_string())
     .with_param("bolt_count", bolt_count.to_string())
     .add_body(
-      BodyPart::extruded_profile_mm(
+      @cad.BodyPart::extruded_profile_mm(
         name + "_body",
         profile.outer,
         thickness_mm,
@@ -219,7 +219,7 @@ pub fn l_bracket(
   wall_hole_diam_mm~ : Double = 22.5,
   density~ : @urdf.Density = @urdf.Density::aluminum_6061(),
   color~ : @step_cad.Rgb = @step_cad.Rgb::grey(),
-) -> Component {
+) -> @cad.Component {
   let base_outer = @step_cad.Profile2D::centered_rect(width_mm, leg_a_mm)
   let hole = @step_cad.Profile2D::centered_circle(hole_diam_mm)
   // Shift the single mounting hole toward the far end of the base leg.
@@ -240,14 +240,14 @@ pub fn l_bracket(
   } else {
     []
   }
-  Component::new(name, description="L bracket")
+  @cad.Component::new(name, description="L bracket")
   .with_param("width_mm", width_mm.to_string())
   .with_param("leg_a_mm", leg_a_mm.to_string())
   .with_param("leg_b_mm", leg_b_mm.to_string())
   .with_param("thickness_mm", thickness_mm.to_string())
   .with_param("wall_hole_diam_mm", wall_hole_diam_mm.to_string())
   .add_body(
-    BodyPart::extruded_profile_mm(
+    @cad.BodyPart::extruded_profile_mm(
       name + "_base",
       base_outer,
       thickness_mm,
@@ -259,7 +259,7 @@ pub fn l_bracket(
     ),
   )
   .add_body(
-    BodyPart::extruded_profile_mm(
+    @cad.BodyPart::extruded_profile_mm(
       name + "_upright",
       @step_cad.Profile2D::centered_rect(width_mm, leg_b_mm - thickness_mm),
       thickness_mm,
@@ -289,16 +289,16 @@ pub fn u_bracket(
   bore_mm~ : Double = 8.0,
   density~ : @urdf.Density = @urdf.Density::aluminum_6061(),
   color~ : @step_cad.Rgb = @step_cad.Rgb::grey(),
-) -> Component {
+) -> @cad.Component {
   let half_span = (inner_span_mm + thickness_mm) / 2.0
-  Component::new(name, description="U bracket")
+  @cad.Component::new(name, description="U bracket")
   .with_param("inner_span_mm", inner_span_mm.to_string())
   .with_param("arm_length_mm", arm_length_mm.to_string())
   .with_param("width_mm", width_mm.to_string())
   .with_param("thickness_mm", thickness_mm.to_string())
   .with_param("bore_mm", bore_mm.to_string())
   .add_body(
-    BodyPart::box_mm(
+    @cad.BodyPart::box_mm(
       name + "_base",
       inner_span_mm + 2.0 * thickness_mm,
       width_mm,
@@ -308,7 +308,7 @@ pub fn u_bracket(
     ),
   )
   .add_body(
-    BodyPart::box_mm(
+    @cad.BodyPart::box_mm(
       name + "_arm_left",
       thickness_mm,
       width_mm,
@@ -320,7 +320,7 @@ pub fn u_bracket(
     ),
   )
   .add_body(
-    BodyPart::box_mm(
+    @cad.BodyPart::box_mm(
       name + "_arm_right",
       thickness_mm,
       width_mm,

@@ -25,34 +25,34 @@ fn check_component(comp : @cad.Component, mates : Array[String]) -> Unit raise {
 
 ///|
 test "hex standoff" {
-  let comp = @cad.hex_standoff()
+  let comp = @catalog.hex_standoff()
   check_component(comp, ["bottom", "top", "origin"])
   assert_true(comp.total_mass_kg() > 0.0)
 }
 
 ///|
 test "cylindrical spacer" {
-  let comp = @cad.cylindrical_spacer()
+  let comp = @catalog.cylindrical_spacer()
   check_component(comp, ["bottom", "top"])
 }
 
 ///|
 test "ball bearing" {
-  let comp = @cad.ball_bearing()
+  let comp = @catalog.ball_bearing()
   check_component(comp, ["center", "bottom", "top"])
   assert_eq(comp.bodies.length(), 3)
 }
 
 ///|
 test "shaft coupler" {
-  let comp = @cad.shaft_coupler()
+  let comp = @catalog.shaft_coupler()
   check_component(comp, ["input_shaft", "output_shaft"])
   assert_eq(comp.bodies.length(), 2)
 }
 
 ///|
 test "flange plate" {
-  let comp = @cad.flange_plate()
+  let comp = @catalog.flange_plate()
   check_component(comp, [
     "bottom", "top", "bolt_0", "bolt_1", "bolt_2", "bolt_3",
   ])
@@ -62,14 +62,14 @@ test "flange plate" {
 
 ///|
 test "l bracket" {
-  let comp = @cad.l_bracket()
+  let comp = @catalog.l_bracket()
   check_component(comp, ["base_mount", "wall_mount"])
   assert_eq(comp.bodies.length(), 2)
 }
 
 ///|
 test "u bracket" {
-  let comp = @cad.u_bracket()
+  let comp = @catalog.u_bracket()
   check_component(comp, ["base_mount", "pivot"])
   assert_eq(comp.bodies.length(), 3)
   let pivot = comp.get_mate("pivot").unwrap()

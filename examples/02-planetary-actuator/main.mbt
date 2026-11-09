@@ -22,16 +22,16 @@ async fn main {
     is Some(args) else {
     return
   }
-  let base_params = @cad.PlanetaryGearboxParams::default()
-  let params : @cad.PlanetaryGearboxParams = {
+  let base_params = @catalog.PlanetaryGearboxParams::default()
+  let params : @catalog.PlanetaryGearboxParams = {
     ..base_params,
     gear_module: args.double("module"),
     sun_teeth: args.int("numTeeth"),
     num_planets: args.int("numPlanets"),
     gear_length_mm: args.double("gearLength"),
   }
-  let gearbox = @cad.planetary_gearbox(params~)
-  let stepper = @cad.nema_stepper()
+  let gearbox = @catalog.planetary_gearbox(params~)
+  let stepper = @catalog.nema_stepper()
   let comp = gearbox.attach(
     "motor_flange_joint",
     parent_mate="input_flange",

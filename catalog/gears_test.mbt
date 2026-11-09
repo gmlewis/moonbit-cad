@@ -1,6 +1,6 @@
 ///|
 test "default planetary gearbox compiles to a mimic-coupled robot" {
-  let gb = @cad.planetary_gearbox()
+  let gb = @catalog.planetary_gearbox()
   let robot = gb.to_robot()
   assert_eq(robot.links.length(), 6)
   assert_eq(robot.joints.length(), 5)
@@ -36,7 +36,7 @@ test "default planetary gearbox compiles to a mimic-coupled robot" {
 
 ///|
 test "gearbox posed design evaluates mimic joints" {
-  let gb = @cad.planetary_gearbox()
+  let gb = @catalog.planetary_gearbox()
   let positions : Map[String, Double] = Map([])
   positions.set("planetary_gearbox_sun_joint", 1.0)
   let design = gb.to_design(joint_positions=positions)
@@ -48,7 +48,7 @@ test "gearbox posed design evaluates mimic joints" {
 
 ///|
 test "standalone herringbone gear component" {
-  let gear = @cad.herringbone_gear_component(
+  let gear = @catalog.herringbone_gear_component(
     "gear12",
     gear_module=3.0,
     num_teeth=12,

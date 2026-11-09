@@ -1,6 +1,6 @@
 ///|
 test "parallel gripper compiles with a prismatic jaw" {
-  let comp = @cad.parallel_gripper()
+  let comp = @catalog.parallel_gripper()
   check_component(comp, ["mount", "jaw_slide"])
   assert_eq(comp.bodies.length(), 2)
   let robot = comp.to_robot()

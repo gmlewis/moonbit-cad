@@ -20,13 +20,13 @@ async fn main {
     is Some(args) else {
     return
   }
-  let base = @cad.flange_plate(
+  let base = @catalog.flange_plate(
     name="turret_base",
     outer_diam_mm=140.0,
     center_bore_mm=30.0,
     bolt_count=6,
   )
-  let pan_motor = @cad.nema_stepper(
+  let pan_motor = @catalog.nema_stepper(
     name="pan_motor",
     frame_size_mm=57.0,
     body_length_mm=56.0,
@@ -34,13 +34,13 @@ async fn main {
     shaft_length_mm=30.0,
     max_effort_nm=2.0,
   )
-  let pan_bracket = @cad.u_bracket(
+  let pan_bracket = @catalog.u_bracket(
     name="pan_bracket",
     inner_span_mm=60.0,
     arm_length_mm=50.0,
     width_mm=45.0,
   )
-  let tilt = @cad.bldc_actuator_pod(
+  let tilt = @catalog.bldc_actuator_pod(
     name="tilt",
     housing_diam_mm=70.0,
     housing_length_mm=40.0,

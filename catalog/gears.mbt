@@ -608,7 +608,7 @@ pub fn herringbone_gear_component(
   direction~ : Double = 1.0,
   density~ : @urdf.Density = @urdf.Density::pla(),
   color~ : @step_cad.Rgb = @step_cad.Rgb::orange(),
-) -> Component {
+) -> @cad.Component {
   let dims = gear_dimensions(gear_module, gear_deg2rad(20.0), num_teeth)
   let outline = gear_outline(gear_module, 20.0, num_teeth, resolution)
   let holes = if bore_radius_mm > 0.0 {
@@ -638,13 +638,13 @@ pub fn herringbone_gear_component(
     @urdf.Geometry::cylinder_mm(dims.outer_radius, gear_length_mm),
     name=Some(name + "_gear"),
   )
-  Component::new(name, description="Herringbone gear")
+  @cad.Component::new(name, description="Herringbone gear")
   .with_param("gear_module", gear_module.to_string())
   .with_param("num_teeth", num_teeth.to_string())
   .with_param("gear_length_mm", gear_length_mm.to_string())
   .with_param("helix_angle_deg", helix_angle_deg.to_string())
   .add_body(
-    BodyPart::custom(
+    @cad.BodyPart::custom(
       name + "_body",
       node,
       inertial,
@@ -663,7 +663,7 @@ fn ring_housing_component(
   name : String,
   cfg : GearboxConfig,
   p : PlanetaryGearboxParams,
-) -> Component {
+) -> @cad.Component {
   let ring = gear_ring_geometry(cfg)
   let outer_circle = gear_circle_outline(
     ring.outer_radius,
@@ -695,12 +695,12 @@ fn ring_housing_component(
     @urdf.Geometry::cylinder_mm(ring.outer_radius, cfg.gear_length),
     name=Some(name + "_gear"),
   )
-  let mut comp = Component::new(name, description="Planetary ring housing")
+  let mut comp = @cad.Component::new(name, description="Planetary ring housing")
     .with_param("sun_teeth", p.sun_teeth.to_string())
     .with_param("planet_teeth", p.planet_teeth.to_string())
     .with_param("ring_teeth", cfg.ring_teeth.to_string())
     .add_body(
-      BodyPart::custom(
+      @cad.BodyPart::custom(
         name + "_body",
         node,
         inertial,
@@ -728,7 +728,7 @@ fn sun_component(
   name : String,
   cfg : GearboxConfig,
   p : PlanetaryGearboxParams,
-) -> Component {
+) -> @cad.Component {
   let outline = gear_outline(
     cfg.gear_module,
     cfg.pressure_angle,
@@ -762,10 +762,10 @@ fn sun_component(
     @urdf.Geometry::cylinder_mm(cfg.sun.outer_radius, cfg.gear_length),
     name=Some(name + "_gear"),
   )
-  Component::new(name, description="Planetary sun gear")
+  @cad.Component::new(name, description="Planetary sun gear")
   .with_param("sun_teeth", cfg.sun.num_teeth.to_string())
   .add_body(
-    BodyPart::custom(
+    @cad.BodyPart::custom(
       name + "_body",
       node,
       inertial,
@@ -785,7 +785,7 @@ fn planet_component(
   cfg : GearboxConfig,
   p : PlanetaryGearboxParams,
   phi_deg : Double,
-) -> Component {
+) -> @cad.Component {
   let outline = gear_outline(
     cfg.gear_module,
     cfg.pressure_angle,
@@ -824,11 +824,11 @@ fn planet_component(
     @urdf.Geometry::cylinder_mm(cfg.planet.outer_radius, cfg.gear_length),
     name=Some(name + "_gear"),
   )
-  Component::new(name, description="Planetary planet gear")
+  @cad.Component::new(name, description="Planetary planet gear")
   .with_param("planet_teeth", cfg.planet.num_teeth.to_string())
   .with_param("phase_deg", phi_deg.to_string())
   .add_body(
-    BodyPart::custom(
+    @cad.BodyPart::custom(
       name + "_body",
       node,
       inertial,
@@ -847,13 +847,16 @@ fn carrier_component(
   name : String,
   cfg : GearboxConfig,
   p : PlanetaryGearboxParams,
-) -> Component {
+) -> @cad.Component {
   let thickness = 8.0
   let plate_radius = cfg.center_distance + cfg.planet.outer_radius + 4.0
-  let mut comp = Component::new(name, description="Planetary carrier plate")
+  let mut comp = @cad.Component::new(
+      name,
+      description="Planetary carrier plate",
+    )
     .with_param("center_distance_mm", cfg.center_distance.to_string())
     .add_body(
-      BodyPart::cylinder_mm(
+      @cad.BodyPart::cylinder_mm(
         name + "_plate",
         plate_radius * 2.0,
         thickness,
@@ -865,7 +868,7 @@ fn carrier_component(
   for i in 0..<p.num_planets {
     let theta = gear_two_pi * i.to_double() / p.num_planets.to_double()
     comp = comp.add_body(
-      BodyPart::cylinder_mm(
+      @cad.BodyPart::cylinder_mm(
         "\{name}_pin_\{i}",
         8.0,
         thickness,
@@ -886,7 +889,7 @@ fn carrier_component(
 pub fn planetary_gearbox(
   name~ : String = "planetary_gearbox",
   params~ : PlanetaryGearboxParams = PlanetaryGearboxParams::default(),
-) -> Component {
+) -> @cad.Component {
   let cfg = gearbox_config(params)
   let ring_name = name + "_ring_housing"
   let sun_name = name + "_sun"
@@ -898,7 +901,7 @@ pub fn planetary_gearbox(
     parent_mate="center",
     sun,
     child_mate="origin",
-    spec=JointSpec::continuous(
+    spec=@cad.JointSpec::continuous(
       limit=Some(@urdf.JointLimit::new(effort=15.0, velocity=30.0)),
       dynamics=Some(@urdf.JointDynamics::new(damping=0.02, friction=0.01)),
       transmission_reduction=Some(1.0),
@@ -918,7 +921,7 @@ pub fn planetary_gearbox(
       parent_mate="planet_orbit_\{i}",
       planet,
       child_mate="origin",
-      spec=JointSpec::continuous(
+      spec=@cad.JointSpec::continuous(
         limit=Some(@urdf.JointLimit::new(effort=10.0, velocity=30.0)),
         dynamics=Some(@urdf.JointDynamics::new(damping=0.02, friction=0.01)),
         mimic=Some(
@@ -936,7 +939,7 @@ pub fn planetary_gearbox(
       parent_mate="output_face",
       carrier,
       child_mate="origin",
-      spec=JointSpec::continuous(
+      spec=@cad.JointSpec::continuous(
         limit=Some(@urdf.JointLimit::new(effort=10.0, velocity=30.0)),
         mimic=Some(
           @urdf.JointMimic::new(sun_joint, multiplier=carrier_multiplier),

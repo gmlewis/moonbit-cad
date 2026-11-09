@@ -1,4 +1,4 @@
 #!/bin/bash -ex
-moon fmt .
-moon info --target native .
-moon test -j 12 --target native .
+moon fmt . catalog
+moon info --target native . catalog
+moon test -j 12 --target native . catalog

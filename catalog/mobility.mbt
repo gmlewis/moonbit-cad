@@ -12,19 +12,19 @@ pub fn box_tube_strut(
   wall_mm~ : Double = 3.0,
   density~ : @urdf.Density = @urdf.Density::aluminum_6061(),
   color~ : @step_cad.Rgb = @step_cad.Rgb::grey(),
-) -> Component {
+) -> @cad.Component {
   let outer = @step_cad.Profile2D::centered_rect(width_mm, height_mm)
   let inner = @step_cad.Profile2D::centered_rect(
     width_mm - 2.0 * wall_mm,
     height_mm - 2.0 * wall_mm,
   )
-  Component::new(name, description="Box tube strut")
+  @cad.Component::new(name, description="Box tube strut")
   .with_param("width_mm", width_mm.to_string())
   .with_param("height_mm", height_mm.to_string())
   .with_param("length_mm", length_mm.to_string())
   .with_param("wall_mm", wall_mm.to_string())
   .add_body(
-    BodyPart::extruded_profile_mm(
+    @cad.BodyPart::extruded_profile_mm(
       name + "_body",
       outer,
       length_mm,
@@ -47,13 +47,13 @@ pub fn robot_leg_segment(
   thickness_mm~ : Double = 28.0,
   density~ : @urdf.Density = @urdf.Density::carbon_fiber(),
   color~ : @step_cad.Rgb = @step_cad.Rgb::grey(),
-) -> Component {
-  Component::new(name, description="Robot leg segment")
+) -> @cad.Component {
+  @cad.Component::new(name, description="Robot leg segment")
   .with_param("length_mm", length_mm.to_string())
   .with_param("width_mm", width_mm.to_string())
   .with_param("thickness_mm", thickness_mm.to_string())
   .add_body(
-    BodyPart::cylinder_mm(
+    @cad.BodyPart::cylinder_mm(
       name + "_proximal_boss",
       thickness_mm,
       width_mm,
@@ -63,7 +63,7 @@ pub fn robot_leg_segment(
     ),
   )
   .add_body(
-    BodyPart::box_mm(
+    @cad.BodyPart::box_mm(
       name + "_strut",
       width_mm,
       thickness_mm,
@@ -74,7 +74,7 @@ pub fn robot_leg_segment(
     ),
   )
   .add_body(
-    BodyPart::cylinder_mm(
+    @cad.BodyPart::cylinder_mm(
       name + "_distal_boss",
       thickness_mm,
       width_mm,
@@ -96,12 +96,12 @@ pub fn treaded_wheel(
   width_mm~ : Double = 45.0,
   hub_radius_mm~ : Double = 35.0,
   density~ : @urdf.Density = @urdf.Density::tpu(),
-) -> Component {
-  Component::new(name, description="Treaded wheel")
+) -> @cad.Component {
+  @cad.Component::new(name, description="Treaded wheel")
   .with_param("radius_mm", radius_mm.to_string())
   .with_param("width_mm", width_mm.to_string())
   .add_body(
-    BodyPart::cylinder_mm(
+    @cad.BodyPart::cylinder_mm(
       name + "_hub",
       hub_radius_mm * 2.0,
       width_mm,
@@ -111,7 +111,7 @@ pub fn treaded_wheel(
     ),
   )
   .add_body(
-    BodyPart::tube_mm(
+    @cad.BodyPart::tube_mm(
       name + "_tire",
       radius_mm * 2.0,
       hub_radius_mm * 2.0,
@@ -133,16 +133,16 @@ pub fn quadruped_leg_assembly(
   thigh_len_mm~ : Double = 220.0,
   calf_len_mm~ : Double = 220.0,
   wheel_radius_mm~ : Double = 90.0,
-) -> Component {
+) -> @cad.Component {
   let sign = if is_left { 1.0 } else { -1.0 }
   let hip_name = prefix + "_hip_link"
   let thigh_name = prefix + "_thigh_link"
   let calf_name = prefix + "_calf_link"
   let wheel_name = prefix + "_wheel_link"
-  let hip = Component::new(hip_name, description="Quadruped hip link")
+  let hip = @cad.Component::new(hip_name, description="Quadruped hip link")
     .with_param("hip_offset_y_mm", hip_offset_y_mm.to_string())
     .add_body(
-      BodyPart::cylinder_mm(
+      @cad.BodyPart::cylinder_mm(
         hip_name + "_tube",
         60.0,
         hip_offset_y_mm,
@@ -153,7 +153,7 @@ pub fn quadruped_leg_assembly(
       ),
     )
     .add_body(
-      BodyPart::cylinder_mm(
+      @cad.BodyPart::cylinder_mm(
         hip_name + "_pod",
         96.0,
         54.0,
@@ -177,7 +177,7 @@ pub fn quadruped_leg_assembly(
     parent_mate="distal_joint",
     wheel,
     child_mate="axle",
-    spec=JointSpec::continuous(
+    spec=@cad.JointSpec::continuous(
       limit=Some(@urdf.JointLimit::new(effort=20.0, velocity=35.0)),
       transmission_reduction=Some(1.0),
     ),
@@ -187,7 +187,7 @@ pub fn quadruped_leg_assembly(
     parent_mate="distal_joint",
     calf_with_wheel,
     child_mate="proximal_joint",
-    spec=JointSpec::revolute(
+    spec=@cad.JointSpec::revolute(
       @urdf.JointLimit::new(
         lower=Some(-2.7),
         upper=Some(-0.5),
@@ -202,7 +202,7 @@ pub fn quadruped_leg_assembly(
     parent_mate="thigh_mount",
     thigh_with_calf,
     child_mate="proximal_joint",
-    spec=JointSpec::revolute(
+    spec=@cad.JointSpec::revolute(
       @urdf.JointLimit::new(
         lower=Some(-1.57),
         upper=Some(3.14),
@@ -224,17 +224,17 @@ pub fn galileo_quadruped_robot(
   thigh_len_mm~ : Double = 220.0,
   calf_len_mm~ : Double = 220.0,
   wheel_radius_mm~ : Double = 90.0,
-) -> Component {
+) -> @cad.Component {
   let half_len = body_len_mm / 2.0
   let half_width = body_width_mm / 2.0
-  let mut base = Component::new("base_link", description="Galileo chassis")
+  let mut base = @cad.Component::new("base_link", description="Galileo chassis")
     .with_robot_name(name)
     .with_param("body_len_mm", body_len_mm.to_string())
     .with_param("body_width_mm", body_width_mm.to_string())
     .with_param("thigh_len_mm", thigh_len_mm.to_string())
     .with_param("calf_len_mm", calf_len_mm.to_string())
     .add_body(
-      BodyPart::box_mm(
+      @cad.BodyPart::box_mm(
         "chassis",
         body_len_mm,
         body_width_mm,
@@ -244,7 +244,7 @@ pub fn galileo_quadruped_robot(
       ),
     )
     .add_body(
-      BodyPart::cylinder_mm(
+      @cad.BodyPart::cylinder_mm(
         "lidar_dome",
         110.0,
         40.0,
@@ -279,7 +279,7 @@ pub fn galileo_quadruped_robot(
       parent_mate="\{prefix}_hip_mount",
       leg,
       child_mate="hip_mount",
-      spec=JointSpec::revolute(
+      spec=@cad.JointSpec::revolute(
         @urdf.JointLimit::new(
           lower=Some(-0.8),
           upper=Some(0.8),
@@ -302,7 +302,7 @@ pub fn assistive_scooter_robot(
   seat_height_mm~ : Double = 480.0,
   rear_wheel_r_mm~ : Double = 150.0,
   front_wheel_r_mm~ : Double = 100.0,
-) -> Component {
+) -> @cad.Component {
   let chassis_name = "chassis_link"
   let steering_name = "steering_column_link"
   let front_name = "front_wheel_link"
@@ -310,13 +310,13 @@ pub fn assistive_scooter_robot(
   let rear_right_name = "rear_right_wheel_link"
   let seat_x = -wheelbase_mm * 0.15
   let deck_top = 90.0
-  let chassis = Component::new(chassis_name, description="Scooter chassis")
+  let chassis = @cad.Component::new(chassis_name, description="Scooter chassis")
     .with_robot_name(name)
     .with_param("wheelbase_mm", wheelbase_mm.to_string())
     .with_param("track_width_mm", track_width_mm.to_string())
     .with_param("seat_height_mm", seat_height_mm.to_string())
     .add_body(
-      BodyPart::box_mm(
+      @cad.BodyPart::box_mm(
         chassis_name + "_deck",
         wheelbase_mm * 0.75,
         track_width_mm * 0.55,
@@ -327,7 +327,7 @@ pub fn assistive_scooter_robot(
       ),
     )
     .add_body(
-      BodyPart::cylinder_mm(
+      @cad.BodyPart::cylinder_mm(
         chassis_name + "_seat_post",
         40.0,
         seat_height_mm - deck_top,
@@ -338,7 +338,7 @@ pub fn assistive_scooter_robot(
       ),
     )
     .add_body(
-      BodyPart::box_mm(
+      @cad.BodyPart::box_mm(
         chassis_name + "_seat",
         400.0,
         track_width_mm * 0.8,
@@ -350,7 +350,7 @@ pub fn assistive_scooter_robot(
       ),
     )
     .add_body(
-      BodyPart::box_mm(
+      @cad.BodyPart::box_mm(
         chassis_name + "_backrest",
         80.0,
         track_width_mm * 0.8,
@@ -376,13 +376,13 @@ pub fn assistive_scooter_robot(
       z=rear_wheel_r_mm,
       axis=(0.0, 1.0, 0.0),
     )
-  let steering = Component::new(
+  let steering = @cad.Component::new(
       steering_name,
       description="Scooter steering column",
     )
     .with_param("seat_height_mm", seat_height_mm.to_string())
     .add_body(
-      BodyPart::cylinder_mm(
+      @cad.BodyPart::cylinder_mm(
         steering_name + "_column",
         30.0,
         seat_height_mm,
@@ -392,7 +392,7 @@ pub fn assistive_scooter_robot(
       ),
     )
     .add_body(
-      BodyPart::box_mm(
+      @cad.BodyPart::box_mm(
         steering_name + "_handlebar",
         60.0,
         500.0,
@@ -412,7 +412,7 @@ pub fn assistive_scooter_robot(
     parent_mate="front_axle",
     front_wheel,
     child_mate="axle",
-    spec=JointSpec::continuous(
+    spec=@cad.JointSpec::continuous(
       limit=Some(@urdf.JointLimit::new(effort=10.0, velocity=30.0)),
     ),
   )
@@ -422,7 +422,7 @@ pub fn assistive_scooter_robot(
     parent_mate="steering_mount",
     steering_with_wheel,
     child_mate="mount",
-    spec=JointSpec::revolute(
+    spec=@cad.JointSpec::revolute(
       @urdf.JointLimit::new(
         lower=Some(-0.75),
         upper=Some(0.75),
@@ -437,7 +437,7 @@ pub fn assistive_scooter_robot(
     parent_mate="rear_left_axle",
     rear_left,
     child_mate="axle",
-    spec=JointSpec::continuous(
+    spec=@cad.JointSpec::continuous(
       limit=Some(@urdf.JointLimit::new(effort=20.0, velocity=30.0)),
       transmission_reduction=Some(1.0),
     ),
@@ -447,7 +447,7 @@ pub fn assistive_scooter_robot(
     parent_mate="rear_right_axle",
     rear_right,
     child_mate="axle",
-    spec=JointSpec::continuous(
+    spec=@cad.JointSpec::continuous(
       limit=Some(@urdf.JointLimit::new(effort=20.0, velocity=30.0)),
       transmission_reduction=Some(1.0),
     ),

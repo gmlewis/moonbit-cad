@@ -21,7 +21,7 @@ async fn main {
     is Some(args) else {
     return
   }
-  let comp = @cad.assistive_scooter_robot(
+  let comp = @catalog.assistive_scooter_robot(
     wheelbase_mm=args.double("wheelbase"),
     track_width_mm=args.double("trackWidth"),
     seat_height_mm=args.double("seatHeight"),

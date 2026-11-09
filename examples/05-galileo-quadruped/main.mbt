@@ -26,7 +26,7 @@ async fn main {
     is Some(args) else {
     return
   }
-  let comp = @cad.galileo_quadruped_robot(
+  let comp = @catalog.galileo_quadruped_robot(
     body_len_mm=args.double("bodyLen"),
     body_width_mm=args.double("bodyWidth"),
     thigh_len_mm=args.double("thighLen"),

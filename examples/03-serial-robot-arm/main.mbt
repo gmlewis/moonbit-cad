@@ -47,7 +47,7 @@ fn plated_strut(
   } else {
     length / 2.0
   }
-  let mut comp = @cad.box_tube_strut(
+  let mut comp = @catalog.box_tube_strut(
     name,
     width_mm=width,
     height_mm=height,
@@ -234,13 +234,13 @@ async fn main {
   let tool_out_len = 55.0
   let tool_out_w = 30.0
   let tool_out_h = 24.0
-  let base = @cad.flange_plate(
+  let base = @catalog.flange_plate(
     name="base_flange",
     outer_diam_mm=160.0,
     center_bore_mm=40.0,
     bolt_count=6,
   )
-  let waist = @cad.bldc_actuator_pod(
+  let waist = @catalog.bldc_actuator_pod(
     name="waist",
     housing_diam_mm=120.0,
     housing_length_mm=70.0,
@@ -270,7 +270,7 @@ async fn main {
     pad_overlap,
     link1_len / 2.0 - shoulder_diam / 2.0 - 6.0,
   )
-  let shoulder = @cad.bldc_actuator_pod(
+  let shoulder = @catalog.bldc_actuator_pod(
     name="shoulder",
     housing_diam_mm=shoulder_diam,
     housing_length_mm=54.0,
@@ -323,7 +323,7 @@ async fn main {
     pad_overlap,
     link2_len / 2.0 - elbow_diam / 2.0 - 6.0,
   )
-  let elbow = @cad.bldc_actuator_pod(
+  let elbow = @catalog.bldc_actuator_pod(
     name="elbow",
     housing_diam_mm=elbow_diam,
     housing_length_mm=48.0,
@@ -373,7 +373,7 @@ async fn main {
     pad_overlap,
     0.0,
   )
-  let wrist_pitch = @cad.bldc_actuator_pod(
+  let wrist_pitch = @catalog.bldc_actuator_pod(
     name="wrist_pitch",
     housing_diam_mm=wrist_pitch_diam,
     housing_length_mm=40.0,
@@ -402,7 +402,7 @@ async fn main {
     pad_overlap,
     small_adapter_len / 2.0 - 20.0,
   )
-  let wrist_roll = @cad.bldc_actuator_pod(
+  let wrist_roll = @catalog.bldc_actuator_pod(
     name="wrist_roll",
     housing_diam_mm=wrist_roll_diam,
     housing_length_mm=34.0,
@@ -433,7 +433,7 @@ async fn main {
     pad_overlap,
     -4.0,
   )
-  let tool_pitch = @cad.bldc_actuator_pod(
+  let tool_pitch = @catalog.bldc_actuator_pod(
     name="tool_pitch",
     housing_diam_mm=tool_pitch_diam,
     housing_length_mm=28.0,
@@ -462,7 +462,7 @@ async fn main {
     pad_overlap,
     tool_out_len / 2.0 - 22.0,
   )
-  let gripper = @cad.parallel_gripper(
+  let gripper = @catalog.parallel_gripper(
     name="gripper",
     opening_mm=30.0,
     travel_mm=28.0,

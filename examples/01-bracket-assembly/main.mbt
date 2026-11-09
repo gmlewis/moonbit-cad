@@ -19,15 +19,15 @@ async fn main {
     is Some(args) else {
     return
   }
-  let bracket = @cad.l_bracket(width_mm=args.double("bracketWidth"))
-  let flange = @cad.flange_plate(
+  let bracket = @catalog.l_bracket(width_mm=args.double("bracketWidth"))
+  let flange = @catalog.flange_plate(
     name="mount_flange",
     outer_diam_mm=44.0,
     bolt_circle_mm=32.0,
   )
-  let stepper = @cad.nema_stepper()
-  let coupler = @cad.shaft_coupler()
-  let bearing = @cad.ball_bearing(name="output_bearing")
+  let stepper = @catalog.nema_stepper()
+  let coupler = @catalog.shaft_coupler()
+  let bearing = @catalog.ball_bearing(name="output_bearing")
   let comp = bracket
     .attach(
       "flange_merge",
