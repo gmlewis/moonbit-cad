@@ -497,6 +497,8 @@ pub fn Component::build_manifest(
   out = out +
     "| `link-parts.csv` | Link-to-part map for drawing generation. |\n"
   out = out +
+    "| `firmware.h` | C header with joint bindings and sensor interfaces. |\n"
+  out = out +
     "| `bundle/` | URDF, `package.xml`, glTF meshes, and per-link STEP parts. |\n"
   out = out + "\n## Validation\n\n"
   out = out + "```bash\n"
@@ -504,6 +506,8 @@ pub fn Component::build_manifest(
     "python3 scripts/validate_step.py --no-mesh bundle/parts/<part>.step\n"
   out = out +
     "python3 scripts/validate_urdf.py --check-meshes bundle/urdf/*.urdf\n"
+  out = out +
+    "python3 scripts/validate_control.py control.yaml bundle/urdf/*.urdf --pins pins.csv\n"
   out = out + "```\n"
   out
 }
@@ -526,5 +530,6 @@ pub fn Component::build_package_files(
     BuildFile::new("pins.csv", self.to_pin_map_csv()),
     BuildFile::new("pcb-connectors.csv", self.pcb_placements_csv()),
     BuildFile::new("link-parts.csv", self.link_parts_csv()),
+    BuildFile::new("firmware.h", self.firmware_header()),
   ]
 }

@@ -433,7 +433,8 @@ async fn main {
   let grip_travel_mm = 28.0
   let joint_gear_ratio = 6.0
   let can_node_base = 1
-  let joint_limit_rad = @math.PI
+  // Match the QDD pods' default joint limit exactly.
+  let joint_limit_rad = 3.14159
   let gripper = @catalog.lead_screw_gripper(
     name="gripper",
     opening_mm=30.0,

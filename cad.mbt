@@ -168,8 +168,9 @@
 /// MCU pins, direction, gear ratio, soft limits, and homing/limit inputs.
 /// `Component::to_ros2_control_yaml()` writes a `ros2_control` configuration
 /// (joint-state broadcaster, trajectory controller, hardware parameters, and
-/// sensors) and `Component::to_pin_map_csv()` writes the matching firmware pin
-/// map. `Component::control_checks()` verifies that every commandable robot
+/// sensors), `Component::to_pin_map_csv()` writes the matching firmware pin
+/// map, and `Component::firmware_header()` writes the same bindings and sensor
+/// tables as a C header. `Component::control_checks()` verifies that every commandable robot
 /// joint is bound and that every referenced joint, actuator, and input exists.
 ///
 /// ```mbt
@@ -183,8 +184,8 @@
 /// `Component::build_package_files()` returns the text files for a complete
 /// build package: the manifest, BOM, sourcing with supplier links, print/cut
 /// list with process settings, fastener torque table, assembly and test
-/// procedure, power/IO report, `ros2_control` configuration, pin map, and
-/// PCB connector placements. The example CLI's `--package <dir>` also writes the
+/// procedure, power/IO report, `ros2_control` configuration, pin map, firmware
+/// header, and PCB connector placements. The example CLI's `--package <dir>` also writes the
 /// posed assembly STEP and the URDF/glTF/per-link-STEP bundle.
 ///
 /// ```mbt

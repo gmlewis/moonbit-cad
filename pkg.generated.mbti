@@ -192,6 +192,7 @@ pub fn Component::control_bindings(Self) -> Array[ControlBinding]
 pub fn Component::control_checks(Self) -> Array[String]
 pub fn Component::display_name(Self) -> String
 pub fn Component::fastener_table_csv(Self) -> String
+pub fn Component::firmware_header(Self) -> String
 pub fn Component::format_documentation(Self) -> String
 pub fn Component::get_mate(Self, String) -> @urdf.MateConnector?
 pub fn Component::harness_checks(Self) -> Array[String]

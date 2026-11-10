@@ -171,8 +171,10 @@ broadcaster, a joint trajectory controller, and a hardware section mapping every
 bound joint to its actuator, CAN node or STEP/DIR channel, MCU pins, direction,
 gear ratio, soft limits, and homing/limit inputs. The same file lists the
 declared sensors and their interfaces. `--pins <file.csv>` writes the matching
-firmware pin map. `Component::control_checks()` verifies that every commandable
-joint is bound and that every referenced joint, actuator, and input resolves.
+firmware pin map, and the build package's `firmware.h` carries the same bindings
+and sensor tables as C structs for MCU firmware. `Component::control_checks()`
+verifies that every commandable joint is bound and that every referenced joint,
+actuator, and input resolves.
 
 ```bash
 ./run-example.sh 03 --control 03-control.yaml --pins 03-pins.csv
@@ -195,6 +197,7 @@ test one example:
 | `control.yaml`, `pins.csv` | `ros2_control` configuration and firmware pin map. |
 | `pcb-connectors.csv` | Imported PCB connector placements (reference, value, footprint, position, side). |
 | `link-parts.csv` | Link-to-part map used by the drawing generator. |
+| `firmware.h` | C header: joint bindings, gear ratios, limits, pins, and sensors. |
 | `assembly.step` | Posed assembly STEP. |
 | `bundle/` | URDF, `package.xml`, glTF meshes, and per-link STEP parts. |
 
@@ -261,6 +264,7 @@ python3 scripts/validate_urdf.py --check-meshes model.urdf
 python3 scripts/render_step.py model.step preview.png          # OCCT + Inkscape
 python3 scripts/render_solidcraft.py model.step preview-shaded.png  # SolidCraft + Inkscape
 python3 scripts/make_drawings.py build/03                            # SolidCraft (+ Inkscape for PDF)
+python3 scripts/validate_control.py control.yaml robot.urdf --pins pins.csv  # PyYAML
 ```
 
 `render_step.py` uses OCCT `DRAWEXE` (plus `sips` or ImageMagick for PPM

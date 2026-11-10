@@ -131,3 +131,14 @@ test "forward kinematics rotates a commanded joint" {
   let delta = (t1.rot.m00 - t0.rot.m00).abs() + (t1.rot.m01 - t0.rot.m01).abs()
   assert_true(delta > 0.1)
 }
+
+///|
+test "firmware header lists bindings, pins, and sensors" {
+  let header = build_test_component().firmware_header()
+  assert_true(header.contains("MB_JOINT_COUNT 1"))
+  assert_true(header.contains("MB_SENSOR_COUNT 1"))
+  assert_true(header.contains("arm_joint"))
+  assert_true(header.contains("can0:1"))
+  assert_true(header.contains("1.0f"))
+  assert_true(header.contains("microswitch"))
+}

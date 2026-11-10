@@ -86,7 +86,8 @@ Run these in order; each layer has a check:
    (`Component::wiring_checks()`).
 9. Control sanity: every commandable joint has a binding; every sensor has an
    input; firmware pin map matches the harness. `Component::control_checks()`
-   covers the first two.
+   covers the first two; `scripts/validate_control.py` independently checks the
+   URDF, control YAML, and pin map, including soft limits.
 
 ## Import/export boundaries
 
