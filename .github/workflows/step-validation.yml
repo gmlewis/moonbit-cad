@@ -1,0 +1,116 @@
+name: STEP and URDF validation
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 8 * * *"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  fast:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install MoonBit
+        run: |
+          /bin/bash -c "$(curl -fsSL https://cli.moonbitlang.com/install/unix.sh)"
+          echo "/home/runner/.moon/bin" >> $GITHUB_PATH
+
+      - name: moon version
+        run: moon version --all
+
+      - name: moon update
+        run: moon update
+
+      - name: validator syntax
+        run: |
+          python3 -m py_compile \
+            scripts/validate_step.py \
+            scripts/validate_urdf.py \
+            scripts/validate_control.py
+
+      - name: generate example STEP and URDF files
+        run: |
+          mkdir -p /tmp/cad-fixtures
+          for n in 01 02 03 04 05 06; do
+            ./examples/run-example.sh "$n" -o "/tmp/cad-fixtures/$n.step"
+            ./examples/run-example.sh "$n" --urdf "/tmp/cad-fixtures/$n.urdf"
+          done
+
+      - name: validate generated STEP files (syntax and topology)
+        run: python3 scripts/validate_step.py --no-mesh /tmp/cad-fixtures/*.step
+
+      - name: validate generated URDF files
+        run: |
+          for f in /tmp/cad-fixtures/*.urdf; do
+            python3 scripts/validate_urdf.py "$f"
+          done
+
+  deep:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install MoonBit
+        run: |
+          /bin/bash -c "$(curl -fsSL https://cli.moonbitlang.com/install/unix.sh)"
+          echo "/home/runner/.moon/bin" >> $GITHUB_PATH
+
+      - name: install OpenCASCADE
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y occt-draw
+          sudo apt-get install -y libocct-draw-dev || true
+          command -v occt-draw || command -v DRAWEXE
+
+      - name: moon version
+        run: moon version --all
+
+      - name: moon update
+        run: moon update
+
+      - name: validator syntax
+        run: |
+          python3 -m py_compile \
+            scripts/validate_step.py \
+            scripts/validate_urdf.py \
+            scripts/validate_control.py
+
+      - name: generate example STEP and URDF files
+        run: |
+          mkdir -p /tmp/cad-fixtures
+          for n in 01 02 03 04 05 06; do
+            ./examples/run-example.sh "$n" -o "/tmp/cad-fixtures/$n.step"
+            ./examples/run-example.sh "$n" --urdf "/tmp/cad-fixtures/$n.urdf"
+          done
+
+      - name: validate generated STEP files (including tessellation)
+        run: python3 scripts/validate_step.py /tmp/cad-fixtures/*.step
+
+      - name: generate ROS bundles and validate mesh references
+        run: |
+          for n in 01 02 03 04 05 06; do
+            bundle="/tmp/cad-bundle-$n"
+            rm -rf "$bundle"
+            ./examples/run-example.sh "$n" --bundle "$bundle"
+            urdf="$(find "$bundle" -name '*.urdf' -print -quit)"
+            test -n "$urdf"
+            package_root="$(dirname "$(dirname "$urdf")")"
+            python3 scripts/validate_urdf.py \
+              --check-meshes --package-root "$package_root" "$urdf"
+          done

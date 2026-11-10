@@ -1,0 +1,57 @@
+name: check
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install-ubuntu
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: |
+          /bin/bash -c "$(curl -fsSL https://cli.moonbitlang.com/install/unix.sh)"
+          echo "/home/runner/.moon/bin" >> $GITHUB_PATH
+
+      - name: moon version
+        run: |
+          moon version --all
+          moonrun --version
+
+      - name: moon update
+        run: moon update
+
+      - name: moon check
+        run: moon check . catalog
+
+      - name: moon info
+        run: |
+          moon info --target native . catalog
+          git diff --exit-code
+
+      - name: moon test
+        run: |
+          moon test -j 12 --target native . catalog
+
+      - name: format diff
+        run: |
+          moon fmt . catalog
+          git diff --exit-code
