@@ -108,7 +108,7 @@ name:
 | `01-bracket-assembly` | L bracket with a rigidly merged flange, NEMA stepper, coupler, and bearing. |
 | `02-planetary-actuator` | NEMA stepper driving a herringbone planetary gearbox. |
 | `03-serial-robot-arm` | Six-axis modular arm: waist yaw, shoulder/elbow pitch, and a pitch-roll-pitch wrist with a motorized lead-screw gripper, two limit switches, and a controller PCB. |
-| `04-pan-tilt-turret` | Two-axis gimbal with `MergeRigid` stator mounting and a revolute tilt axis. |
+| `04-pan-tilt-turret` | Two-axis gimbal: merged NEMA pan joint, QDD tilt joint, camera payload with IMU, pan-home limit switch, controller PCB, wiring, and a two-joint control map. |
 | `05-galileo-quadruped` | Flagship 17-link wheeled quadruped; STEP, glTF, URDF, or full ROS 2 bundle. |
 | `06-assistive-scooter` | Rider-parameterized mobility scooter with a steerable front column. |
 
@@ -160,7 +160,9 @@ itself, and that each carried wire matches its route's components.
 
 Example 03 declares six 48 V QDD joints on CAN, a 24 V NEMA stepper on
 STEP/DIR, two 5 V limit switches on GPIO, and a 24 V controller PCB with four
-wire runs. `Component::power_budget()` returns the same data programmatically.
+wire runs. Example 04 declares a 24 V NEMA pan joint on STEP/DIR, a 48 V QDD
+tilt joint on CAN, a 3.3 V IMU on I2C, a 5 V limit switch, and a controller
+PCB. `Component::power_budget()` returns the same data programmatically.
 
 ### Control export
 

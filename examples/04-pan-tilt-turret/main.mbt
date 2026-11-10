@@ -2,8 +2,10 @@
 /// 04-pan-tilt-turret
 ///
 /// A two-axis pan/tilt camera or lidar turret: a flange base, a NEMA pan
-/// motor merged into the base link, a U-bracket clevis, a QDD tilt actuator,
-/// and a sensor payload housing.
+/// motor merged into the base link, a U-bracket clevis, a QDD tilt joint, and
+/// a sensor payload housing with an IMU.  A controller PCB, a pan-home limit
+/// switch, wiring, and a two-joint control map make the package buildable and
+/// controllable.
 
 ///|
 async fn main {
@@ -26,6 +28,31 @@ async fn main {
     center_bore_mm=30.0,
     bolt_count=6,
   )
+    .add_mate_mm_deg("pcb_mount", x=48.0, z=3.0)
+    .add_mate_mm_deg("pan_limit_mount", x=-45.0, z=3.0)
+  let pan_limit = @catalog.limit_switch(name="pan_limit")
+  let controller = @catalog.pcb_board(
+      name="turret_controller",
+      length_mm=30.0,
+      width_mm=24.0,
+      connectors=[
+        "power", "motor", "can", "limit_home", "bus48", "i2c", "power3v3",
+        "power5v",
+      ],
+    )
+    .add_port(
+      @cad.Port::new("bus48", @cad.PortKind::Power, spec="48 V, 8 A"),
+    )
+    .add_port(
+      @cad.Port::new("power3v3", @cad.PortKind::Power, spec="3.3 V, 0.1 A"),
+    )
+    .add_port(
+      @cad.Port::new("power5v", @cad.PortKind::Power, spec="5 V, 0.5 A"),
+    )
+    .add_port(
+      @cad.Port::new("i2c", @cad.PortKind::Bus, spec="I2C, 400 kHz"),
+    )
+  let imu = @catalog.imu_module(name="imu")
   let pan_motor = @catalog.nema_stepper(
     name="pan_motor",
     frame_size_mm=57.0,
@@ -47,6 +74,10 @@ async fn main {
     output_diam_mm=42.0,
     output_thickness_mm=6.0,
     reduction=4.0,
+    lower_rad=-1.2,
+    upper_rad=1.2,
+    max_effort_nm=30.0,
+    max_vel_rad_s=10.0,
   )
   let payload = @cad.Component::new(
       "sensor_payload",
@@ -72,6 +103,7 @@ async fn main {
         color=@step_cad.Rgb::blue(),
       ),
     )
+    .add_mate_mm_deg("imu_mount", x=35.0, z=35.0)
     .with_part(
       @cad.PartMeta::new(
         "SENSOR-PAYLOAD",
@@ -82,11 +114,12 @@ async fn main {
         unit_cost_usd=90.0,
       ),
     )
-  let tilt_limit = @urdf.JointLimit::new(
-    lower=Some(-1.2),
-    upper=Some(1.2),
-    effort=30.0,
-    velocity=10.0,
+  let payload = payload.attach(
+    "imu_mount",
+    parent_mate="imu_mount",
+    imu,
+    child_mate="mount",
+    spec=@cad.JointSpec::fixed(),
   )
   let comp = base
     .attach(
@@ -110,10 +143,7 @@ async fn main {
       parent_mate="pivot",
       tilt,
       child_mate="rear_mount",
-      spec=@cad.JointSpec::revolute(
-        tilt_limit,
-        transmission_reduction=Some(4.0),
-      ),
+      spec=@cad.JointSpec::fixed(),
     )
     .attach_to(
       "tilt_rotor",
@@ -123,12 +153,138 @@ async fn main {
       child_mate="origin",
       spec=@cad.JointSpec::fixed(),
     )
+    .attach(
+      "pan_limit_mount",
+      parent_mate="pan_limit_mount",
+      pan_limit,
+      child_mate="mount",
+      spec=@cad.JointSpec::fixed(),
+    )
+    .attach(
+      "pcb_mount",
+      parent_mate="pcb_mount",
+      controller,
+      child_mate="mount",
+      spec=@cad.JointSpec::fixed(),
+    )
+    .with_robot_name("pan_tilt_turret")
+  // Instrumentation wiring and control map.
+  let _ = comp.add_wire_run(
+    @cad.WireRun::new(
+      "pan_power",
+      from_component="turret_controller",
+      from_port="power",
+      to_component="pan_motor_stator",
+      to_port="power",
+      gauge_awg=20,
+      length_mm=400.0,
+    ),
+  )
+  let _ = comp.add_wire_run(
+    @cad.WireRun::new(
+      "pan_step_dir",
+      from_component="turret_controller",
+      from_port="motor",
+      to_component="pan_motor_stator",
+      to_port="step_dir",
+      gauge_awg=26,
+      length_mm=400.0,
+    ),
+  )
+  let _ = comp.add_wire_run(
+    @cad.WireRun::new(
+      "tilt_power",
+      from_component="turret_controller",
+      from_port="bus48",
+      to_component="tilt",
+      to_port="power",
+      gauge_awg=18,
+      length_mm=600.0,
+    ),
+  )
+  let _ = comp.add_wire_run(
+    @cad.WireRun::new(
+      "tilt_can",
+      from_component="turret_controller",
+      from_port="can",
+      to_component="tilt",
+      to_port="can",
+      gauge_awg=24,
+      length_mm=600.0,
+    ),
+  )
+  let _ = comp.add_wire_run(
+    @cad.WireRun::new(
+      "imu_power",
+      from_component="turret_controller",
+      from_port="power3v3",
+      to_component="imu",
+      to_port="power",
+      gauge_awg=26,
+      length_mm=250.0,
+    ),
+  )
+  let _ = comp.add_wire_run(
+    @cad.WireRun::new(
+      "imu_i2c",
+      from_component="turret_controller",
+      from_port="i2c",
+      to_component="imu",
+      to_port="i2c",
+      gauge_awg=26,
+      length_mm=250.0,
+    ),
+  )
+  let _ = comp.add_wire_run(
+    @cad.WireRun::new(
+      "limit_power",
+      from_component="turret_controller",
+      from_port="power5v",
+      to_component="pan_limit",
+      to_port="power",
+      gauge_awg=26,
+      length_mm=200.0,
+    ),
+  )
+  let _ = comp.add_wire_run(
+    @cad.WireRun::new(
+      "limit_signal",
+      from_component="pan_limit",
+      from_port="signal",
+      to_component="turret_controller",
+      to_port="limit_home",
+      gauge_awg=26,
+      length_mm=200.0,
+    ),
+  )
+  let _ = comp.add_control_binding(
+    @cad.ControlBinding::new(
+      "pan_motor_shaft_joint",
+      actuator="pan_motor_stator",
+      channel="step_dir:0",
+      mcu_pins="STEP=PB0; DIR=PB1; EN=PB2",
+      gear_ratio=1.0,
+      soft_lower=Some(-@math.PI),
+      soft_upper=Some(@math.PI),
+      homing_input=Some("limit_home"),
+    ),
+  )
+  let _ = comp.add_control_binding(
+    @cad.ControlBinding::new(
+      "tilt_joint",
+      actuator="tilt",
+      channel="can0:7",
+      gear_ratio=4.0,
+      soft_lower=Some(-1.2),
+      soft_upper=Some(1.2),
+    ),
+  )
   let positions : Map[String, Double] = Map([])
   positions.set(
     "pan_motor_shaft_joint",
     args.double("panDeg") * @math.PI / 180.0,
   )
-  positions.set("tilt_axis_joint", args.double("tiltDeg") * @math.PI / 180.0)
+  positions.set("tilt_joint", args.double("tiltDeg") * @math.PI / 180.0)
   @common.write_output(
     comp,
     @common.output_paths(args),
