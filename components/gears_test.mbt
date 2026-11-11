@@ -92,22 +92,31 @@ test "Tier-1 spur gear wrapper is printable" {
 }
 
 ///|
-test "planetary stage wraps Tier-1 gears with mimic planets" {
+test "planetary stage wraps the Tier-1 planetary assembly" {
   let stage = @components.planetary_gearset_stage(
     module_mm=1.5,
     sun_teeth=12,
     planet_teeth=18,
     planet_count=3,
+    face_width_mm=8.0,
+    sun_bore_mm=6.0,
   )
   let robot = stage.to_robot()
   assert_true(!robot.has_errors())
-  let mut mimics = 0
-  for joint in robot.joints {
-    if joint.mimic is Some(_) {
-      mimics = mimics + 1
+  // The Tier-1 assembly is a posed gear set, so the stage keeps its gears as
+  // fixed links and exports each one as a printable part.
+  let parts = stage.printable_parts()
+  assert_true(parts.length() >= 4)
+  let names : Array[String] = []
+  for part in parts {
+    names.push(part.part_number)
+  }
+  let mut has_planet = false
+  for name in names {
+    if name.contains("planet") {
+      has_planet = true
     }
   }
-  assert_eq(mimics, 4)
-  let parts = stage.printable_parts()
-  assert_true(parts.length() >= 6)
+  assert_true(has_planet)
+  assert_true(stage.total_mass_kg() > 0.0)
 }

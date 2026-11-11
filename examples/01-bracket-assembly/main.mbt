@@ -25,7 +25,7 @@ async fn main {
   let bracket = @components.l_bracket(
     width_mm=args.double("bracketWidth"),
     detail~,
-  )
+  ).add_mate_mm_deg("strut_mount", x=32.0, y=27.0, z=0.0)
   let flange = @components.flange_plate(
     name="mount_flange",
     outer_diam_mm=44.0,
@@ -54,7 +54,7 @@ async fn main {
     )
     .attach(
       "strut_mount",
-      parent_mate="base_mount",
+      parent_mate="strut_mount",
       strut,
       child_mate="start",
       spec=@cad.JointSpec::fixed(),
@@ -64,7 +64,7 @@ async fn main {
       parent_mate="wall_mount",
       stepper,
       child_mate="face_mount",
-      spec=@cad.JointSpec::fixed(),
+      spec=@cad.JointSpec::fixed(offset_mm=-3.0),
     )
     .attach_to(
       "nema17_rotor",
@@ -79,7 +79,7 @@ async fn main {
       "bearing_mount",
       parent_mate="output_shaft",
       bearing,
-      child_mate="center",
+      child_mate="bottom",
       spec=@cad.JointSpec::fixed(),
     )
   // Four M3 socket head cap screws and nuts on the flange bolt circle.

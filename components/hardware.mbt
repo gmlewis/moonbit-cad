@@ -380,10 +380,25 @@ pub fn tslot_extrusion_strut(
   )
   .add_mate_mm_deg("start", z=-length_mm / 2.0)
   .add_mate_mm_deg("end", z=length_mm / 2.0)
-  .add_mate_mm_deg("side_px", x=width / 2.0, axis=(1.0, 0.0, 0.0))
-  .add_mate_mm_deg("side_nx", x=-width / 2.0, axis=(-1.0, 0.0, 0.0))
-  .add_mate_mm_deg("side_py", y=height / 2.0, axis=(0.0, 1.0, 0.0))
-  .add_mate_mm_deg("side_ny", y=-height / 2.0, axis=(0.0, -1.0, 0.0))
+  .add_mate_mm_deg("side_px", x=width / 2.0, ry_deg=90.0, axis=(1.0, 0.0, 0.0))
+  .add_mate_mm_deg(
+    "side_nx",
+    x=-width / 2.0,
+    ry_deg=-90.0,
+    axis=(-1.0, 0.0, 0.0),
+  )
+  .add_mate_mm_deg(
+    "side_py",
+    y=height / 2.0,
+    rx_deg=-90.0,
+    axis=(0.0, 1.0, 0.0),
+  )
+  .add_mate_mm_deg(
+    "side_ny",
+    y=-height / 2.0,
+    rx_deg=90.0,
+    axis=(0.0, -1.0, 0.0),
+  )
   .with_param("profile", profile.designation())
   .with_param("length_mm", length_mm.to_string())
 }
@@ -757,7 +772,8 @@ pub fn u_bracket(
   .add_mate_mm_deg("base_mount", z=-thickness_mm / 2.0)
   .add_mate_mm_deg(
     "pivot",
-    z=thickness_mm / 2.0 + arm_length_mm * 0.7,
+    z=thickness_mm / 2.0 + arm_length_mm * 0.9,
+    ry_deg=90.0,
     axis=(1.0, 0.0, 0.0),
   )
   .with_part(part)

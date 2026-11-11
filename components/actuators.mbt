@@ -246,10 +246,8 @@ pub fn bldc_actuator_pod(
       "bearing_merge",
       parent_mate="bearing_seat",
       bearing,
-      child_mate="bottom",
-      spec=@cad.JointSpec::merge_rigid(
-        offset_mm=-0.5 * housing_length_mm * 0.08,
-      ),
+      child_mate="top",
+      spec=@cad.JointSpec::merge_rigid(),
     )
     // Six flange screws around the bolt circle.
     let bolt_radius = housing_diam_mm * 0.5
@@ -322,6 +320,7 @@ pub fn bldc_actuator_pod(
         effort=max_effort_nm,
         velocity=max_vel_rad_s,
       ),
+      offset_mm=output_thickness_mm / 2.0,
       dynamics=Some(@urdf.JointDynamics::new(damping=0.4, friction=0.08)),
       transmission_reduction=Some(reduction),
     ),
@@ -397,7 +396,7 @@ pub fn hub_motor_assembly(
       @cad.BodyPart::tube_mm(
         wheel_name + "_rim",
         rim_diam,
-        stator_diam_mm * 0.5,
+        stator_diam_mm + 2.0,
         tire_width_mm,
         density=@urdf.Density::aluminum_6061(),
         color=@step_cad.Rgb::grey(),

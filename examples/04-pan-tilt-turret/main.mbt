@@ -65,7 +65,7 @@ async fn main {
   )
   let pan_bracket = @components.u_bracket(
     name="pan_bracket",
-    inner_span_mm=60.0,
+    inner_span_mm=120.0,
     arm_length_mm=50.0,
     width_mm=45.0,
     detail~,
@@ -109,6 +109,7 @@ async fn main {
       ),
     )
     .add_mate_mm_deg("imu_mount", x=35.0, z=35.0)
+    .add_mate_mm_deg("mount", z=-35.0)
     .with_part(
       @cad.PartMeta::new(
         "SENSOR-PAYLOAD",
@@ -155,8 +156,8 @@ async fn main {
       "payload_mount",
       parent_mate="output_flange",
       payload,
-      child_mate="origin",
-      spec=@cad.JointSpec::fixed(),
+      child_mate="mount",
+      spec=@cad.JointSpec::fixed(offset_mm=100.0),
     )
     .attach(
       "pan_limit_mount",

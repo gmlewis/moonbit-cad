@@ -122,13 +122,15 @@ async fn main {
     ("rear_rail", -half_len * 0.8, 0.0, body_width, 0.0, 1.0, 0.0),
   ]
   for rail in rail_specs {
-    let (rail_name, x, y, rail_length, ax, ay, az) = rail
+    let (rail_name, x, y, rail_length, ax, _, _) = rail
+    let is_x_rail = ax != 0.0
     base = base.add_mate_mm_deg(
       "\{rail_name}_mount",
       x~,
       y~,
       z=body_height / 2.0,
-      axis=(ax, ay, az),
+      ry_deg=if is_x_rail { 90.0 } else { 0.0 },
+      rx_deg=if is_x_rail { 0.0 } else { -90.0 },
     )
     let strut = @components.tslot_extrusion_strut(
       name=rail_name,

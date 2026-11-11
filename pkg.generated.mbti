@@ -2,6 +2,7 @@
 package "gmlewis/cad"
 
 import {
+  "gmlewis/step/components/collision",
   "gmlewis/step/components/common",
   "gmlewis/urdf",
   "moonbitlang/core/debug",
@@ -207,6 +208,9 @@ pub fn Component::build_manifest(Self, name? : String) -> String
 pub fn Component::build_package_files(Self, name? : String) -> Array[BuildFile]
 pub fn Component::build_procedure_text(Self) -> String
 pub fn Component::cable_routes(Self) -> Array[CableRoute]
+pub fn Component::collision_checks(Self, joint_positions? : Map[String, Double], tol? : @collision.TolerancePolicy, policy? : @collision.ContactPolicy) -> Array[String]
+pub fn Component::collision_report_text(Self, joint_positions? : Map[String, Double], tol? : @collision.TolerancePolicy, policy? : @collision.ContactPolicy) -> String
+pub fn Component::collision_reports(Self, joint_positions? : Map[String, Double], tol? : @collision.TolerancePolicy, policy? : @collision.ContactPolicy) -> Array[@collision.CollisionReport]
 pub fn Component::compile_links(Self, package_name? : String?) -> (Array[CompiledLink], Array[@urdf.Joint], Array[@urdf.Transmission])
 pub fn Component::control_bindings(Self) -> Array[ControlBinding]
 pub fn Component::control_checks(Self) -> Array[String]
@@ -221,6 +225,7 @@ pub fn Component::link_design(Self, String) -> @gmlewis/step/cad.Design?
 pub fn Component::link_parts_csv(Self) -> String
 pub fn Component::new(String, description? : String) -> Self
 pub fn Component::pcb_placements_csv(Self) -> String
+pub fn Component::placed_shapes(Self, joint_positions? : Map[String, Double]) -> Array[@collision.PlacedShape]
 pub fn Component::power_budget(Self) -> PowerBudget
 pub fn Component::print_list_csv(Self) -> String
 pub fn Component::printable_parts(Self) -> Array[PrintablePart]

@@ -216,6 +216,7 @@
 /// | `harness.mbt` | `CableRoute` length, tree collection, and harness checks (route geometry and wire reach). |
 /// | `build.mbt` | Sourcing, print/cut list, fastener torque table, procedure, build-package manifest, and standalone printable parts. |
 /// | `step-bridge.mbt` | `@step_common.Component` → CAD bodies/components, detail/thread parsing, and chamfered-prism flattening. |
+/// | `analysis.mbt` | World-posed bodies and the `gmlewis/step/components/collision` interference audit. |
 /// | `compile-step.mbt` | `Component` → posed `@step_cad.Design` through forward kinematics. |
 /// | `compile-urdf.mbt` | `Component` → `@urdf.Robot` and `@urdf.UrdfBundle` (with real `.gltf` and `.step` assets). |
 /// | `components/hardware.mbt` | ISO fasteners, standoffs, bearings, T-slot parts, couplers, and L/U/flange brackets. |

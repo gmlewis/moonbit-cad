@@ -241,6 +241,15 @@ pub fn quadruped_leg_assembly(
   threads? : @step_common.ThreadRepresentation,
 ) -> @cad.Component {
   let sign = if is_left { 1.0 } else { -1.0 }
+  // Clevis stack: each link's bosses sit beside its parent's boss rather than
+  // sharing the same axial span, so the exported solids do not interpenetrate.
+  let hip_pod_length_mm = 54.0
+  let leg_width_mm = 44.0
+  let leg_thickness_mm = 28.0
+  let wheel_width_mm = 45.0
+  let hip_to_thigh_mm = sign * (hip_pod_length_mm / 2.0 + leg_width_mm / 2.0)
+  let thigh_to_calf_mm = -sign * (leg_width_mm / 2.0 + leg_thickness_mm / 2.0)
+  let calf_to_wheel_mm = sign * (leg_width_mm / 2.0 + wheel_width_mm / 2.0)
   let hip_name = prefix + "_hip_link"
   let thigh_name = prefix + "_thigh_link"
   let calf_name = prefix + "_calf_link"
@@ -356,6 +365,7 @@ pub fn quadruped_leg_assembly(
     child_mate="axle",
     spec=@cad.JointSpec::continuous(
       limit=Some(@urdf.JointLimit::new(effort=20.0, velocity=35.0)),
+      offset_mm=calf_to_wheel_mm,
       transmission_reduction=Some(1.0),
     ),
   )
@@ -371,6 +381,7 @@ pub fn quadruped_leg_assembly(
         effort=55.0,
         velocity=18.0,
       ),
+      offset_mm=thigh_to_calf_mm,
       transmission_reduction=Some(6.0),
     ),
   )
@@ -387,6 +398,7 @@ pub fn quadruped_leg_assembly(
         effort=45.0,
         velocity=21.0,
       ),
+      offset_mm=hip_to_thigh_mm,
       transmission_reduction=Some(6.0),
     ),
   )
@@ -418,8 +430,8 @@ pub fn suspension_fork_module(
     .add_body(
       @cad.BodyPart::box_mm(
         name + "_crown",
-        fork_span_mm + 20.0,
         30.0,
+        fork_span_mm + 20.0,
         18.0,
         z_mm=fork_length_mm,
         density~,
@@ -431,7 +443,7 @@ pub fn suspension_fork_module(
         name + "_leg_left",
         18.0,
         fork_length_mm,
-        x_mm=-half_span,
+        y_mm=-half_span,
         z_mm=fork_length_mm / 2.0,
         density~,
         color=@step_cad.Rgb::grey(),
@@ -451,7 +463,7 @@ pub fn suspension_fork_module(
         name + "_leg_right",
         18.0,
         fork_length_mm,
-        x_mm=half_span,
+        y_mm=half_span,
         z_mm=fork_length_mm / 2.0,
         density~,
         color=@step_cad.Rgb::grey(),
@@ -507,10 +519,10 @@ pub fn suspension_fork_module(
     .add_body(
       @cad.BodyPart::box_mm(
         name + "_dropout_left",
-        18.0,
         26.0,
+        18.0,
         30.0,
-        x_mm=-half_span,
+        y_mm=-half_span,
         z_mm=12.0,
         density~,
         color=@step_cad.Rgb::grey(),
@@ -519,10 +531,10 @@ pub fn suspension_fork_module(
     .add_body(
       @cad.BodyPart::box_mm(
         name + "_dropout_right",
-        18.0,
         26.0,
+        18.0,
         30.0,
-        x_mm=half_span,
+        y_mm=half_span,
         z_mm=12.0,
         density~,
         color=@step_cad.Rgb::grey(),

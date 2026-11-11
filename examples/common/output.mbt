@@ -23,9 +23,11 @@ pub(all) struct OutputPaths {
   pins : String?
   build_package : String?
   print_parts : String?
+  posed_parts : String?
   detail : String
   threads : String
   check : Bool
+  collisions : Bool
 }
 
 ///|
@@ -105,6 +107,12 @@ pub fn with_output_args(spec : Map[String, @cli.Arg]) -> Map[String, @cli.Arg] {
     ),
   )
   spec.set(
+    "posed-parts",
+    @cli.opt_string(
+      help="Write world-posed per-link STEP files for interference analysis to directory",
+    ),
+  )
+  spec.set(
     "print-parts",
     @cli.opt_string(
       help="Write standalone 3D-printable STEP parts and print-list.csv to directory",
@@ -123,6 +131,10 @@ pub fn with_output_args(spec : Map[String, @cli.Arg]) -> Map[String, @cli.Arg] {
   spec.set(
     "check",
     @cli.flag(help="Print assembly/hardware warnings to stderr"),
+  )
+  spec.set(
+    "collisions",
+    @cli.flag(help="Analyze placed parts for unintended overlaps"),
   )
   spec
 }
@@ -147,9 +159,11 @@ pub fn output_paths(args : @cli.Args) -> OutputPaths {
     pins: args.string_opt("pins"),
     build_package: args.string_opt("package"),
     print_parts: args.string_opt("print-parts"),
+    posed_parts: args.string_opt("posed-parts"),
     detail: args.string_opt("detail").unwrap_or("simplified"),
     threads: args.string_opt("threads").unwrap_or(""),
     check: args.flag("check"),
+    collisions: args.flag("collisions"),
   }
 }
 
@@ -205,7 +219,9 @@ fn any_output(output : OutputPaths) -> Bool {
   output.control is Some(_) ||
   output.pins is Some(_) ||
   output.build_package is Some(_) ||
-  output.print_parts is Some(_)
+  output.print_parts is Some(_) ||
+  output.posed_parts is Some(_) ||
+  output.collisions
 }
 
 ///|
@@ -231,6 +247,39 @@ pub async fn write_output(
       }
     }
     abort("")
+  }
+  if output.collisions {
+    let reports = comp.collision_reports(joint_positions~)
+    let mut collisions = 0
+    let mut contacts = 0
+    let mut fits = 0
+    let mut indeterminate = 0
+    for report in reports {
+      match report.kind {
+        @step_collision.CollisionKind::Collision => {
+          collisions = collisions + 1
+          @cli.eprintln("collision: " + report.summary())
+        }
+        @step_collision.CollisionKind::Contact => contacts = contacts + 1
+        @step_collision.CollisionKind::InterferenceFit => fits = fits + 1
+        @step_collision.CollisionKind::Indeterminate => {
+          indeterminate = indeterminate + 1
+          @cli.eprintln("indeterminate: " + report.summary())
+        }
+        @step_collision.CollisionKind::Clearance => ()
+      }
+    }
+    @cli.eprintln(
+      "collision analysis: " +
+      collisions.to_string() +
+      " collision(s), " +
+      contacts.to_string() +
+      " contact(s), " +
+      fits.to_string() +
+      " declared fit(s), " +
+      indeterminate.to_string() +
+      " indeterminate",
+    )
   }
   if output.check {
     let warnings = comp.assembly_checks()
@@ -259,6 +308,39 @@ pub async fn write_output(
     )
   }
   if !any_output(output) {
+    if output.collisions {
+      let reports = comp.collision_reports(joint_positions~)
+      let mut collisions = 0
+      let mut contacts = 0
+      let mut fits = 0
+      let mut indeterminate = 0
+      for report in reports {
+        match report.kind {
+          @step_collision.CollisionKind::Collision => {
+            collisions = collisions + 1
+            @cli.eprintln("collision: " + report.summary())
+          }
+          @step_collision.CollisionKind::Contact => contacts = contacts + 1
+          @step_collision.CollisionKind::InterferenceFit => fits = fits + 1
+          @step_collision.CollisionKind::Indeterminate => {
+            indeterminate = indeterminate + 1
+            @cli.eprintln("indeterminate: " + report.summary())
+          }
+          @step_collision.CollisionKind::Clearance => ()
+        }
+      }
+      @cli.eprintln(
+        "collision analysis: " +
+        collisions.to_string() +
+        " collision(s), " +
+        contacts.to_string() +
+        " contact(s), " +
+        fits.to_string() +
+        " declared fit(s), " +
+        indeterminate.to_string() +
+        " indeterminate",
+      )
+    }
     if output.check {
       return
     }
@@ -335,6 +417,26 @@ pub async fn write_output(
   match output.pins {
     Some(_) =>
       @step_cad.write_text_file(comp.to_pin_map_csv(), stdout_path(output.pins))
+    None => ()
+  }
+  match output.posed_parts {
+    Some(dir) => {
+      @fs.mkdir(dir, recursive=true, allow_exist=true)
+      let (links, _, _) = comp.compile_links()
+      let fk = robot.forward_kinematics(joint_positions~)
+      for link in links {
+        let world = fk.get(link.name).unwrap_or(@urdf.Transform::identity())
+        let mut design = @step_cad.Design::new(name=link.name)
+        for body in link.bodies {
+          design = design.add(
+            @cad.transform_scene_node_urdf(body.node, world).with_name(
+              link.name + "_" + body.name,
+            ),
+          )
+        }
+        design.write_step_file(Some(dir + "/" + link.name + ".step"))
+      }
+    }
     None => ()
   }
   match output.print_parts {

@@ -98,9 +98,12 @@ tree, so a load can be snapped onto a motor's nested rotor link.
   pods, and hub-motor wheels. At `Detailed`/`FullyModeled` they add keyed
   shafts, bearings, and real mounting screws.
 - **`components/gears`** — a parameterized herringbone planetary gearbox built
-  from true involute swept B-Rep gears, with mimic-coupled planets and carrier,
-  plus Tier-1 `spur_gear_part` and `planetary_gearset_stage` wrappers. Sun,
-  planet, ring, and carrier are individually printable.
+  from true involute swept B-Rep gears with mimic-coupled planets and carrier
+  (a local port of `moonbit-17-step/examples/38-planetary-gearbox`), plus
+  `spur_gear_part` and `planetary_gearset_stage`. The stage wraps the Tier-1
+  `planetary_gear_set` assembly and is what example 02 uses; sun, planet, ring,
+  and carrier are individually printable. Tier-1 does not yet expose a
+  herringbone gearbox component, only the involute planetary assembly.
 - **`components/mobility`** — reusable box-tube struts, printable robot leg
   segments with bearing seats, treaded wheels, 4-DOF quadruped legs, and a
   steerable suspension fork. Whole robots live in `examples/05` and
@@ -134,6 +137,9 @@ Every example supports the shared output flags:
 - `--print-parts <dir>` — standalone 3D-printable STEP parts and
   `print-list.csv`, each part in its own local datum frame with purchased
   motors, screws, bearings, and PCBs excluded.
+- `--posed-parts <dir>` — world-posed per-link STEP files for exact
+  interference analysis.
+- `--collisions` — conservative OBB/AABB collision and interference audit.
 - `-o`, `--assembly`, `--gltf`, `--blender`, `--urdf`, `--bundle`,
   `--package`, `--bom`, `--control`, `--pins`, and `--check`.
 
@@ -296,6 +302,8 @@ this repository alone; only the external tools named below are required):
 ```bash
 python3 scripts/validate_step.py --no-mesh model.step
 python3 scripts/validate_urdf.py --check-meshes model.urdf
+python3 scripts/check_interferences.py --parts-dir posed/       # exact OCCT link interference
+./run-example.sh 05 --detail detailed --posed-parts posed/05    # world-posed links for the check
 python3 scripts/render_step.py model.step preview.png          # OCCT + Inkscape
 python3 scripts/render_solidcraft.py model.step preview-shaded.png  # SolidCraft + Inkscape
 python3 scripts/make_drawings.py build/03                            # SolidCraft (+ Inkscape for PDF)

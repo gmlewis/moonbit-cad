@@ -67,7 +67,7 @@ pub fn pcb_from_kicad(name? : String, footprints? : Array[KiCadFootprint], board
 
 pub fn planetary_gearbox(name? : String, params? : PlanetaryGearboxParams, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
 
-pub fn planetary_gearset_stage(name? : String, module_mm? : Double, sun_teeth? : Int32, planet_teeth? : Int32, planet_count? : Int32, face_width_mm? : Double, pressure_angle_deg? : Double, ring_wall_mm? : Double, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
+pub fn planetary_gearset_stage(name? : String, module_mm? : Double, sun_teeth? : Int32, planet_teeth? : Int32, planet_count? : Int32, face_width_mm? : Double, pressure_angle_deg? : Double, sun_bore_mm? : Double, planet_bore_mm? : Double, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
 
 pub fn quadruped_leg_assembly(String, is_left~ : Bool, hip_offset_y_mm? : Double, thigh_length_mm? : Double, calf_length_mm? : Double, wheel_diam_mm? : Double, detail? : @common.DetailLevel, threads? : @common.ThreadRepresentation) -> @gmlewis/cad.Component
 

@@ -1,5 +1,6 @@
 import {
   "gmlewis/step/cad" @step_cad,
+  "gmlewis/step/components/collision" @step_collision,
   "gmlewis/step/components/common" @step_common,
   "gmlewis/urdf",
   "moonbitlang/core/math",

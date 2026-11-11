@@ -33,9 +33,11 @@ pub(all) struct OutputPaths {
   pins : String?
   build_package : String?
   print_parts : String?
+  posed_parts : String?
   detail : String
   threads : String
   check : Bool
+  collisions : Bool
 }
 pub fn OutputPaths::detail_level(Self) -> @gmlewis/step/components/common.DetailLevel
 pub fn OutputPaths::thread_rep(Self) -> @gmlewis/step/components/common.ThreadRepresentation?

@@ -907,7 +907,7 @@ pub fn lead_screw_gripper(
     parent_mate="motor_mount",
     motor,
     child_mate="face_mount",
-    spec=@cad.JointSpec::fixed(),
+    spec=@cad.JointSpec::fixed(offset_mm=-8.0),
   )
   .attach_to(
     motor_name + "_rotor",
@@ -930,7 +930,7 @@ pub fn lead_screw_gripper(
     parent_mate="bearing_seat",
     bearing,
     child_mate="center",
-    spec=@cad.JointSpec::fixed(),
+    spec=@cad.JointSpec::fixed(offset_mm=5.0),
   )
   .attach(
     jaw_name,

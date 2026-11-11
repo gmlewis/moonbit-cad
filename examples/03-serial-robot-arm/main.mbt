@@ -552,7 +552,7 @@ async fn main {
       parent_mate="shoulder_port",
       shoulder,
       child_mate="rear_mount",
-      spec=@cad.JointSpec::fixed(),
+      spec=@cad.JointSpec::fixed(offset_mm=10.0),
     )
     .attach_to(
       "shoulder_rotor",
@@ -576,7 +576,7 @@ async fn main {
       parent_mate="elbow_port",
       elbow,
       child_mate="rear_mount",
-      spec=@cad.JointSpec::fixed(),
+      spec=@cad.JointSpec::fixed(offset_mm=10.0),
     )
     .attach_to(
       "elbow_rotor",
@@ -600,7 +600,7 @@ async fn main {
       parent_mate="wrist_pitch_port",
       wrist_pitch,
       child_mate="rear_mount",
-      spec=@cad.JointSpec::fixed(),
+      spec=@cad.JointSpec::fixed(offset_mm=10.0),
     )
     .attach_to(
       "wrist_pitch_rotor",
@@ -616,7 +616,7 @@ async fn main {
       parent_mate="wrist_roll_port",
       wrist_roll,
       child_mate="rear_mount",
-      spec=@cad.JointSpec::fixed(),
+      spec=@cad.JointSpec::fixed(offset_mm=10.0),
     )
     .attach_to(
       "wrist_roll_rotor",

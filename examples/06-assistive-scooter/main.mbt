@@ -69,7 +69,7 @@ async fn main {
   chassis = chassis.add_body(
     @cad.BodyPart::box_mm(
       "deck",
-      wheelbase * 0.75,
+      wheelbase * 0.6,
       track_width * 0.55,
       deck_top,
       z_mm=deck_top / 2.0,
@@ -99,7 +99,7 @@ async fn main {
       6.0,
       x_mm=-wheelbase / 2.0,
       y_mm=half_track,
-      z_mm=rear_wheel_r + 10.0,
+      z_mm=rear_wheel_r * 2.0 + 5.0,
       density=@urdf.Density::petg(),
       color=@step_cad.Rgb::black(),
     ).with_part(
@@ -114,7 +114,7 @@ async fn main {
       6.0,
       x_mm=-wheelbase / 2.0,
       y_mm=-half_track,
-      z_mm=rear_wheel_r + 10.0,
+      z_mm=rear_wheel_r * 2.0 + 5.0,
       density=@urdf.Density::petg(),
       color=@step_cad.Rgb::black(),
     ).with_part(
@@ -122,8 +122,8 @@ async fn main {
     ),
   )
   let drop_mounts : Array[(String, Double, String)] = [
-    ("left_drop_mount", half_track, "SCOOTER-LEFT-DROP-MOUNT"),
-    ("right_drop_mount", -half_track, "SCOOTER-RIGHT-DROP-MOUNT"),
+    ("left_drop_mount", half_track + 30.0, "SCOOTER-LEFT-DROP-MOUNT"),
+    ("right_drop_mount", -(half_track + 30.0), "SCOOTER-RIGHT-DROP-MOUNT"),
   ]
   for drop in drop_mounts {
     let (drop_name, y, drop_part) = drop
@@ -178,13 +178,13 @@ async fn main {
     "left_rail_mount",
     y=half_track,
     z=deck_top * 0.5,
-    axis=(1.0, 0.0, 0.0),
+    ry_deg=90.0,
   )
   chassis = chassis.add_mate_mm_deg(
     "right_rail_mount",
     y=-half_track,
     z=deck_top * 0.5,
-    axis=(1.0, 0.0, 0.0),
+    ry_deg=90.0,
   )
   for
     rail in [
@@ -205,17 +205,35 @@ async fn main {
       spec=@cad.JointSpec::merge_rigid(offset_mm=-wheelbase / 2.0),
     )
   }
-  // Front suspension fork.
+  // Front suspension fork and its steering column. The fork's local frame
+  // puts the axle at z = 0 and the mount at fork_length + 18, so the mount
+  // sits high enough that the axle lands at the front-wheel radius.
+  let fork_length = front_wheel_diam * 1.2
+  let fork_mount_z = front_wheel_diam / 2.0 + fork_length + 18.0
+  chassis = chassis.add_body(
+    @cad.BodyPart::cylinder_mm(
+      "steering_column",
+      30.0,
+      fork_mount_z - 30.0 - deck_top,
+      x_mm=wheelbase * 0.55,
+      y_mm=45.0,
+      z_mm=(deck_top + fork_mount_z - 30.0) / 2.0,
+      density=@urdf.Density::aluminum_6061(),
+      color=@step_cad.Rgb::grey(),
+    ).with_part(
+      scooter_fab("SCOOTER-STEERING-COLUMN", "Steering column", "6061-T6", 8.0),
+    ),
+  )
   chassis = chassis.add_mate_mm_deg(
     "steering_mount",
-    x=wheelbase * 0.4,
-    z=deck_top,
+    x=wheelbase * 0.55,
+    z=fork_mount_z,
     axis=(0.0, 0.0, 1.0),
   )
   let fork = @components.suspension_fork_module(
     name="front_fork",
     fork_span_mm=track_width * 0.28,
-    fork_length_mm=front_wheel_diam * 1.2,
+    fork_length_mm=fork_length,
     wheel_diam_mm=front_wheel_diam,
     detail~,
     threads?,
@@ -247,6 +265,7 @@ async fn main {
       x=-wheelbase / 2.0,
       y~,
       z=rear_wheel_r,
+      rx_deg=-90.0,
       axis=(0.0, 1.0, 0.0),
     )
     let hub = @components.hub_motor_assembly(
@@ -259,7 +278,7 @@ async fn main {
       "\{hub_name}_mount_joint",
       parent_mate="\{hub_name}_axle",
       hub,
-      child_mate="mount",
+      child_mate="axle",
       spec=@cad.JointSpec::fixed(),
     )
   }
@@ -295,8 +314,9 @@ async fn main {
   let steering_home = @components.limit_switch(name="steering_home", detail~)
   chassis = chassis.add_mate_mm_deg(
     "steering_home_mount",
-    x=wheelbase * 0.4,
-    z=deck_top,
+    x=wheelbase * 0.55,
+    y=45.0,
+    z=deck_top + 110.0,
   )
   chassis = chassis.attach(
     "steering_home_merge",
@@ -309,7 +329,7 @@ async fn main {
   chassis = chassis.add_mate_mm_deg(
     "camera_mount",
     x=wheelbase * 0.55,
-    z=front_wheel_diam * 0.8,
+    z=front_wheel_diam + 20.0,
   )
   chassis = chassis.attach(
     "camera_merge",
