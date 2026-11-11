@@ -69,27 +69,51 @@ tree, so a load can be snapped onto a motor's nested rotor link.
 | `comp.to_design(joint_positions~)` | Posed `@step_cad.Design` solved through `forward_kinematics`. |
 | `comp.to_step_file()`, `to_assembly_step()`, `to_gltf()`, `to_blender_python()` | Posed exports in the requested format. |
 
-## Hardware catalog
+## Three-tier architecture
 
-- **`catalog/fasteners`** — hex standoffs, cylindrical spacers, ball bearings,
-  shaft couplers, flange plates, L brackets, and U brackets, plus a fastener
-  catalog of socket-head screws, hex nuts, washers, and heat-set inserts. Each
-  carries `PartMeta` so it can flow into a bill of materials.
-- **`catalog/actuators`** — NEMA steppers, quasi-direct-drive BLDC actuator pods,
-  and hub-motor wheels. Each is a stator/rotor `Component` pair with a joint and
-  transmission.
-- **`catalog/gears`** — a parameterized herringbone planetary gearbox built from
-  true involute swept B-Rep gears, with mimic-coupled planets and carrier.
-- **`catalog/mobility`** — box-tube struts, robot leg segments, treaded wheels, a
-  17-link wheeled quadruped, and an assistive mobility scooter.
-- **`catalog/grippers`** — a 1-DOF parallel-jaw gripper and a motorized,
+- **Tier 1 — `gmlewis/step/components/*`** — low-level, parametrized STEP
+  hardware primitives: ISO fasteners, bearings, shafts, spacers, T-slot
+  extrusions, gears, and frames. Every primitive accepts
+  `detail~ : DetailLevel` (`Simplified`, `Detailed`, `FullyModeled`) and an
+  optional `threads? : ThreadRepresentation` (`None`, `Cosmetic`, `Helical`).
+- **Tier 2 — `gmlewis/cad/components`** — reusable robotic and mechatronic
+  sub-assemblies that wrap Tier-1 primitives with named mates, URDF
+  kinematics, analytical inertia, collision geometry, `PartMeta`, fastener
+  schedules, fits, ports, actuator/sensor/PCB specs, wiring, and control
+  bindings. Every builder accepts `detail~` (and `threads?` for threaded
+  hardware) and forwards it to Tier 1.
+- **Tier 3 — `examples/`** — specialized, parameterized, printable, and
+  simulatable end-to-end models. Every example accepts `--detail` and
+  `--threads` and can emit STEP, glTF, URDF, a ROS 2 bundle, a manufacturing
+  package, and standalone printable STEP parts.
+
+## Hardware components
+
+- **`components/hardware`** — ISO 4762/4017/4032/7089/DIN 976 wrappers,
+  hex standoffs, spacers, bushings, ball bearings, T-slot extrusions and
+  frames, compression springs, shaft couplers, flange plates, L/U brackets, and
+  heat-set inserts. Each carries `PartMeta` so it can flow into a bill of
+  materials and the printable-part export.
+- **`components/actuators`** — NEMA steppers, quasi-direct-drive BLDC actuator
+  pods, and hub-motor wheels. At `Detailed`/`FullyModeled` they add keyed
+  shafts, bearings, and real mounting screws.
+- **`components/gears`** — a parameterized herringbone planetary gearbox built
+  from true involute swept B-Rep gears, with mimic-coupled planets and carrier,
+  plus Tier-1 `spur_gear_part` and `planetary_gearset_stage` wrappers. Sun,
+  planet, ring, and carrier are individually printable.
+- **`components/mobility`** — reusable box-tube struts, printable robot leg
+  segments with bearing seats, treaded wheels, 4-DOF quadruped legs, and a
+  steerable suspension fork. Whole robots live in `examples/05` and
+  `examples/06`.
+- **`components/grippers`** — a 1-DOF parallel-jaw gripper and a motorized,
   threaded lead-screw gripper (NEMA stepper, exposed screw/nut/rails, matched
-  jaws, bolt-ready plates, two limit switches, and a controller PCB).
-- **`catalog/sensors`** — micro limit switches, magnetic encoders, six-axis
-  IMUs, camera modules, force sensors, and PCB envelopes with mounting holes.
-- **`catalog/harness`** — polyline cable bundles with jacket diameter, carried
-  wire runs, a length-based purchased part number, and jacket geometry.
-- **`catalog/kicad`** — KiCad `.pos` CSV import: board envelope with mounting
+  jaws, printable brackets, two limit switches, and a controller PCB).
+- **`components/sensors`** — micro limit switches, magnetic encoders, six-axis
+  IMUs, camera modules, force sensors, printable sensor-mount brackets, and PCB
+  envelopes with mounting holes and optional standoffs.
+- **`components/harness`** — polyline cable bundles with jacket diameter,
+  carried wire runs, a length-based purchased part number, and jacket geometry.
+- **`components/kicad`** — KiCad `.pos` CSV import: board envelope with mounting
   holes, connector placements, and ports.
 
 ## Showcase examples
@@ -102,6 +126,16 @@ name:
 ./run-example.sh 05-galileo-quadruped --bundle /tmp/galileo_bundle
 ./run-example.sh 06 --out scooter.step --urdf scooter.urdf
 ```
+
+Every example supports the shared output flags:
+
+- `--detail simplified|detailed|fully-modeled` — geometry detail.
+- `--threads none|cosmetic|helical` — thread representation override.
+- `--print-parts <dir>` — standalone 3D-printable STEP parts and
+  `print-list.csv`, each part in its own local datum frame with purchased
+  motors, screws, bearings, and PCBs excluded.
+- `-o`, `--assembly`, `--gltf`, `--blender`, `--urdf`, `--bundle`,
+  `--package`, `--bom`, `--control`, `--pins`, and `--check`.
 
 | Example | Description |
 | --- | --- |
@@ -251,8 +285,9 @@ bill-of-materials roll-up, assembly plans and hardware checks, power/IO
 budgets, cable-route length and wire checks, control export and
 joint-completeness checks, forward-kinematics pose smoke tests, build-package
 generation (sourcing, print list, torque table, manifest), KiCad placement
-import, every catalog component, the sensor and harness catalogs, the
-mimic-coupled gearbox, and the 17-link quadruped. Drawing sheets are generated
+import, every component builder at all detail levels, printable-part extraction,
+the sensor and harness components, the mimic-coupled gearbox, and the
+17-link quadruped. Drawing sheets are generated
 by `scripts/make_drawings.py` from a built package.
 
 Validation and rendering helpers live in `scripts/` (they run from a clone of

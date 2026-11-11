@@ -72,26 +72,36 @@
 /// | `comp.to_design(joint_positions~)` | Posed `@step_cad.Design` solved through `forward_kinematics`. |
 /// | `comp.to_step_file()`, `to_assembly_step()`, `to_gltf()`, `to_blender_python()` | Posed exports in the requested format. |
 ///
-/// ## Hardware catalog
+/// ## Three-tier architecture
 ///
-/// - `catalog/fasteners` — hex standoffs, cylindrical spacers, ball bearings,
-///   shaft couplers, flange plates, L brackets, and U brackets, plus socket-head
-///   screws, hex nuts, washers, and heat-set inserts (all with `PartMeta`).
-/// - `catalog/actuators` — NEMA steppers, quasi-direct-drive BLDC actuator
+/// - **Tier 1** (`gmlewis/step/components/*`) provides parametrized STEP
+///   primitives with `DetailLevel` and `ThreadRepresentation`.
+/// - **Tier 2** (`gmlewis/cad/components`) wraps those primitives with mates,
+///   URDF kinematics, inertia, BOM metadata, ports, wiring, and control.
+/// - **Tier 3** (`examples/`) builds specialized printable and simulatable
+///   models and exports STEP, glTF, URDF, ROS 2 bundles, and printable parts.
+///
+/// ## Hardware components
+///
+/// - `components/hardware` — ISO 4762/4017/4032/7089/DIN 976 wrappers, hex
+///   standoffs, cylindrical spacers, bushings, bearings, T-slot extrusions and
+///   frames, compression springs, shaft couplers, flange plates, L/U brackets,
+///   and heat-set inserts (all with `PartMeta`).
+/// - `components/actuators` — NEMA steppers, quasi-direct-drive BLDC actuator
 ///   pods, and hub-motor wheels. Each is a stator/rotor `Component` pair with a
 ///   joint and transmission.
-/// - `catalog/gears` — a parameterized herringbone planetary gearbox built from
+/// - `components/gears` — a parameterized herringbone planetary gearbox built from
 ///   true involute swept B-Rep gears, with mimic-coupled planets and carrier.
-/// - `catalog/mobility` — box-tube struts, robot leg segments, treaded wheels,
-///   a 17-link wheeled quadruped, and an assistive mobility scooter.
-/// - `catalog/grippers` — a 1-DOF parallel-jaw gripper and a motorized,
+/// - `components/mobility` — reusable box-tube struts, printable robot leg
+///   segments, treaded wheels, quadruped legs, and a steerable suspension fork.
+/// - `components/grippers` — a 1-DOF parallel-jaw gripper and a motorized,
 ///   threaded lead-screw gripper (exposed screw/nut/rails, matched jaws,
 ///   bolt-ready plates, limit switches, and a controller PCB).
-/// - `catalog/sensors` — limit switches, magnetic encoders, IMUs, cameras,
+/// - `components/sensors` — limit switches, magnetic encoders, IMUs, cameras,
 ///   force sensors, and PCB envelopes with mounting holes.
-/// - `catalog/harness` — polyline cable bundles with jacket geometry, carried
+/// - `components/harness` — polyline cable bundles with jacket geometry, carried
 ///   wire runs, and a length-based purchased part number.
-/// - `catalog/kicad` — KiCad `.pos` CSV import: board envelope, mounting holes,
+/// - `components/kicad` — KiCad `.pos` CSV import: board envelope, mounting holes,
 ///   connector placements, and ports.
 ///
 /// ## Quick start
@@ -204,16 +214,17 @@
 /// | `electronics.mbt` | `ActuatorSpec`, `SensorSpec`, `PcbSpec`, `WireRun`, and the power/IO budget report. |
 /// | `control.mbt` | `ControlBinding`, `ros2_control` YAML, firmware pin map, and control-completeness checks. |
 /// | `harness.mbt` | `CableRoute` length, tree collection, and harness checks (route geometry and wire reach). |
-/// | `build.mbt` | Sourcing, print/cut list, fastener torque table, procedure, and build-package manifest. |
+/// | `build.mbt` | Sourcing, print/cut list, fastener torque table, procedure, build-package manifest, and standalone printable parts. |
+/// | `step-bridge.mbt` | `@step_common.Component` → CAD bodies/components, detail/thread parsing, and chamfered-prism flattening. |
 /// | `compile-step.mbt` | `Component` → posed `@step_cad.Design` through forward kinematics. |
 /// | `compile-urdf.mbt` | `Component` → `@urdf.Robot` and `@urdf.UrdfBundle` (with real `.gltf` and `.step` assets). |
-/// | `catalog/fasteners.mbt` | Standoffs, bushings, bearings, couplers, and L/U/flange brackets. |
-/// | `catalog/actuators.mbt` | NEMA steppers, BLDC actuator pods, hub motors, and servos. |
-/// | `catalog/gears.mbt` | Herringbone involute planetary gearbox (STEP + mimic URDF). |
-/// | `catalog/mobility.mbt` | Structural tubes, leg segments, wheels, chassis, and scooter frame. |
-/// | `catalog/grippers.mbt` | Parallel-jaw and lead-screw grippers. |
-/// | `catalog/harness.mbt` | Polyline cable-route bundles with jacket geometry and part metadata. |
-/// | `catalog/kicad.mbt` | KiCad position-file parser and PCB envelope builder. |
+/// | `components/hardware.mbt` | ISO fasteners, standoffs, bearings, T-slot parts, couplers, and L/U/flange brackets. |
+/// | `components/actuators.mbt` | NEMA steppers, BLDC actuator pods, hub motors, and servos. |
+/// | `components/gears.mbt` | Herringbone involute planetary gearbox (STEP + mimic URDF). |
+/// | `components/mobility.mbt` | Structural tubes, leg segments, wheels, quadruped legs, and suspension fork. |
+/// | `components/grippers.mbt` | Parallel-jaw and lead-screw grippers. |
+/// | `components/harness.mbt` | Polyline cable-route bundles with jacket geometry and part metadata. |
+/// | `components/kicad.mbt` | KiCad position-file parser and PCB envelope builder. |
 ///
 /// ## Booleans are nominal in the STEP backend
 ///

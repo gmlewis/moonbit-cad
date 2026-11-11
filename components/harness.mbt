@@ -23,7 +23,9 @@ pub fn cable_route(
   to_port~ : String = "",
   density~ : @urdf.Density = @urdf.Density::kg_per_m3(1400.0),
   color~ : @step_cad.Rgb = @step_cad.Rgb::black(),
+  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
 ) -> @cad.Component {
+  let _ = detail
   let route = @cad.CableRoute::new(
     name,
     points~,

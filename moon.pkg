@@ -1,9 +1,13 @@
 import {
   "gmlewis/step/cad" @step_cad,
+  "gmlewis/step/components/common" @step_common,
   "gmlewis/urdf",
   "moonbitlang/core/math",
 }
 
 import {
+  "gmlewis/step/components/fasteners" @step_fasteners,
+  "gmlewis/step/components/motion" @step_motion,
+  "gmlewis/step/components/standards" @step_standards,
   "moonbitlang/core/encoding/utf8" @encoding/utf8,
 } for "test"

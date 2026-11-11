@@ -608,12 +608,40 @@ pub fn herringbone_gear_component(
   direction~ : Double = 1.0,
   density~ : @urdf.Density = @urdf.Density::pla(),
   color~ : @step_cad.Rgb = @step_cad.Rgb::orange(),
+  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
 ) -> @cad.Component {
   let gear_cost_usd = 6.0
+  let policy = @step_common.DetailPolicy::for_level(detail)
+  let effective_resolution = if !detail_is_rich(detail) {
+    if resolution < 3 {
+      3
+    } else {
+      resolution
+    }
+  } else if detail is @step_common.DetailLevel::FullyModeled {
+    if resolution > 8 {
+      resolution
+    } else {
+      8
+    }
+  } else {
+    resolution
+  }
+  let effective_elbows = if !detail_is_rich(detail) {
+    1
+  } else if detail is @step_common.DetailLevel::FullyModeled {
+    if num_elbows > 3 {
+      num_elbows
+    } else {
+      3
+    }
+  } else {
+    num_elbows
+  }
   let dims = gear_dimensions(gear_module, gear_deg2rad(20.0), num_teeth)
-  let outline = gear_outline(gear_module, 20.0, num_teeth, resolution)
+  let outline = gear_outline(gear_module, 20.0, num_teeth, effective_resolution)
   let holes = if bore_radius_mm > 0.0 {
-    [gear_circle_outline(bore_radius_mm, 36, false)]
+    [gear_circle_outline(bore_radius_mm, policy.circle_segments, false)]
   } else {
     []
   }
@@ -625,7 +653,7 @@ pub fn herringbone_gear_component(
     outline,
     holes,
     gear_length_mm,
-    num_elbows,
+    effective_elbows,
     max_rotation,
     direction,
     color,
@@ -661,7 +689,7 @@ pub fn herringbone_gear_component(
       "GEAR-" + num_teeth.to_string() + "T",
       "Herringbone gear",
       "PLA",
-      "print",
+      "3D print",
       gear_cost_usd,
     ),
   )
@@ -732,7 +760,7 @@ fn ring_housing_component(
   }
   comp.with_part(
     fabricated_part(
-      "PGB-RING", "Planetary ring housing", "PLA", "print", ring_cost_usd,
+      "PGB-RING", "Planetary ring housing", "PLA", "3D print", ring_cost_usd,
     ),
   )
 }
@@ -794,7 +822,7 @@ fn sun_component(
   .add_mate_mm_deg("top", z=cfg.gear_length / 2.0)
   .with_part(
     fabricated_part(
-      "PGB-SUN", "Planetary sun gear", "PLA", "print", sun_cost_usd,
+      "PGB-SUN", "Planetary sun gear", "PLA", "3D print", sun_cost_usd,
     ),
   )
 }
@@ -863,7 +891,11 @@ fn planet_component(
   .add_mate_mm_deg("top", z=cfg.gear_length / 2.0)
   .with_part(
     fabricated_part(
-      "PGB-PLANET", "Planetary planet gear", "PLA", "print", planet_cost_usd,
+      "PGB-PLANET-" + name,
+      "Planetary planet gear",
+      "PLA",
+      "3D print",
+      planet_cost_usd,
     ),
   )
 }
@@ -913,7 +945,7 @@ fn carrier_component(
   .add_mate_mm_deg("output_shaft", z=thickness)
   .with_part(
     fabricated_part(
-      "PGB-CARRIER", "Planetary carrier", "PLA", "print", carrier_cost_usd,
+      "PGB-CARRIER", "Planetary carrier", "PLA", "3D print", carrier_cost_usd,
     ),
   )
 }
@@ -924,13 +956,45 @@ fn carrier_component(
 pub fn planetary_gearbox(
   name~ : String = "planetary_gearbox",
   params~ : PlanetaryGearboxParams = PlanetaryGearboxParams::default(),
+  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
 ) -> @cad.Component {
-  let cfg = gearbox_config(params)
+  let effective_params : PlanetaryGearboxParams = if !detail_is_rich(detail) {
+    {
+      ..params,
+      num_elbows: if params.num_elbows < 2 {
+        params.num_elbows
+      } else {
+        2
+      },
+      resolution: if params.resolution < 4 {
+        params.resolution
+      } else {
+        4
+      },
+    }
+  } else if detail is @step_common.DetailLevel::FullyModeled {
+    {
+      ..params,
+      num_elbows: if params.num_elbows > 3 {
+        params.num_elbows
+      } else {
+        3
+      },
+      resolution: if params.resolution > 8 {
+        params.resolution
+      } else {
+        8
+      },
+    }
+  } else {
+    params
+  }
+  let cfg = gearbox_config(effective_params)
   let ring_name = name + "_ring_housing"
   let sun_name = name + "_sun"
   let sun_joint = name + "_sun_joint"
   let mut comp = ring_housing_component(ring_name, cfg, params)
-  let sun = sun_component(sun_name, cfg, params)
+  let sun = sun_component(sun_name, cfg, effective_params)
   comp = comp.attach(
     sun_joint,
     parent_mate="center",
@@ -942,13 +1006,13 @@ pub fn planetary_gearbox(
       transmission_reduction=Some(1.0),
     ),
   )
-  let planet_multiplier = -(params.sun_teeth.to_double() /
-    params.planet_teeth.to_double())
-  for i in 0..<params.num_planets {
+  let planet_multiplier = -(effective_params.sun_teeth.to_double() /
+    effective_params.planet_teeth.to_double())
+  for i in 0..<effective_params.num_planets {
     let planet = planet_component(
       "\{name}_planet_\{i}",
       cfg,
-      params,
+      effective_params,
       cfg.planets[i].phi_deg,
     )
     comp = comp.attach(
@@ -965,10 +1029,10 @@ pub fn planetary_gearbox(
       ),
     )
   }
-  if params.include_carrier {
-    let carrier = carrier_component("\{name}_carrier", cfg, params)
-    let carrier_multiplier = params.sun_teeth.to_double() /
-      (params.sun_teeth + cfg.ring_teeth).to_double()
+  if effective_params.include_carrier {
+    let carrier = carrier_component("\{name}_carrier", cfg, effective_params)
+    let carrier_multiplier = effective_params.sun_teeth.to_double() /
+      (effective_params.sun_teeth + cfg.ring_teeth).to_double()
     comp = comp.attach(
       "\{name}_carrier_joint",
       parent_mate="output_face",
@@ -983,4 +1047,188 @@ pub fn planetary_gearbox(
     )
   }
   comp
+}
+
+///|
+/// A spur gear built from the Tier-1 involute gear primitive.
+///
+/// The gear is centered on `z = 0` and marked as a 3D-printed part so
+/// `printable_parts()` exports it as a standalone STEP file.
+pub fn spur_gear_part(
+  name~ : String = "spur_gear",
+  module_mm~ : Double = 1.0,
+  teeth~ : Int32 = 20,
+  face_width_mm~ : Double = 8.0,
+  bore_diameter_mm~ : Double = 4.0,
+  pressure_angle_deg~ : Double = 20.0,
+  backlash_mm~ : Double = 0.0,
+  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
+  color~ : @step_cad.Rgb = @step_cad.Rgb::orange(),
+) -> @cad.Component {
+  let params = expect_step(
+    "spur gear parameters",
+    @step_gears.SpurGearParams::new(
+      module_mm~,
+      teeth~,
+      pressure_angle_deg~,
+      face_width_mm~,
+      bore_diameter_mm~,
+      backlash_mm~,
+    ),
+  )
+  let step_comp = expect_step(
+    "spur gear",
+    @step_gears.spur_gear(params, detail~, color~),
+  )
+  let part = fabricated_part(
+    "SPUR-\{teeth}T-M\{module_mm}-\{name}",
+    "Spur gear \{teeth} teeth, module \{module_mm}",
+    "PLA",
+    "3D print",
+    3.0,
+  )
+  @cad.Component::from_step_component(
+    name,
+    step_comp,
+    density=@urdf.Density::pla(),
+    part=Some(part),
+    z_mm=-face_width_mm / 2.0,
+  )
+  .add_mate_mm_deg("origin")
+  .add_mate_mm_deg("bottom", z=-face_width_mm / 2.0)
+  .add_mate_mm_deg("top", z=face_width_mm / 2.0)
+  .with_param("module_mm", module_mm.to_string())
+  .with_param("teeth", teeth.to_string())
+  .with_param("face_width_mm", face_width_mm.to_string())
+}
+
+///|
+/// A sun/planet/ring planetary stage built from Tier-1 gear primitives.
+///
+/// The ring is the root. The sun and each planet are continuous joints with
+/// mimic coupling, and a printed carrier disk is driven at the sun/ring ratio.
+/// Every gear and the carrier are exported individually by
+/// `printable_parts()`.
+pub fn planetary_gearset_stage(
+  name~ : String = "planetary_stage",
+  module_mm~ : Double = 1.0,
+  sun_teeth~ : Int32 = 12,
+  planet_teeth~ : Int32 = 18,
+  planet_count~ : Int32 = 3,
+  face_width_mm~ : Double = 8.0,
+  pressure_angle_deg~ : Double = 20.0,
+  ring_wall_mm~ : Double = 4.0,
+  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
+) -> @cad.Component {
+  let ring_teeth = sun_teeth + 2 * planet_teeth
+  let center_distance = module_mm *
+    (sun_teeth.to_double() + planet_teeth.to_double()) /
+    2.0
+  let ring_step = expect_step(
+    "internal ring gear",
+    @step_gears.internal_ring_gear_exact(
+      module_mm,
+      ring_teeth,
+      face_width_mm,
+      pressure_angle_deg~,
+      outer_wall_mm=ring_wall_mm,
+    ),
+  )
+  let ring_part = fabricated_part(
+    "RING-\{ring_teeth}T-M\{module_mm}",
+    "Internal ring gear \{ring_teeth} teeth",
+    "PLA",
+    "3D print",
+    6.0,
+  )
+  let sun_joint = name + "_sun_joint"
+  let mut stage = @cad.Component::from_step_component(
+      name + "_ring",
+      ring_step,
+      density=@urdf.Density::pla(),
+      part=Some(ring_part),
+      z_mm=-face_width_mm / 2.0,
+    )
+    .add_mate_mm_deg("sun_axis")
+    .add_mate_mm_deg("carrier_mount", z=face_width_mm / 2.0)
+  let sun = spur_gear_part(
+    name=name + "_sun",
+    module_mm~,
+    teeth=sun_teeth,
+    face_width_mm~,
+    bore_diameter_mm=module_mm * 3.0,
+    pressure_angle_deg~,
+    detail~,
+  )
+  stage = stage.attach(
+    sun_joint,
+    parent_mate="sun_axis",
+    sun,
+    child_mate="origin",
+    spec=@cad.JointSpec::continuous(
+      limit=Some(@urdf.JointLimit::new(effort=10.0, velocity=20.0)),
+      transmission_reduction=Some(1.0),
+    ),
+  )
+  let planet_multiplier = -(sun_teeth.to_double() / planet_teeth.to_double())
+  for i in 0..<planet_count {
+    let theta = 2.0 * @math.PI * i.to_double() / planet_count.to_double()
+    let x = center_distance * @math.cos(theta)
+    let y = center_distance * @math.sin(theta)
+    stage = stage.add_mate_mm_deg("planet_axis_\{i}", x~, y~)
+    let planet = spur_gear_part(
+      name="\{name}_planet_\{i}",
+      module_mm~,
+      teeth=planet_teeth,
+      face_width_mm~,
+      bore_diameter_mm=module_mm * 3.0,
+      pressure_angle_deg~,
+      detail~,
+    )
+    stage = stage.attach(
+      "\{name}_planet_\{i}_joint",
+      parent_mate="planet_axis_\{i}",
+      planet,
+      child_mate="origin",
+      spec=@cad.JointSpec::continuous(
+        limit=Some(@urdf.JointLimit::new(effort=5.0, velocity=20.0)),
+        mimic=Some(
+          @urdf.JointMimic::new(sun_joint, multiplier=planet_multiplier),
+        ),
+      ),
+    )
+  }
+  let carrier_thickness = module_mm * 4.0
+  let carrier_part = fabricated_part(
+    "PGS-CARRIER", "Planetary carrier", "PLA", "3D print", 4.0,
+  )
+  let carrier = @cad.Component::new(
+      name + "_carrier",
+      description="Planetary carrier",
+    )
+    .add_body(
+      @cad.BodyPart::cylinder_mm(
+        name + "_carrier_disk",
+        (center_distance + module_mm * planet_teeth.to_double() / 2.0) * 2.0,
+        carrier_thickness,
+        density=@urdf.Density::pla(),
+        color=@step_cad.Rgb::grey(),
+      ),
+    )
+    .add_mate_mm_deg("origin")
+    .with_part(carrier_part)
+  let carrier_multiplier = sun_teeth.to_double() /
+    (sun_teeth + ring_teeth).to_double()
+  stage.attach(
+    "\{name}_carrier_joint",
+    parent_mate="carrier_mount",
+    carrier,
+    child_mate="origin",
+    spec=@cad.JointSpec::continuous(
+      limit=Some(@urdf.JointLimit::new(effort=5.0, velocity=20.0)),
+      mimic=Some(
+        @urdf.JointMimic::new(sun_joint, multiplier=carrier_multiplier),
+      ),
+    ),
+  )
 }

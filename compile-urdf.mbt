@@ -364,7 +364,7 @@ pub fn Component::to_urdf_bundle(
       }
       bundle = bundle.add_mesh_text(
         "meshes/\{link.name}.gltf",
-        design.to_gltf(),
+        gltf_safe_design(design).to_gltf(),
       )
       if include_step_parts {
         bundle = bundle.add_mesh_text(
@@ -372,6 +372,14 @@ pub fn Component::to_urdf_bundle(
           design.to_step_file(),
         )
       }
+    }
+  }
+  if include_step_parts {
+    for part in self.printable_parts() {
+      bundle = bundle.add_mesh_text(
+        "printable/\{sanitize_part_number(part.part_number)}.step",
+        part.design.to_step_file(),
+      )
     }
   }
   bundle

@@ -1,5 +1,5 @@
 ///|
-/// Part-metadata helpers shared by the catalog builders.
+/// Part-metadata helpers shared by the component builders.
 
 ///|
 /// A purchased, off-the-shelf item.

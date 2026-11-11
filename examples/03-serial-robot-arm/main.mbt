@@ -36,6 +36,7 @@ fn plated_strut(
   overlap : Double,
   start_plate~ : Bool = true,
   end_plate~ : Bool = true,
+  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
 ) -> @cad.Component {
   let plate_w = width + 2.0 * margin
   let plate_h = height + 2.0 * margin
@@ -49,12 +50,13 @@ fn plated_strut(
   } else {
     length / 2.0
   }
-  let mut comp = @catalog.box_tube_strut(
+  let mut comp = @components.box_tube_strut(
     name,
     width_mm=width,
     height_mm=height,
     length_mm=length,
     wall_mm=wall,
+    detail~,
   )
   if start_plate {
     comp = comp.add_body(
@@ -64,6 +66,15 @@ fn plated_strut(
         plate_h,
         plate_t,
         z_mm=-length / 2.0 + overlap - plate_t / 2.0,
+      ).with_part(
+        @cad.PartMeta::new(
+          name + "-START-PLATE",
+          description="Link end plate",
+          supplier="in-house",
+          material="6061-T6",
+          process="3D print / CNC",
+          unit_cost_usd=2.0,
+        ),
       ),
     )
   }
@@ -75,12 +86,34 @@ fn plated_strut(
         plate_h,
         plate_t,
         z_mm=length / 2.0 - overlap + plate_t / 2.0,
+      ).with_part(
+        @cad.PartMeta::new(
+          name + "-END-PLATE",
+          description="Link end plate",
+          supplier="in-house",
+          material="6061-T6",
+          process="3D print / CNC",
+          unit_cost_usd=2.0,
+        ),
       ),
     )
   }
   comp
   .add_mate_mm_deg("start_flange", z=start_face)
   .add_mate_mm_deg("end_flange", z=end_face)
+}
+
+///|
+/// Part metadata for a welded side pad.
+fn link_pad_part(name : String) -> @cad.PartMeta {
+  @cad.PartMeta::new(
+    name + "-PAD",
+    description="Link side pad",
+    supplier="in-house",
+    material="6061-T6",
+    process="3D print / CNC",
+    unit_cost_usd=2.0,
+  )
 }
 
 ///|
@@ -109,7 +142,7 @@ fn with_side_pad(
           pad_size,
           y_mm=tube_h / 2.0 + pad_t / 2.0 - overlap,
           z_mm=along,
-        ),
+        ).with_part(link_pad_part(name)),
       )
       .add_mate_mm_deg(
         name,
@@ -127,7 +160,7 @@ fn with_side_pad(
           pad_size,
           y_mm=-tube_h / 2.0 - pad_t / 2.0 + overlap,
           z_mm=along,
-        ),
+        ).with_part(link_pad_part(name)),
       )
       .add_mate_mm_deg(
         name,
@@ -145,7 +178,7 @@ fn with_side_pad(
           pad_size,
           x_mm=tube_w / 2.0 + pad_t / 2.0 - overlap,
           z_mm=along,
-        ),
+        ).with_part(link_pad_part(name)),
       )
       .add_mate_mm_deg(
         name,
@@ -163,7 +196,7 @@ fn with_side_pad(
           pad_size,
           x_mm=-tube_w / 2.0 - pad_t / 2.0 + overlap,
           z_mm=along,
-        ),
+        ).with_part(link_pad_part(name)),
       )
       .add_mate_mm_deg(
         name,
@@ -200,6 +233,9 @@ async fn main {
     is Some(args) else {
     return
   }
+  let output = @common.output_paths(args)
+  let detail = output.detail_level()
+  let threads = output.thread_rep()
   let link1_len = args.double("link1Len")
   let link2_len = args.double("link2Len")
   // Link cross-sections and structural member sizes.
@@ -236,24 +272,35 @@ async fn main {
   let tool_out_len = 55.0
   let tool_out_w = 30.0
   let tool_out_h = 24.0
-  let base = @catalog.flange_plate(
+  let base = @components.flange_plate(
     name="base_flange",
     outer_diam_mm=160.0,
     center_bore_mm=40.0,
     bolt_count=6,
     bolt_circle_mm=120.0,
+    detail~,
   )
-  let waist = @catalog.bldc_actuator_pod(
+  let waist = @components.bldc_actuator_pod(
     name="waist",
     housing_diam_mm=120.0,
     housing_length_mm=70.0,
     output_diam_mm=80.0,
     output_thickness_mm=12.0,
+    detail~,
+    threads?,
   )
   // Vertical upper arm with solid end plates and a shoulder boss on its +Y
   // side.  The boss keeps the pod's rear disc off the 5 mm tube wall.
   let upper_arm = plated_strut(
-    "upper_arm", link1_w, link1_h, link1_len, link_wall, plate_t, plate_margin, plate_overlap,
+    "upper_arm",
+    link1_w,
+    link1_h,
+    link1_len,
+    link_wall,
+    plate_t,
+    plate_margin,
+    plate_overlap,
+    detail~,
   )
   let upper_arm = with_side_pad(
     upper_arm,
@@ -266,12 +313,14 @@ async fn main {
     pad_overlap,
     link1_len / 2.0 - shoulder_diam / 2.0 - 6.0,
   )
-  let shoulder = @catalog.bldc_actuator_pod(
+  let shoulder = @components.bldc_actuator_pod(
     name="shoulder",
     housing_diam_mm=shoulder_diam,
     housing_length_mm=54.0,
     output_diam_mm=56.0,
     output_thickness_mm=8.0,
+    detail~,
+    threads?,
   )
   // Right-angle flange: the actuator output runs along +Y, the forearm
   // leaves along +X.  The adapter's start plate takes the full rotor face,
@@ -286,6 +335,7 @@ async fn main {
     adapter_margin,
     plate_overlap,
     end_plate=false,
+    detail~,
   )
   let shoulder_adapter = with_side_pad(
     shoulder_adapter,
@@ -299,7 +349,15 @@ async fn main {
     adapter_len / 2.0 - 30.0,
   )
   let forearm = plated_strut(
-    "forearm", link2_w, link2_h, link2_len, link_wall, plate_t, plate_margin, plate_overlap,
+    "forearm",
+    link2_w,
+    link2_h,
+    link2_len,
+    link_wall,
+    plate_t,
+    plate_margin,
+    plate_overlap,
+    detail~,
   )
   let forearm = with_side_pad(
     forearm,
@@ -312,12 +370,14 @@ async fn main {
     pad_overlap,
     link2_len / 2.0 - elbow_diam / 2.0 - 6.0,
   )
-  let elbow = @catalog.bldc_actuator_pod(
+  let elbow = @components.bldc_actuator_pod(
     name="elbow",
     housing_diam_mm=elbow_diam,
     housing_length_mm=48.0,
     output_diam_mm=48.0,
     output_thickness_mm=8.0,
+    detail~,
+    threads?,
   )
   let elbow_adapter = plated_strut(
     "elbow_adapter",
@@ -329,6 +389,7 @@ async fn main {
     adapter_margin,
     plate_overlap,
     end_plate=false,
+    detail~,
   )
   let elbow_adapter = with_side_pad(
     elbow_adapter,
@@ -342,19 +403,28 @@ async fn main {
     adapter_len / 2.0 - 30.0,
   )
   let wrist_link = plated_strut(
-    "wrist_link", wrist_link_w, wrist_link_h, wrist_link_len, adapter_wall, adapter_plate_t,
-    adapter_margin, plate_overlap,
+    "wrist_link",
+    wrist_link_w,
+    wrist_link_h,
+    wrist_link_len,
+    adapter_wall,
+    adapter_plate_t,
+    adapter_margin,
+    plate_overlap,
+    detail~,
   )
   let wrist_link = with_side_pad(
     wrist_link, "wrist_pitch_port", "-x", wrist_link_w, wrist_link_h, wrist_pitch_diam,
     pad_t, pad_overlap, 0.0,
   )
-  let wrist_pitch = @catalog.bldc_actuator_pod(
+  let wrist_pitch = @components.bldc_actuator_pod(
     name="wrist_pitch",
     housing_diam_mm=wrist_pitch_diam,
     housing_length_mm=40.0,
     output_diam_mm=38.0,
     output_thickness_mm=6.0,
+    detail~,
+    threads?,
   )
   let wrist_adapter = plated_strut(
     "wrist_adapter",
@@ -366,6 +436,7 @@ async fn main {
     adapter_margin,
     plate_overlap,
     end_plate=false,
+    detail~,
   )
   let wrist_adapter = with_side_pad(
     wrist_adapter,
@@ -378,30 +449,41 @@ async fn main {
     pad_overlap,
     small_adapter_len / 2.0 - 20.0,
   )
-  let wrist_roll = @catalog.bldc_actuator_pod(
+  let wrist_roll = @components.bldc_actuator_pod(
     name="wrist_roll",
     housing_diam_mm=wrist_roll_diam,
     housing_length_mm=34.0,
     output_diam_mm=32.0,
     output_thickness_mm=6.0,
+    detail~,
+    threads?,
   )
   // Sixth axis: a small pitch pod at the tool flange.  The tool link carries
   // the pod on its -X side boss, and the gripper leaves the pod's +X boss, so
   // the tool pitch is perpendicular to the wrist roll.
   let tool_link = plated_strut(
-    "tool_link", tool_link_w, tool_link_h, tool_link_len, adapter_wall, adapter_plate_t,
-    adapter_margin, plate_overlap,
+    "tool_link",
+    tool_link_w,
+    tool_link_h,
+    tool_link_len,
+    adapter_wall,
+    adapter_plate_t,
+    adapter_margin,
+    plate_overlap,
+    detail~,
   )
   let tool_link = with_side_pad(
     tool_link, "tool_pitch_port", "-x", tool_link_w, tool_link_h, tool_pitch_diam,
     pad_t, pad_overlap, -4.0,
   )
-  let tool_pitch = @catalog.bldc_actuator_pod(
+  let tool_pitch = @components.bldc_actuator_pod(
     name="tool_pitch",
     housing_diam_mm=tool_pitch_diam,
     housing_length_mm=28.0,
     output_diam_mm=26.0,
     output_thickness_mm=5.0,
+    detail~,
+    threads?,
   )
   let tool_out = plated_strut(
     "tool_out",
@@ -413,6 +495,7 @@ async fn main {
     adapter_margin,
     plate_overlap,
     end_plate=false,
+    detail~,
   )
   let tool_out = with_side_pad(
     tool_out,
@@ -435,7 +518,7 @@ async fn main {
   let can_node_base = 1
   // Match the QDD pods' default joint limit exactly.
   let joint_limit_rad = 3.14159
-  let gripper = @catalog.lead_screw_gripper(
+  let gripper = @components.lead_screw_gripper(
     name="gripper",
     opening_mm=30.0,
     travel_mm=28.0,
@@ -444,6 +527,8 @@ async fn main {
     finger_width_mm=45.0,
     finger_thick_mm=8.0,
     controller_pos_csv=kicad_pos_csv,
+    detail~,
+    threads?,
   )
   let comp = base
     .attach(
@@ -622,9 +707,5 @@ async fn main {
     "gripper_motor_shaft_joint",
     grip_mm / grip_lead_mm * 2.0 * @math.PI,
   )
-  @common.write_output(
-    comp,
-    @common.output_paths(args),
-    joint_positions=positions,
-  )
+  @common.write_output(comp, output, joint_positions=positions)
 }

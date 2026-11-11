@@ -3,6 +3,70 @@
 /// coordinates, using the URDF forward kinematics result for every link.
 
 ///|
+/// Replaces a revolved solid with a coaxial bounding cylinder for glTF
+/// visualization.
+///
+/// The STEP exporter keeps the exact spherical, conical, and toroidal
+/// surfaces. The glTF tessellator only handles planes, cylinders, and linear
+/// extrusions, so revolved profiles become a cylinder that covers the same
+/// axial span and maximum radius.
+fn gltf_safe_revolved(node : @step_cad.SceneNode) -> @step_cad.SceneNode {
+  let (x0, x1, y0, y1, z0, z1) = node.shape.bounding_box()
+  let max_x = if x1.abs() > x0.abs() { x1.abs() } else { x0.abs() }
+  let max_y = if y1.abs() > y0.abs() { y1.abs() } else { y0.abs() }
+  let max_r = if max_x > max_y { max_x } else { max_y }
+  let height = if z1 - z0 > 1.0e-6 { z1 - z0 } else { 1.0 }
+  let cylinder = @step_cad.Cylinder::new(2.0 * max_r, height)
+    .with_name(node.name)
+    .with_color(node.color)
+    .translate(z=z0)
+  transform_scene_node(cylinder, @step_cad.Transform::from_node(node))
+}
+
+///|
+/// Makes a scene node safe for the glTF tessellator.
+///
+/// Revolved profiles (bearing balls, button and countersunk heads, chamfered
+/// shafts) become bounding cylinders, and booleans are rebuilt from their
+/// converted children. All other shapes pass through unchanged, so the STEP
+/// output keeps its exact analytic B-Rep.
+pub fn gltf_safe_node(node : @step_cad.SceneNode) -> @step_cad.SceneNode {
+  match node.shape {
+    @step_cad.Shape::RevolvedProfile(_) => gltf_safe_revolved(node)
+    @step_cad.Shape::Union(union) => {
+      let children = union.nodes.map(gltf_safe_node)
+      let rebuilt = @step_cad.union_all(children, name=node.name).with_color(
+        node.color,
+      )
+      transform_scene_node(rebuilt, @step_cad.Transform::from_node(node))
+    }
+    @step_cad.Shape::Difference(difference) => {
+      let base = gltf_safe_node(difference.base)
+      let cutters = difference.cutters.map(gltf_safe_node)
+      let rebuilt = @step_cad.difference(base, cutters, name=node.name).with_color(
+        node.color,
+      )
+      transform_scene_node(rebuilt, @step_cad.Transform::from_node(node))
+    }
+    _ => node
+  }
+}
+
+///|
+/// Makes every node in a design safe for glTF tessellation.
+pub fn gltf_safe_design(design : @step_cad.Design) -> @step_cad.Design {
+  let mut safe = @step_cad.Design::new(
+    name=design.name,
+    description=design.description,
+    documentation=design.documentation,
+  )
+  for node in design.nodes {
+    safe = safe.add(gltf_safe_node(node))
+  }
+  safe
+}
+
+///|
 /// Compares two strings lexicographically by UTF-16 code unit, independent of
 /// their lengths (the standard `Compare` instance uses shortlex order).
 fn compare_lexicographic(a : String, b : String) -> Int32 {
@@ -91,7 +155,7 @@ pub fn Component::to_gltf(
   self : Component,
   joint_positions~ : Map[String, Double] = Map([]),
 ) -> String {
-  self.to_design(joint_positions~).to_gltf()
+  gltf_safe_design(self.to_design(joint_positions~)).to_gltf()
 }
 
 ///|

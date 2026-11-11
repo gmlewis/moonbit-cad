@@ -22,52 +22,55 @@ async fn main {
     is Some(args) else {
     return
   }
-  let base = @catalog.flange_plate(
-    name="turret_base",
-    outer_diam_mm=140.0,
-    center_bore_mm=30.0,
-    bolt_count=6,
-  )
+  let output = @common.output_paths(args)
+  let detail = output.detail_level()
+  let threads = output.thread_rep()
+  let base = @components.flange_plate(
+      name="turret_base",
+      outer_diam_mm=140.0,
+      center_bore_mm=30.0,
+      bolt_count=6,
+      detail~,
+    )
     .add_mate_mm_deg("pcb_mount", x=48.0, z=3.0)
     .add_mate_mm_deg("pan_limit_mount", x=-45.0, z=3.0)
-  let pan_limit = @catalog.limit_switch(name="pan_limit")
-  let controller = @catalog.pcb_board(
+  let pan_limit = @components.limit_switch(name="pan_limit", detail~)
+  let controller = @components.pcb_board(
       name="turret_controller",
       length_mm=30.0,
       width_mm=24.0,
+      detail~,
       connectors=[
-        "power", "motor", "can", "limit_home", "bus48", "i2c", "power3v3",
-        "power5v",
+        "power", "motor", "can", "limit_home", "bus48", "i2c", "power3v3", "power5v",
       ],
     )
-    .add_port(
-      @cad.Port::new("bus48", @cad.PortKind::Power, spec="48 V, 8 A"),
-    )
+    .add_port(@cad.Port::new("bus48", @cad.PortKind::Power, spec="48 V, 8 A"))
     .add_port(
       @cad.Port::new("power3v3", @cad.PortKind::Power, spec="3.3 V, 0.1 A"),
     )
     .add_port(
       @cad.Port::new("power5v", @cad.PortKind::Power, spec="5 V, 0.5 A"),
     )
-    .add_port(
-      @cad.Port::new("i2c", @cad.PortKind::Bus, spec="I2C, 400 kHz"),
-    )
-  let imu = @catalog.imu_module(name="imu")
-  let pan_motor = @catalog.nema_stepper(
+    .add_port(@cad.Port::new("i2c", @cad.PortKind::Bus, spec="I2C, 400 kHz"))
+  let imu = @components.imu_module(name="imu", detail~)
+  let pan_motor = @components.nema_stepper(
     name="pan_motor",
     frame_size_mm=57.0,
     body_length_mm=56.0,
     shaft_diam_mm=8.0,
     shaft_length_mm=30.0,
     max_effort_nm=2.0,
+    detail~,
+    threads?,
   )
-  let pan_bracket = @catalog.u_bracket(
+  let pan_bracket = @components.u_bracket(
     name="pan_bracket",
     inner_span_mm=60.0,
     arm_length_mm=50.0,
     width_mm=45.0,
+    detail~,
   )
-  let tilt = @catalog.bldc_actuator_pod(
+  let tilt = @components.bldc_actuator_pod(
     name="tilt",
     housing_diam_mm=70.0,
     housing_length_mm=40.0,
@@ -78,6 +81,8 @@ async fn main {
     upper_rad=1.2,
     max_effort_nm=30.0,
     max_vel_rad_s=10.0,
+    detail~,
+    threads?,
   )
   let payload = @cad.Component::new(
       "sensor_payload",
@@ -110,7 +115,7 @@ async fn main {
         description="Camera and lidar payload",
         supplier="in-house",
         material="PLA/glass",
-        process="print/assembly",
+        process="3D print",
         unit_cost_usd=90.0,
       ),
     )
@@ -285,9 +290,5 @@ async fn main {
     args.double("panDeg") * @math.PI / 180.0,
   )
   positions.set("tilt_joint", args.double("tiltDeg") * @math.PI / 180.0)
-  @common.write_output(
-    comp,
-    @common.output_paths(args),
-    joint_positions=positions,
-  )
+  @common.write_output(comp, output, joint_positions=positions)
 }

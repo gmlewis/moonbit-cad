@@ -120,7 +120,7 @@ test "build package files cover sourcing, print list, torque, and procedure" {
   assert_true(manifest.contains("`sourcing.csv`"))
   assert_true(manifest.contains("bundle/parts"))
   let files = root.build_package_files(name="demo")
-  assert_eq(files.length(), 12)
+  assert_eq(files.length(), 13)
   let names : Array[String] = files.map(fn(file) { file.path })
   for
     name in [
@@ -129,6 +129,52 @@ test "build package files cover sourcing, print list, torque, and procedure" {
     ] {
     assert_true(names.contains(name))
   }
+}
+
+///|
+test "printable parts exclude purchased and include fabricated" {
+  let root = build_test_component()
+  let parts = root.printable_parts()
+  assert_eq(parts.length(), 1)
+  assert_eq(parts[0].part_number, "PLATE-1")
+  // The standalone design carries the plate body in its own local frame.
+  assert_eq(parts[0].design.nodes.length(), 1)
+  assert_eq(parts[0].design.nodes[0].name, "plate_body")
+}
+
+///|
+test "printable parts export standalone step files in the package" {
+  let root = build_test_component()
+  let files = root.build_package_files(name="demo")
+  let names : Array[String] = []
+  for file in files {
+    names.push(file.path)
+    if file.path == "printable/PLATE-1.step" {
+      assert_true(file.content.contains("ISO-10303-21;"))
+      assert_true(file.content.contains("CARTESIAN_POINT"))
+    }
+  }
+  assert_true(names.contains("printable/PLATE-1.step"))
+  assert_true(!names.contains("printable/MOTOR-1.step"))
+  assert_true(!names.contains("printable/SENSOR-1.step"))
+}
+
+///|
+test "fabrication predicate matches process names" {
+  assert_true(
+    @cad.is_fabricated_part(@cad.PartMeta::new("P", process="3D print")),
+  )
+  assert_true(@cad.is_fabricated_part(@cad.PartMeta::new("P", process="CNC")))
+  assert_true(@cad.is_fabricated_part(@cad.PartMeta::new("P", process="cut")))
+  assert_true(
+    !@cad.is_fabricated_part(@cad.PartMeta::new("P", process="purchased")),
+  )
+  assert_true(!@cad.is_fabricated_part(@cad.PartMeta::new("P")))
+}
+
+///|
+test "part numbers are sanitized for file names" {
+  assert_eq(@cad.sanitize_part_number("PLATE 1/left"), "PLATE-1-left")
 }
 
 ///|

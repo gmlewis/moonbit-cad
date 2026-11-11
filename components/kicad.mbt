@@ -202,7 +202,9 @@ pub fn pcb_from_kicad(
   mounting_hole_diam_mm~ : Double = 2.7,
   board_margin_mm~ : Double = 5.0,
   max_component_height_mm~ : Double = 12.0,
+  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
 ) -> @cad.Component {
+  let _ = detail
   let placed : Array[(KiCadFootprint, Double, Double)] = []
   for footprint in footprints {
     let x = footprint.x_mm - origin_x_mm

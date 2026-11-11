@@ -27,6 +27,8 @@ pub fn parallel_gripper(
   finger_overlap_mm~ : Double = 4.0,
   effort_n~ : Double = 20.0,
   velocity_mps~ : Double = 0.05,
+  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
+  threads? : @step_common.ThreadRepresentation,
   density~ : @urdf.Density = @urdf.Density::aluminum_6061(),
   color~ : @step_cad.Rgb = @step_cad.Rgb::grey(),
 ) -> @cad.Component {
@@ -67,6 +69,15 @@ pub fn parallel_gripper(
     )
     .add_mate_mm_deg("mount")
     .add_mate_mm_deg("jaw_slide", z=base_thick_mm, axis=(1.0, 0.0, 0.0))
+    .with_part(
+      fabricated_part(
+        "GRIPPER-BASE-\{opening_mm}",
+        "Parallel gripper base",
+        "PETG",
+        "3D print",
+        6.0,
+      ),
+    )
   let jaw = @cad.Component::new(jaw_name, description="Moving gripper jaw")
     .add_body(
       @cad.BodyPart::box_mm(
@@ -81,6 +92,17 @@ pub fn parallel_gripper(
       ),
     )
     .add_mate_mm_deg("mount")
+    .with_part(
+      fabricated_part(
+        "GRIPPER-JAW-\{opening_mm}",
+        "Parallel gripper moving jaw",
+        "PETG",
+        "3D print",
+        3.0,
+      ),
+    )
+  let _ = detail
+  let _ = threads
   base.attach(
     jaw_name,
     parent_mate="jaw_slide",
@@ -175,6 +197,8 @@ pub fn lead_screw_gripper(
   /// Optional KiCad `.pos` CSV: build the controller board from placements
   /// (mounting holes, connectors) instead of the procedural board.
   controller_pos_csv~ : String = "",
+  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
+  threads? : @step_common.ThreadRepresentation,
   density~ : @urdf.Density = @urdf.Density::aluminum_6061(),
   color~ : @step_cad.Rgb = @step_cad.Rgb::grey(),
 ) -> @cad.Component {
@@ -782,6 +806,8 @@ pub fn lead_screw_gripper(
     shaft_length_mm=motor_shaft_mm,
     max_effort_nm=motor_effort_nm,
     max_vel_rad_s=motor_vel_rad_s,
+    detail~,
+    threads?,
   )
   let coupler = shaft_coupler(
     name=coupler_name,
@@ -789,6 +815,7 @@ pub fn lead_screw_gripper(
     bore_in_mm=motor_shaft_diam_mm + motor_shaft_fit_mm,
     bore_out_mm=screw_diam_mm + screw_fit_mm,
     length_mm=coupler_len_mm,
+    detail~,
   )
   // Threaded screw: a smooth journal at each end and crest rings between.
   let mut screw = @cad.Component::new(
@@ -830,13 +857,18 @@ pub fn lead_screw_gripper(
     inner_diam_mm=screw_diam_mm + bearing_fit_mm,
     outer_diam_mm=bearing_outer_mm,
     width_mm=bearing_width_mm,
+    detail~,
   )
-  let home_switch = limit_switch(name=name + "_home_switch")
-  let closed_switch = limit_switch(name=name + "_closed_switch")
+  let home_switch = limit_switch(name=name + "_home_switch", detail~)
+  let closed_switch = limit_switch(name=name + "_closed_switch", detail~)
   let controller = if controller_pos_csv == "" {
-    pcb_board(name=controller_name, length_mm=pcb_len_mm, width_mm=pcb_w_mm, connectors=[
-      "power", "motor", "limit_home", "limit_closed", "can",
-    ])
+    pcb_board(
+      name=controller_name,
+      length_mm=pcb_len_mm,
+      width_mm=pcb_w_mm,
+      detail~,
+      connectors=["power", "motor", "limit_home", "limit_closed", "can"],
+    )
   } else {
     let footprints = parse_kicad_pos(controller_pos_csv)
     pcb_from_kicad(

@@ -15,7 +15,9 @@ pub fn limit_switch(
   voltage_v~ : Double = 5.0,
   current_ma~ : Double = 10.0,
   color~ : @step_cad.Rgb = @step_cad.Rgb::red(),
+  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
 ) -> @cad.Component {
+  let _ = detail
   let unit_cost_usd = 2.5
   let part = purchased_part(
     "LIMIT-SW-MICRO", "Micro limit switch", "mixed", unit_cost_usd,
@@ -81,7 +83,9 @@ pub fn magnetic_encoder(
   board_len_mm~ : Double = 20.0,
   voltage_v~ : Double = 3.3,
   current_ma~ : Double = 15.0,
+  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
 ) -> @cad.Component {
+  let _ = detail
   let unit_cost_usd = 8.0
   let part = purchased_part(
     "ENC-MAG-14BIT", "Magnetic encoder 14-bit", "mixed", unit_cost_usd,
@@ -142,7 +146,9 @@ pub fn imu_module(
   board_mm~ : Double = 16.0,
   voltage_v~ : Double = 3.3,
   current_ma~ : Double = 5.0,
+  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
 ) -> @cad.Component {
+  let _ = detail
   let unit_cost_usd = 6.0
   let part = purchased_part("IMU-6AXIS", "6-axis IMU", "mixed", unit_cost_usd)
   let sensor = @cad.SensorSpec::new(
@@ -191,7 +197,9 @@ pub fn camera_module(
   lens_diam_mm~ : Double = 12.0,
   voltage_v~ : Double = 5.0,
   current_ma~ : Double = 250.0,
+  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
 ) -> @cad.Component {
+  let _ = detail
   let unit_cost_usd = 35.0
   let part = purchased_part(
     "CAM-1080P", "1080p camera module", "mixed", unit_cost_usd,
@@ -255,7 +263,9 @@ pub fn force_sensor(
   body_h_mm~ : Double = 5.0,
   voltage_v~ : Double = 5.0,
   current_ma~ : Double = 5.0,
+  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
 ) -> @cad.Component {
+  let _ = detail
   let unit_cost_usd = 9.0
   let part = purchased_part(
     "FSR-50N", "Force sensor 0-50 N", "mixed", unit_cost_usd,
@@ -301,6 +311,64 @@ pub fn force_sensor(
 }
 
 ///|
+/// Builds a printable bracket for an IMU, camera, or other sensor board.
+///
+/// The bracket is a flat plate with two mounting holes and a raised sensor
+/// face. `process="3D print"` makes `printable_parts()` export it.
+pub fn sensor_mount_bracket(
+  name~ : String = "sensor_mount",
+  width_mm~ : Double = 30.0,
+  height_mm~ : Double = 20.0,
+  thickness_mm~ : Double = 4.0,
+  hole_diam_mm~ : Double = 2.7,
+  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
+) -> @cad.Component {
+  let segments = @step_common.DetailPolicy::for_level(detail).circle_segments
+  let part = fabricated_part(
+    "SENSOR-MOUNT-\{width_mm}x\{height_mm}",
+    "Sensor mount bracket",
+    "PETG",
+    "3D print",
+    1.5,
+  )
+  let hole_offset = width_mm * 0.3
+  @cad.Component::new(name, description="Sensor mount bracket")
+  .with_param("width_mm", width_mm.to_string())
+  .with_param("height_mm", height_mm.to_string())
+  .with_param("thickness_mm", thickness_mm.to_string())
+  .add_body(
+    @cad.BodyPart::extruded_profile_mm(
+      name + "_plate",
+      @step_cad.Profile2D::centered_rect(width_mm, height_mm),
+      thickness_mm,
+      holes=[
+        @step_cad.translate_pts(
+          @step_cad.Profile2D::circle(hole_diam_mm, segments~),
+          hx_offset(hole_offset),
+          0.0,
+        ),
+        @step_cad.translate_pts(
+          @step_cad.Profile2D::circle(hole_diam_mm, segments~),
+          -hole_offset,
+          0.0,
+        ),
+      ],
+      z_mm=thickness_mm / 2.0,
+      density=@urdf.Density::petg(),
+      color=@step_cad.Rgb::grey(),
+    ),
+  )
+  .add_mate_mm_deg("mount")
+  .add_mate_mm_deg("sensor_face", z=thickness_mm)
+  .with_part(part)
+}
+
+///|
+fn hx_offset(value : Double) -> Double {
+  value
+}
+
+///|
 /// Builds a PCB envelope: a thin board with four mounting holes.
 ///
 /// The board's back face is at `Z = 0` and it extends along `+Z`, so attaching
@@ -315,6 +383,8 @@ pub fn pcb_board(
   hole_inset_mm~ : Double = 3.5,
   max_component_height_mm~ : Double = 12.0,
   connectors~ : Array[String] = [],
+  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
+  include_standoffs~ : Bool = false,
 ) -> @cad.Component {
   let half_l = length_mm / 2.0
   let half_w = width_mm / 2.0
@@ -403,6 +473,24 @@ pub fn pcb_board(
       x=holes[i].0,
       y=holes[i].1,
     )
+  }
+  if include_standoffs || detail_is_rich(detail) {
+    for i in 0..<holes.length() {
+      let standoff = hex_standoff(
+        name=name + "_standoff_" + i.to_string(),
+        length_mm=6.0,
+        across_flats_mm=5.0,
+        bore_diam_mm=mounting_hole_diam_mm,
+        detail~,
+      )
+      with_mates = with_mates.attach(
+        "standoff_" + i.to_string(),
+        parent_mate="bolt_" + i.to_string(),
+        standoff,
+        child_mate="bottom",
+        spec=@cad.JointSpec::merge_rigid(),
+      )
+    }
   }
   with_mates
 }

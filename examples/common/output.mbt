@@ -1,15 +1,18 @@
 ///|
-/// Shared output destinations for the showcase examples.
+/// Shared output destinations and export flags for the showcase examples.
 ///
 /// Each example builds its own geometry options, calls `with_output_args` to
 /// add the standard export flags, then calls `write_output` with the assembled
 /// `Component`.
+
+///|
 pub(all) struct OutputPaths {
   step : String?
   assembly : String?
   eval : String?
   gltf : String?
   bpy : String?
+  blender : String?
   blend : String?
   urdf : String?
   bundle : String?
@@ -19,6 +22,9 @@ pub(all) struct OutputPaths {
   control : String?
   pins : String?
   build_package : String?
+  print_parts : String?
+  detail : String
+  threads : String
   check : Bool
 }
 
@@ -49,6 +55,10 @@ pub fn with_output_args(spec : Map[String, @cli.Arg]) -> Map[String, @cli.Arg] {
     @cli.opt_string(help="Write Blender 5.0 Python script to path"),
   )
   spec.set(
+    "blender",
+    @cli.opt_string(help="Write Blender 5.0 Python script to path"),
+  )
+  spec.set(
     "blend",
     @cli.opt_string(help="Create .blend file via Blender CLI at path"),
   )
@@ -63,20 +73,16 @@ pub fn with_output_args(spec : Map[String, @cli.Arg]) -> Map[String, @cli.Arg] {
     "bundle",
     @cli.opt_string(
       short='b',
-      help="Write ROS 2 URDF bundle (with .gltf & .step link assets) to directory",
+      help="Write ROS 2 URDF bundle (with .gltf, .step, and printable parts) to directory",
     ),
   )
   spec.set(
     "bom",
-    @cli.opt_string(
-      help="Write bill-of-materials CSV to path ('-' for stdout)",
-    ),
+    @cli.opt_string(help="Write bill-of-materials CSV to path ('-' for stdout)"),
   )
   spec.set(
     "plan",
-    @cli.opt_string(
-      help="Write ordered assembly plan to path ('-' for stdout)",
-    ),
+    @cli.opt_string(help="Write ordered assembly plan to path ('-' for stdout)"),
   )
   spec.set(
     "report",
@@ -90,15 +96,29 @@ pub fn with_output_args(spec : Map[String, @cli.Arg]) -> Map[String, @cli.Arg] {
   )
   spec.set(
     "pins",
-    @cli.opt_string(
-      help="Write firmware pin-map CSV to path ('-' for stdout)",
-    ),
+    @cli.opt_string(help="Write firmware pin-map CSV to path ('-' for stdout)"),
   )
   spec.set(
     "package",
     @cli.opt_string(
-      help="Write the complete build package (BOM, sourcing, procedure, control, URDF bundle) to a directory",
+      help="Write the complete build package (BOM, sourcing, printable STEP parts, control, URDF bundle) to a directory",
     ),
+  )
+  spec.set(
+    "print-parts",
+    @cli.opt_string(
+      help="Write standalone 3D-printable STEP parts and print-list.csv to directory",
+    ),
+  )
+  spec.set(
+    "detail",
+    @cli.opt_string(
+      help="Geometry detail level: simplified, detailed, or fully-modeled",
+    ),
+  )
+  spec.set(
+    "threads",
+    @cli.opt_string(help="Thread mode override: none, cosmetic, or helical"),
   )
   spec.set(
     "check",
@@ -116,6 +136,7 @@ pub fn output_paths(args : @cli.Args) -> OutputPaths {
     eval: args.string_opt("eval"),
     gltf: args.string_opt("gltf"),
     bpy: args.string_opt("bpy"),
+    blender: args.string_opt("blender"),
     blend: args.string_opt("blend"),
     urdf: args.string_opt("urdf"),
     bundle: args.string_opt("bundle"),
@@ -125,7 +146,45 @@ pub fn output_paths(args : @cli.Args) -> OutputPaths {
     control: args.string_opt("control"),
     pins: args.string_opt("pins"),
     build_package: args.string_opt("package"),
+    print_parts: args.string_opt("print-parts"),
+    detail: args.string_opt("detail").unwrap_or("simplified"),
+    threads: args.string_opt("threads").unwrap_or(""),
     check: args.flag("check"),
+  }
+}
+
+///|
+/// Parses the `--detail` flag, aborting on an invalid value.
+pub fn OutputPaths::detail_level(
+  self : OutputPaths,
+) -> @step_common.DetailLevel {
+  match @cad.parse_detail_level(self.detail) {
+    Some(level) => level
+    None =>
+      abort(
+        "error: invalid --detail '" +
+        self.detail +
+        "' (expected simplified, detailed, or fully-modeled)",
+      )
+  }
+}
+
+///|
+/// Parses the `--threads` flag, returning `None` when it was not given.
+pub fn OutputPaths::thread_rep(
+  self : OutputPaths,
+) -> @step_common.ThreadRepresentation? {
+  if self.threads == "" {
+    return None
+  }
+  match @cad.parse_thread_rep(self.threads) {
+    Some(rep) => Some(rep)
+    None =>
+      abort(
+        "error: invalid --threads '" +
+        self.threads +
+        "' (expected none, cosmetic, or helical)",
+      )
   }
 }
 
@@ -136,6 +195,7 @@ fn any_output(output : OutputPaths) -> Bool {
   output.eval is Some(_) ||
   output.gltf is Some(_) ||
   output.bpy is Some(_) ||
+  output.blender is Some(_) ||
   output.blend is Some(_) ||
   output.urdf is Some(_) ||
   output.bundle is Some(_) ||
@@ -144,7 +204,8 @@ fn any_output(output : OutputPaths) -> Bool {
   output.report is Some(_) ||
   output.control is Some(_) ||
   output.pins is Some(_) ||
-  output.build_package is Some(_)
+  output.build_package is Some(_) ||
+  output.print_parts is Some(_)
 }
 
 ///|
@@ -191,9 +252,9 @@ pub async fn write_output(
     @cli.eprintln(
       "hardware checks: " +
       (warnings.length() +
-        control_warnings.length() +
-        harness_warnings.length() +
-        wiring_warnings.length()).to_string() +
+      control_warnings.length() +
+      harness_warnings.length() +
+      wiring_warnings.length()).to_string() +
       " warning(s)",
     )
   }
@@ -222,10 +283,14 @@ pub async fn write_output(
     None => ()
   }
   match output.gltf {
-    Some(path) => design.to_gltf_file(Some(path))
+    Some(path) => @cad.gltf_safe_design(design).to_gltf_file(Some(path))
     None => ()
   }
   match output.bpy {
+    Some(path) => design.write_blender_python(Some(path))
+    None => ()
+  }
+  match output.blender {
     Some(path) => design.write_blender_python(Some(path))
     None => ()
   }
@@ -242,7 +307,8 @@ pub async fn write_output(
     None => ()
   }
   match output.bom {
-    Some(_) => @step_cad.write_text_file(comp.to_bom_csv(), stdout_path(output.bom))
+    Some(_) =>
+      @step_cad.write_text_file(comp.to_bom_csv(), stdout_path(output.bom))
     None => ()
   }
   match output.plan {
@@ -271,9 +337,28 @@ pub async fn write_output(
       @step_cad.write_text_file(comp.to_pin_map_csv(), stdout_path(output.pins))
     None => ()
   }
+  match output.print_parts {
+    Some(dir) => {
+      @fs.mkdir(dir, recursive=true, allow_exist=true)
+      for part in comp.printable_parts() {
+        @step_cad.write_text_file(
+          part.design.to_step_file(),
+          Some(
+            dir + "/" + @cad.sanitize_part_number(part.part_number) + ".step",
+          ),
+        )
+      }
+      @step_cad.write_text_file(
+        comp.print_list_csv(),
+        Some(dir + "/print-list.csv"),
+      )
+    }
+    None => ()
+  }
   match output.build_package {
     Some(dir) => {
       @fs.mkdir(dir, recursive=true, allow_exist=true)
+      @fs.mkdir(dir + "/printable", recursive=true, allow_exist=true)
       for file in comp.build_package_files() {
         @step_cad.write_text_file(file.content, Some(dir + "/" + file.path))
       }

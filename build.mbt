@@ -14,6 +14,120 @@ pub(all) struct BuildFile {
 }
 
 ///|
+/// A standalone fabricated/3D-printable part: its own design in its local
+/// datum frame, without purchased motors, fasteners, bearings, or PCBs.
+pub(all) struct PrintablePart {
+  part_number : String
+  component_name : String
+  meta : PartMeta
+  design : @step_cad.Design
+}
+
+///|
+/// Returns true when a part is fabricated in-house rather than purchased.
+pub fn is_fabricated_part(meta : PartMeta) -> Bool {
+  meta.process != "" && meta.process != "purchased"
+}
+
+///|
+/// Makes a part number safe for use as a file name.
+pub fn sanitize_part_number(part_number : String) -> String {
+  part_number
+  .replace(old="/", new="-")
+  .replace(old="\\", new="-")
+  .replace(old=" ", new="-")
+}
+
+///|
+/// Builds a local-frame design from the bodies of one component.
+fn design_from_bodies(
+  name : String,
+  description : String,
+  documentation : String,
+  bodies : Array[BodyPart],
+  part_number : String,
+) -> @step_cad.Design {
+  let mut design = @step_cad.Design::new(name~, description~, documentation~)
+  for body in bodies {
+    match body.part {
+      Some(meta) =>
+        if meta.part_number == part_number || meta.part_number == "" {
+          design = design.add(body.node)
+        }
+      None => design = design.add(body.node)
+    }
+  }
+  design
+}
+
+///|
+/// Collects standalone printable/fabricated designs from this component tree.
+///
+/// A whole component marked fabricated is exported with all its bodies. A
+/// body-level part number collects every body sharing that number. Pre-order
+/// traversal and part-number de-duplication make each printable part appear
+/// once.
+pub fn Component::printable_parts(self : Component) -> Array[PrintablePart] {
+  let out : Array[PrintablePart] = []
+  let seen : Array[String] = []
+  self.collect_printable_parts(out, seen)
+  out
+}
+
+///|
+fn Component::collect_printable_parts(
+  self : Component,
+  out : Array[PrintablePart],
+  seen : Array[String],
+) -> Unit {
+  match self.part {
+    Some(meta) =>
+      if is_fabricated_part(meta) &&
+        self.bodies.length() > 0 &&
+        !seen.contains(meta.part_number) {
+        seen.push(meta.part_number)
+        out.push({
+          part_number: meta.part_number,
+          component_name: self.name,
+          meta,
+          design: design_from_bodies(
+            meta.part_number,
+            meta.description,
+            self.format_documentation(),
+            self.bodies,
+            meta.part_number,
+          ),
+        })
+      }
+    None => ()
+  }
+  for body in self.bodies {
+    match body.part {
+      Some(meta) =>
+        if is_fabricated_part(meta) && !seen.contains(meta.part_number) {
+          seen.push(meta.part_number)
+          out.push({
+            part_number: meta.part_number,
+            component_name: self.name,
+            meta,
+            design: design_from_bodies(
+              meta.part_number,
+              meta.description,
+              self.format_documentation(),
+              self.bodies,
+              meta.part_number,
+            ),
+          })
+        }
+      None => ()
+    }
+  }
+  for att in self.attachments {
+    att.child.collect_printable_parts(out, seen)
+  }
+}
+
+///|
 pub fn BuildFile::new(path : String, content : String) -> BuildFile {
   { path, content, }
 }
@@ -518,7 +632,7 @@ pub fn Component::build_package_files(
   self : Component,
   name~ : String = "",
 ) -> Array[BuildFile] {
-  [
+  let files : Array[BuildFile] = [
     BuildFile::new("README.md", self.build_manifest(name~)),
     BuildFile::new("bom.csv", self.to_bom_csv()),
     BuildFile::new("sourcing.csv", self.sourcing_csv()),
@@ -532,4 +646,13 @@ pub fn Component::build_package_files(
     BuildFile::new("link-parts.csv", self.link_parts_csv()),
     BuildFile::new("firmware.h", self.firmware_header()),
   ]
+  for part in self.printable_parts() {
+    files.push(
+      BuildFile::new(
+        "printable/\{sanitize_part_number(part.part_number)}.step",
+        part.design.to_step_file(),
+      ),
+    )
+  }
+  files
 }

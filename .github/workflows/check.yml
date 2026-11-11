@@ -40,18 +40,18 @@ jobs:
         run: moon update
 
       - name: moon check
-        run: moon check . catalog
+        run: moon check . components
 
       - name: moon info
         run: |
-          moon info --target native . catalog
+          moon info --target native . components
           git diff --exit-code
 
       - name: moon test
         run: |
-          moon test -j 12 --target native . catalog
+          moon test -j 12 --target native . components
 
       - name: format diff
         run: |
-          moon fmt . catalog
+          moon fmt . components
           git diff --exit-code

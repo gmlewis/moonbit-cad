@@ -2,6 +2,7 @@
 package "gmlewis/cad"
 
 import {
+  "gmlewis/step/components/common",
   "gmlewis/urdf",
   "moonbitlang/core/debug",
 }
@@ -15,13 +16,31 @@ pub fn centered_extruded_profile_node(Array[(Double, Double)], Double, holes? : 
 
 pub fn centered_tube_node(Double, Double, Double, segments? : Int32, name? : String, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/step/cad.SceneNode
 
+pub fn detail_level_name(@common.DetailLevel) -> String
+
+pub fn detail_level_with_threads(@common.DetailLevel, @common.ThreadRepresentation?) -> @common.DetailLevel
+
+pub fn gltf_safe_design(@gmlewis/step/cad.Design) -> @gmlewis/step/cad.Design
+
+pub fn gltf_safe_node(@gmlewis/step/cad.SceneNode) -> @gmlewis/step/cad.SceneNode
+
+pub fn is_fabricated_part(PartMeta) -> Bool
+
+pub fn parse_detail_level(String) -> @common.DetailLevel?
+
+pub fn parse_thread_rep(String) -> @common.ThreadRepresentation?
+
 pub fn rgb_to_rgba(@gmlewis/step/cad.Rgb, a? : Double) -> @urdf.Rgba
 
 pub fn rgba_to_rgb(@urdf.Rgba) -> @gmlewis/step/cad.Rgb
 
+pub fn sanitize_part_number(String) -> String
+
 pub fn step_to_urdf_matrix(@gmlewis/step/cad.Matrix3x3) -> @urdf.Matrix3x3
 
 pub fn step_to_urdf_transform(@gmlewis/step/cad.Transform) -> @urdf.Transform
+
+pub fn thread_rep_name(@common.ThreadRepresentation) -> String
 
 pub fn transform_scene_node(@gmlewis/step/cad.SceneNode, @gmlewis/step/cad.Transform) -> @gmlewis/step/cad.SceneNode
 
@@ -94,6 +113,7 @@ pub fn BodyPart::box_mm(String, Double, Double, Double, density? : @urdf.Density
 pub fn BodyPart::custom(String, @gmlewis/step/cad.SceneNode, @urdf.Inertial, collisions? : Array[@urdf.Collision], density? : @urdf.Density, part? : PartMeta?) -> Self
 pub fn BodyPart::cylinder_mm(String, Double, Double, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb, x_mm? : Double, y_mm? : Double, z_mm? : Double, rx_deg? : Double, ry_deg? : Double, rz_deg? : Double) -> Self
 pub fn BodyPart::extruded_profile_mm(String, Array[(Double, Double)], Double, holes? : Array[Array[(Double, Double)]], density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb, x_mm? : Double, y_mm? : Double, z_mm? : Double, rx_deg? : Double, ry_deg? : Double, rz_deg? : Double) -> Self
+pub fn BodyPart::from_step_component(@common.Component, density? : @urdf.Density, part? : PartMeta?, x_mm? : Double, y_mm? : Double, z_mm? : Double, rx_deg? : Double, ry_deg? : Double, rz_deg? : Double) -> Array[Self]
 pub fn BodyPart::transform_by(Self, @urdf.Transform) -> Self
 pub fn BodyPart::tube_mm(String, Double, Double, Double, segments? : Int32, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb, x_mm? : Double, y_mm? : Double, z_mm? : Double, rx_deg? : Double, ry_deg? : Double, rz_deg? : Double) -> Self
 pub fn BodyPart::with_part(Self, PartMeta) -> Self
@@ -194,6 +214,7 @@ pub fn Component::display_name(Self) -> String
 pub fn Component::fastener_table_csv(Self) -> String
 pub fn Component::firmware_header(Self) -> String
 pub fn Component::format_documentation(Self) -> String
+pub fn Component::from_step_component(String, @common.Component, density? : @urdf.Density, part? : PartMeta?, x_mm? : Double, y_mm? : Double, z_mm? : Double, rx_deg? : Double, ry_deg? : Double, rz_deg? : Double) -> Self
 pub fn Component::get_mate(Self, String) -> @urdf.MateConnector?
 pub fn Component::harness_checks(Self) -> Array[String]
 pub fn Component::link_design(Self, String) -> @gmlewis/step/cad.Design?
@@ -202,6 +223,7 @@ pub fn Component::new(String, description? : String) -> Self
 pub fn Component::pcb_placements_csv(Self) -> String
 pub fn Component::power_budget(Self) -> PowerBudget
 pub fn Component::print_list_csv(Self) -> String
+pub fn Component::printable_parts(Self) -> Array[PrintablePart]
 pub fn Component::report_text(Self) -> String
 pub fn Component::sourcing_csv(Self) -> String
 pub fn Component::to_assembly_step(Self, joint_positions? : Map[String, Double]) -> String
@@ -378,6 +400,13 @@ pub(all) struct PowerBudget {
 }
 pub fn PowerBudget::new() -> Self
 pub fn PowerBudget::to_text(Self) -> String
+
+pub(all) struct PrintablePart {
+  part_number : String
+  component_name : String
+  meta : PartMeta
+  design : @gmlewis/step/cad.Design
+}
 
 pub(all) struct RouteLine {
   path : String

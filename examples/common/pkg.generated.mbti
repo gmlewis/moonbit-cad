@@ -22,10 +22,23 @@ pub(all) struct OutputPaths {
   eval : String?
   gltf : String?
   bpy : String?
+  blender : String?
   blend : String?
   urdf : String?
   bundle : String?
+  bom : String?
+  plan : String?
+  report : String?
+  control : String?
+  pins : String?
+  build_package : String?
+  print_parts : String?
+  detail : String
+  threads : String
+  check : Bool
 }
+pub fn OutputPaths::detail_level(Self) -> @gmlewis/step/components/common.DetailLevel
+pub fn OutputPaths::thread_rep(Self) -> @gmlewis/step/components/common.ThreadRepresentation?
 
 // Type aliases
 

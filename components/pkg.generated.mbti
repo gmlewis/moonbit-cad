@@ -1,0 +1,127 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "gmlewis/cad/components"
+
+import {
+  "gmlewis/step/components/common",
+  "gmlewis/step/components/profiles",
+  "gmlewis/step/components/standards",
+  "gmlewis/urdf",
+}
+
+// Values
+pub fn ball_bearing(name? : String, designation? : String, outer_diam_mm? : Double, inner_diam_mm? : Double, width_mm? : Double, detail? : @common.DetailLevel, density? : @urdf.Density) -> @gmlewis/cad.Component
+
+pub fn bldc_actuator_pod(name? : String, housing_diam_mm? : Double, housing_length_mm? : Double, output_diam_mm? : Double, output_thickness_mm? : Double, reduction? : Double, lower_rad? : Double, upper_rad? : Double, max_effort_nm? : Double, max_vel_rad_s? : Double, color? : @gmlewis/step/cad.Rgb, detail? : @common.DetailLevel, threads? : @common.ThreadRepresentation) -> @gmlewis/cad.Component
+
+pub fn box_tube_strut(String, width_mm~ : Double, height_mm~ : Double, length_mm~ : Double, wall_mm? : Double, detail? : @common.DetailLevel, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/cad.Component
+
+pub fn cable_route(name? : String, points? : Array[(Double, Double, Double)], jacket_diameter_mm? : Double, wire_names? : Array[String], material? : String, from_component? : String, from_port? : String, to_component? : String, to_port? : String, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
+
+pub fn camera_module(name? : String, body_mm? : Double, body_h_mm? : Double, lens_diam_mm? : Double, voltage_v? : Double, current_ma? : Double, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
+
+pub fn compression_spring_part(name? : String, wire_diam_mm? : Double, mean_diam_mm? : Double, free_length_mm? : Double, active_coils? : Int32, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
+
+pub fn cylindrical_spacer(name? : String, outer_diam_mm? : Double, bore_diam_mm? : Double, length_mm? : Double, detail? : @common.DetailLevel, density? : @urdf.Density) -> @gmlewis/cad.Component
+
+pub fn din976_stud(name? : String, size? : @standards.MetricSize, length_mm? : Double, detail? : @common.DetailLevel, threads? : @common.ThreadRepresentation) -> @gmlewis/cad.Component
+
+pub fn flange_plate(name? : String, outer_diam_mm? : Double, center_bore_mm? : Double, thickness_mm? : Double, bolt_count? : Int32, bolt_circle_mm? : Double, bolt_diam_mm? : Double, detail? : @common.DetailLevel, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/cad.Component
+
+pub fn force_sensor(name? : String, body_len_mm? : Double, body_w_mm? : Double, body_h_mm? : Double, voltage_v? : Double, current_ma? : Double, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
+
+pub fn heat_set_insert(name? : String, outer_diam_mm? : Double, inner_diam_mm? : Double, length_mm? : Double, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/cad.Component
+
+pub fn herringbone_gear_component(String, gear_module~ : Double, num_teeth~ : Int32, gear_length_mm~ : Double, helix_angle_deg? : Double, bore_radius_mm? : Double, num_elbows? : Int32, resolution? : Int32, direction? : Double, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
+
+pub fn hex_standoff(name? : String, length_mm? : Double, across_flats_mm? : Double, bore_diam_mm? : Double, thread_size? : @standards.MetricSize, detail? : @common.DetailLevel, threads? : @common.ThreadRepresentation, density? : @urdf.Density) -> @gmlewis/cad.Component
+
+pub fn hub_motor_assembly(name? : String, stator_diam_mm? : Double, stator_width_mm? : Double, tire_diam_mm? : Double, tire_width_mm? : Double, max_effort_nm? : Double, max_vel_rad_s? : Double, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
+
+pub fn imu_module(name? : String, board_mm? : Double, voltage_v? : Double, current_ma? : Double, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
+
+pub fn iso_flat_washer(name? : String, size? : @standards.MetricSize, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
+
+pub fn iso_hex_bolt(name? : String, size? : @standards.MetricSize, length_mm? : Double, detail? : @common.DetailLevel, threads? : @common.ThreadRepresentation) -> @gmlewis/cad.Component
+
+pub fn iso_hex_nut(name? : String, size? : @standards.MetricSize, detail? : @common.DetailLevel, threads? : @common.ThreadRepresentation) -> @gmlewis/cad.Component
+
+pub fn iso_shcs_screw(name? : String, size? : @standards.MetricSize, length_mm? : Double, detail? : @common.DetailLevel, threads? : @common.ThreadRepresentation) -> @gmlewis/cad.Component
+
+pub fn l_bracket(name? : String, width_mm? : Double, leg_a_mm? : Double, leg_b_mm? : Double, thickness_mm? : Double, hole_diam_mm? : Double, wall_hole_diam_mm? : Double, detail? : @common.DetailLevel, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/cad.Component
+
+pub fn lead_screw_gripper(name? : String, opening_mm? : Double, travel_mm? : Double, lead_mm? : Double, finger_len_mm? : Double, finger_width_mm? : Double, finger_thick_mm? : Double, grip_pad_mm? : Double, base_depth_mm? : Double, base_h_mm? : Double, base_w_mm? : Double, wall_mm? : Double, screw_diam_mm? : Double, thread_od_mm? : Double, rail_diam_mm? : Double, rail_y_mm? : Double, motor_frame_mm? : Double, motor_body_mm? : Double, motor_shaft_mm? : Double, motor_shaft_diam_mm? : Double, motor_boss_diam_mm? : Double, motor_boss_height_mm? : Double, motor_effort_nm? : Double, motor_vel_rad_s? : Double, coupler_len_mm? : Double, coupler_outer_mm? : Double, motor_shaft_fit_mm? : Double, screw_fit_mm? : Double, nut_outer_mm? : Double, nut_len_mm? : Double, nut_fit_mm? : Double, bushing_outer_mm? : Double, bushing_len_mm? : Double, bushing_fit_mm? : Double, bearing_outer_mm? : Double, bearing_width_mm? : Double, bearing_fit_mm? : Double, thread_crest_width_mm? : Double, thread_crest_fit_mm? : Double, thread_journal_mm? : Double, bearing_journal_mm? : Double, grip_finger_overlap_mm? : Double, flange_bolt_diam_mm? : Double, flange_bolt_pitch_x_mm? : Double, flange_bolt_pitch_y_mm? : Double, motor_hole_diam_mm? : Double, motor_bolt_diam_mm? : Double, motor_bolt_pitch_mm? : Double, bearing_hole_diam_mm? : Double, bearing_bolt_diam_mm? : Double, bearing_bolt_pitch_mm? : Double, jaw_effort_n? : Double, jaw_velocity_mps? : Double, controller_pos_csv? : String, detail? : @common.DetailLevel, threads? : @common.ThreadRepresentation, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/cad.Component
+
+pub fn limit_switch(name? : String, body_len_mm? : Double, body_w_mm? : Double, body_h_mm? : Double, voltage_v? : Double, current_ma? : Double, color? : @gmlewis/step/cad.Rgb, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
+
+pub fn magnetic_encoder(name? : String, disc_diam_mm? : Double, board_len_mm? : Double, voltage_v? : Double, current_ma? : Double, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
+
+pub fn nema_stepper(name? : String, frame_size_mm? : Double, body_length_mm? : Double, boss_diam_mm? : Double, boss_height_mm? : Double, shaft_diam_mm? : Double, shaft_length_mm? : Double, max_effort_nm? : Double, max_vel_rad_s? : Double, detail? : @common.DetailLevel, threads? : @common.ThreadRepresentation) -> @gmlewis/cad.Component
+
+pub fn parallel_gripper(name? : String, opening_mm? : Double, travel_mm? : Double, finger_len_mm? : Double, finger_width_mm? : Double, finger_thick_mm? : Double, base_thick_mm? : Double, finger_overlap_mm? : Double, effort_n? : Double, velocity_mps? : Double, detail? : @common.DetailLevel, threads? : @common.ThreadRepresentation, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/cad.Component
+
+pub fn parse_kicad_pos(String) -> Array[KiCadFootprint]
+
+pub fn pcb_board(name? : String, length_mm? : Double, width_mm? : Double, thickness_mm? : Double, mounting_hole_diam_mm? : Double, hole_inset_mm? : Double, max_component_height_mm? : Double, connectors? : Array[String], detail? : @common.DetailLevel, include_standoffs? : Bool) -> @gmlewis/cad.Component
+
+pub fn pcb_from_kicad(name? : String, footprints? : Array[KiCadFootprint], board_len_mm? : Double, board_w_mm? : Double, thickness_mm? : Double, origin_x_mm? : Double, origin_y_mm? : Double, flip_y? : Bool, mounting_hole_match? : String, mounting_hole_diam_mm? : Double, board_margin_mm? : Double, max_component_height_mm? : Double, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
+
+pub fn planetary_gearbox(name? : String, params? : PlanetaryGearboxParams, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
+
+pub fn planetary_gearset_stage(name? : String, module_mm? : Double, sun_teeth? : Int32, planet_teeth? : Int32, planet_count? : Int32, face_width_mm? : Double, pressure_angle_deg? : Double, ring_wall_mm? : Double, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
+
+pub fn quadruped_leg_assembly(String, is_left~ : Bool, hip_offset_y_mm? : Double, thigh_length_mm? : Double, calf_length_mm? : Double, wheel_diam_mm? : Double, detail? : @common.DetailLevel, threads? : @common.ThreadRepresentation) -> @gmlewis/cad.Component
+
+pub fn robot_leg_segment(String, length_mm~ : Double, width_mm? : Double, thickness_mm? : Double, bore_diam_mm? : Double, detail? : @common.DetailLevel, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/cad.Component
+
+pub fn sensor_mount_bracket(name? : String, width_mm? : Double, height_mm? : Double, thickness_mm? : Double, hole_diam_mm? : Double, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
+
+pub fn shaft_coupler(name? : String, outer_diam_mm? : Double, bore_in_mm? : Double, bore_out_mm? : Double, length_mm? : Double, detail? : @common.DetailLevel, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/cad.Component
+
+pub fn sleeve_bushing(name? : String, bore_diam_mm? : Double, outer_diam_mm? : Double, length_mm? : Double, flange_outer_mm? : Double, flange_thickness_mm? : Double, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
+
+pub fn spur_gear_part(name? : String, module_mm? : Double, teeth? : Int32, face_width_mm? : Double, bore_diameter_mm? : Double, pressure_angle_deg? : Double, backlash_mm? : Double, detail? : @common.DetailLevel, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/cad.Component
+
+pub fn suspension_fork_module(name? : String, fork_span_mm? : Double, fork_length_mm? : Double, wheel_diam_mm? : Double, detail? : @common.DetailLevel, threads? : @common.ThreadRepresentation, density? : @urdf.Density) -> @gmlewis/cad.Component
+
+pub fn treaded_wheel(String, radius_mm? : Double, width_mm? : Double, hub_radius_mm? : Double, detail? : @common.DetailLevel, density? : @urdf.Density) -> @gmlewis/cad.Component
+
+pub fn tslot_extrusion_strut(name~ : String, profile? : @profiles.TSlotProfile, length_mm? : Double, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
+
+pub fn tslot_frame(name? : String, width_mm? : Double, depth_mm? : Double, height_mm? : Double, profile? : @profiles.TSlotProfile, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
+
+pub fn u_bracket(name? : String, inner_span_mm? : Double, arm_length_mm? : Double, width_mm? : Double, thickness_mm? : Double, bore_mm? : Double, detail? : @common.DetailLevel, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/cad.Component
+
+// Errors
+
+// Types and methods
+pub(all) struct KiCadFootprint {
+  reference : String
+  value : String
+  footprint : String
+  x_mm : Double
+  y_mm : Double
+  rotation_deg : Double
+  side : String
+}
+pub fn KiCadFootprint::new(reference? : String, value? : String, footprint? : String, x_mm? : Double, y_mm? : Double, rotation_deg? : Double, side? : String) -> Self
+
+pub(all) struct PlanetaryGearboxParams {
+  gear_module : Double
+  gear_length_mm : Double
+  helix_angle_deg : Double
+  sun_teeth : Int32
+  planet_teeth : Int32
+  num_planets : Int32
+  pressure_angle_deg : Double
+  num_elbows : Int32
+  resolution : Int32
+  bore_radius_mm : Double
+  tolerance_mm : Double
+  outer_thickness_mm : Double
+  include_carrier : Bool
+}
+pub fn PlanetaryGearboxParams::default() -> Self
+
+// Type aliases
+
+// Traits

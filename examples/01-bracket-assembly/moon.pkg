@@ -1,8 +1,9 @@
 import {
   "gmlewis/cad",
-  "gmlewis/cad/catalog",
+  "gmlewis/cad/components",
   "gmlewis/cad/examples/common",
   "gmlewis/step/cli",
+  "gmlewis/step/components/standards" @step_standards,
   "moonbitlang/async",
   "moonbitlang/core/math",
 }

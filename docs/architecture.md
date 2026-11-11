@@ -9,9 +9,10 @@ living document: add to it as the layers below gain content.
 - The module root package `gmlewis/cad` is the **core framework**: shapes,
   scene graph, `Component`, `BodyPart`, `JointSpec`, `Attachment`, primitive
   bridges, and the STEP/URDF compilers.
-- `gmlewis/cad/catalog` holds the stock hardware: fasteners, actuators, gears,
-  mobility, and grippers. Examples import `@cad` for the framework and
-  `@catalog` for hardware.
+- `gmlewis/cad/components` holds reusable higher-level sub-assemblies that
+  wrap the low-level `gmlewis/step/components/*` primitives: hardware,
+  actuators, gears, mobility, grippers, sensors, harness, and KiCad import.
+  Examples import `@cad` for the framework and `@components` for hardware.
 - Examples are separate executable packages under `examples/`.
 
 ## Target layers
@@ -19,9 +20,11 @@ living document: add to it as the layers below gain content.
 | Layer | Contents | Package |
 | --- | --- | --- |
 | Core | Shapes, scene graph, `Component`, `BodyPart`, mates, joints, transforms, units, compilers | `gmlewis/cad` (root) |
-| Mechanical catalog | Structural members, fasteners, bearings, couplers, brackets, mechanisms, grippers | `gmlewis/cad/catalog` |
-| Actuation | Motors, drivers, encoders, transmissions, brake/limit hardware | `gmlewis/cad` (`electronics.mbt`) + `catalog/actuators` |
-| Sensing | Limit switches, encoders, IMUs, cameras, force sensors | `gmlewis/cad` (`electronics.mbt`) + `catalog/sensors` |
+| Tier 1 STEP primitives | Parametrized ISO fasteners, bearings, shafts, spacers, extrusions, gears, frames | `gmlewis/step/components/*` |
+| Mechanical components | Structural members, fasteners, bearings, couplers, brackets, mechanisms, grippers | `gmlewis/cad/components` |
+| Examples | Specialized printable and simulatable end-to-end models | `examples/*` |
+| Actuation | Motors, drivers, encoders, transmissions, brake/limit hardware | `gmlewis/cad` (`electronics.mbt`) + `components/actuators` |
+| Sensing | Limit switches, encoders, IMUs, cameras, force sensors | `gmlewis/cad` (`electronics.mbt`) + `components/sensors` |
 | Electronics | PCB envelopes, connectors, keepouts, wiring/harness | `gmlewis/cad` (`electronics.mbt`); KiCad import future |
 | Assembly | BOM, fastener schedules, fits/clearances, assembly steps, part numbers | `gmlewis/cad` (`assembly.mbt`; steps future) |
 | Export | STEP/URDF/SDF/glTF, `ros2_control`, firmware pin maps, BOM, build package, drawings | `gmlewis/cad` (`control.mbt`, `assembly.mbt`, `electronics.mbt`, `build.mbt`) + `scripts/make_drawings.py` |
@@ -40,13 +43,13 @@ realistic layers add orthogonal records rather than bloating `Component`:
   bus), fluid/pneumatic, or sensor port; direction and specs. **Implemented.**
 - `Fastener` — bolt/screw/insert/washer; thread, length, clearance hole,
   engagement, torque, quantity; references the fastened bodies/mates.
-  **Implemented**, with a fastener catalog in `catalog/fasteners.mbt`.
+  **Implemented**, with a fastener component library in `components/fasteners.mbt`.
 - `Fit` — nominal, clearance, transition, interference; per-face clearance is
   already present in the profile helpers. **Implemented** (`Fit` records).
 - `ActuatorSpec` — voltage, current (stall/rated), torque, driver, control
   interface (PWM/STEP-DIR/CAN), encoder type. **Implemented.**
 - `SensorSpec` — type, range, resolution, interface, supply, current draw.
-  **Implemented**, with builders in `catalog/sensors.mbt`.
+  **Implemented**, with builders in `components/sensors.mbt`.
 - `PcbSpec` / `pcb_board` — outline, thickness, mounting holes, height limit,
   connectors, placements, and bolt-hole mates. **Implemented.**
 - KiCad position-file import (`parse_kicad_pos`, `pcb_from_kicad`) — board
@@ -56,7 +59,7 @@ realistic layers add orthogonal records rather than bloating `Component`:
   report. **Implemented.**
 - `CableRoute` — polyline jacket geometry, diameter, material, and the wire
   runs it carries; checked for length against each wire. **Implemented** in
-  `harness.mbt` + `catalog/harness.mbt`. Connector mating is checked by
+  `harness.mbt` + `components/harness.mbt`. Connector mating is checked by
   `Component::wiring_checks()`.
 - `ControlBinding` — joint → actuator channel → MCU pins/bus; direction, gear
   ratio, soft limits, homing/limit inputs. **Implemented**, with
