@@ -262,18 +262,36 @@ pub(all) enum ConnectionKind {
 }
 
 ///|
-/// The non-geometric parameters of an attachment: joint type, offset along the
-/// parent mate axis, phase angle, and optional dynamics, mimic, and
-/// transmission data.
+/// The kinematic parameters of an attachment plus the shared geometric mate
+/// pair.
+///
+/// The pair owns the parent connector name, child connector name, offset, twist,
+/// flip, and fit. `JointSpec` keeps only what is kinematic: the joint kind,
+/// limits, dynamics, mimic, and transmission reduction.
 #derive(Debug, Eq)
 pub(all) struct JointSpec {
   kind : ConnectionKind
-  offset_mm : Double
-  angle_deg : Double
-  flip_axis : Bool
+  pair : @step_common.MatePair
   dynamics : @urdf.JointDynamics?
   mimic : @urdf.JointMimic?
   transmission_reduction : Double?
+}
+
+///|
+/// joint_pair builds the pair template used by the `JointSpec` constructors.
+/// The parent and child names are filled in when the attachment is created.
+fn joint_pair(
+  offset_mm : Double,
+  angle_deg : Double,
+  flip_axis : Bool,
+) -> @step_common.MatePair {
+  @step_common.MatePair::new(
+    parent="",
+    child="",
+    offset_mm~,
+    twist_deg=angle_deg,
+    flip_axis~,
+  )
 }
 
 ///|
@@ -285,9 +303,7 @@ pub fn JointSpec::merge_rigid(
 ) -> JointSpec {
   {
     kind: MergeRigid,
-    offset_mm,
-    angle_deg,
-    flip_axis,
+    pair: joint_pair(offset_mm, angle_deg, flip_axis),
     dynamics: None,
     mimic: None,
     transmission_reduction: None,
@@ -303,9 +319,7 @@ pub fn JointSpec::fixed(
 ) -> JointSpec {
   {
     kind: Fixed,
-    offset_mm,
-    angle_deg,
-    flip_axis,
+    pair: joint_pair(offset_mm, angle_deg, flip_axis),
     dynamics: None,
     mimic: None,
     transmission_reduction: None,
@@ -325,9 +339,7 @@ pub fn JointSpec::revolute(
 ) -> JointSpec {
   {
     kind: Revolute(limit),
-    offset_mm,
-    angle_deg,
-    flip_axis,
+    pair: joint_pair(offset_mm, angle_deg, flip_axis),
     dynamics,
     mimic,
     transmission_reduction,
@@ -347,9 +359,7 @@ pub fn JointSpec::continuous(
 ) -> JointSpec {
   {
     kind: Continuous(limit),
-    offset_mm,
-    angle_deg,
-    flip_axis,
+    pair: joint_pair(offset_mm, angle_deg, flip_axis),
     dynamics,
     mimic,
     transmission_reduction,
@@ -369,9 +379,7 @@ pub fn JointSpec::prismatic(
 ) -> JointSpec {
   {
     kind: Prismatic(limit),
-    offset_mm,
-    angle_deg,
-    flip_axis,
+    pair: joint_pair(offset_mm, angle_deg, flip_axis),
     dynamics,
     mimic,
     transmission_reduction,
@@ -382,9 +390,9 @@ pub fn JointSpec::prismatic(
 /// A child component snapped onto one of its parent's mates.
 pub(all) struct Attachment {
   joint_name : String
-  parent_mate : String
   child : Component
-  child_mate : String
+  /// The resolved relationship: parent/child connector names, offset, twist,
+  /// flip, and fit all live in the shared pair inside `spec`.
   spec : JointSpec
   /// False for children that belong to the parent as a purchased/assembled
   /// item (e.g. a motor rotor), so the BOM does not count them separately.
@@ -401,7 +409,7 @@ pub(all) struct Component {
   description : String
   parameters : Map[String, String]
   bodies : Array[BodyPart]
-  mates : Map[String, @urdf.MateConnector]
+  mates : Map[String, @step_common.MateConnector]
   attachments : Array[Attachment]
   /// Optional name for the exported robot/design when the root link name
   /// differs from the assembly name (e.g. `base_link` inside a Galileo robot).
@@ -431,11 +439,8 @@ pub(all) struct Component {
 ///|
 /// Creates an empty component with a default `"origin"` mate.
 pub fn Component::new(name : String, description~ : String = "") -> Component {
-  let mates : Map[String, @urdf.MateConnector] = Map([])
-  mates.set(
-    "origin",
-    @urdf.MateConnector::new("origin", origin=@urdf.Origin::identity()),
-  )
+  let mates : Map[String, @step_common.MateConnector] = Map([])
+  mates.set("origin", @step_common.MateConnector::new("origin"))
   {
     name,
     description,
@@ -513,7 +518,7 @@ pub fn Component::add_bodies(
 /// Registers a mate connector on this component.
 pub fn Component::add_mate(
   self : Component,
-  mate : @urdf.MateConnector,
+  mate : @step_common.MateConnector,
 ) -> Component {
   self.mates.set(mate.name, mate)
   self
@@ -533,7 +538,7 @@ pub fn Component::add_mate_mm_deg(
   axis~ : (Double, Double, Double) = (0.0, 0.0, 1.0),
 ) -> Component {
   self.add_mate(
-    @urdf.MateConnector::from_mm_deg(
+    @step_common.MateConnector::from_mm_deg(
       name,
       x~,
       y~,
@@ -551,7 +556,7 @@ pub fn Component::add_mate_mm_deg(
 pub fn Component::get_mate(
   self : Component,
   name : String,
-) -> @urdf.MateConnector? {
+) -> @step_common.MateConnector? {
   self.mates.get(name)
 }
 
@@ -566,14 +571,17 @@ pub fn Component::attach(
   spec~ : JointSpec = JointSpec::fixed(),
   bom_external~ : Bool = true,
 ) -> Component {
-  self.attachments.push({
-    joint_name,
-    parent_mate,
-    child,
-    child_mate,
-    spec,
-    bom_external,
-  })
+  let pair = @step_common.MatePair::new(
+    parent=parent_mate,
+    child=child_mate,
+    offset_mm=spec.pair.offset_mm,
+    twist_deg=spec.pair.twist_deg,
+    flip_axis=spec.pair.flip_axis,
+    fit=spec.pair.fit,
+    description=spec.pair.description,
+  )
+  let spec = { ..spec, pair, }
+  self.attachments.push({ joint_name, child, spec, bom_external, })
   self
 }
 

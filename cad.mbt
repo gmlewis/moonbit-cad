@@ -20,7 +20,7 @@
 /// | --- | --- |
 /// | `parameters : Map[String, String]` | Self-documenting design parameters (`"module": "3.0"`). |
 /// | `bodies : Array[BodyPart]` | Rigid solids with CAD geometry, density, exact inertia, and collision primitives. |
-/// | `mates : Map[String, @urdf.MateConnector]` | Named attachment frames other components snap onto. |
+/// | `mates : Map[String, @step_common.MateConnector]` | Named attachment frames other components snap onto. |
 /// | `attachments : Array[Attachment]` | Child components plus the joint that connects them. |
 /// | `part : PartMeta?` | Purchasing/manufacturing data (part number, supplier, material, process, cost). |
 /// | `ports : Array[Port]` | Typed electrical/mechanical interfaces (power, signal, bus, sensor). |

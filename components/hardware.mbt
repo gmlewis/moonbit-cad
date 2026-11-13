@@ -58,12 +58,9 @@ pub fn iso_shcs_screw(
     0.35,
     supplier_url="https://www.mcmaster.com/screws/socket-head-cap-screws/",
   )
-  @cad.Component::from_step_component(
-    name,
-    step_comp,
-    part=Some(part),
-    z_mm=-length_mm,
-  )
+  // The STEP component already uses the head-seat frame: head 0..k, shank
+  // -length..0. Do not translate it again.
+  @cad.Component::from_step_component(name, step_comp, part=Some(part))
   .add_mate_mm_deg("head_seat")
   .add_mate_mm_deg("tip", z=-length_mm)
   .add_mate_mm_deg("head_top", z=dims.head_height_mm)
@@ -95,12 +92,9 @@ pub fn iso_hex_bolt(
     "steel",
     0.40,
   )
-  @cad.Component::from_step_component(
-    name,
-    step_comp,
-    part=Some(part),
-    z_mm=-length_mm,
-  )
+  // The STEP component already uses the head-seat frame: head 0..k, shank
+  // -length..0. Do not translate it again.
+  @cad.Component::from_step_component(name, step_comp, part=Some(part))
   .add_mate_mm_deg("head_seat")
   .add_mate_mm_deg("tip", z=-length_mm)
   .add_mate_mm_deg("head_top", z=spec.size_dims.head_height_mm)

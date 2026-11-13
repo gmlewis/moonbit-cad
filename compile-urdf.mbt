@@ -21,8 +21,24 @@ pub(all) struct CompiledLink {
 }
 
 ///|
-fn identity_mate(name : String) -> @urdf.MateConnector {
-  @urdf.MateConnector::new(name, origin=@urdf.Origin::identity())
+fn identity_mate(name : String) -> @step_common.MateConnector {
+  @step_common.MateConnector::new(name)
+}
+
+///|
+/// transform_of_placement converts a shared millimetre/degree placement to a
+/// URDF metre/radian transform.
+fn transform_of_placement(p : @step_common.Placement) -> @urdf.Transform {
+  let (xyz, rpy) = @step_common.MateConnector::new("snap", placement=p).to_m_rad()
+  @urdf.Transform::from_origin(@urdf.Origin::new(xyz~, rpy~))
+}
+
+///|
+/// placement_of_transform converts a URDF metre/radian transform to a shared
+/// millimetre/degree placement.
+fn placement_of_transform(t : @urdf.Transform) -> @step_common.Placement {
+  let origin = t.to_origin()
+  @step_common.MateConnector::from_m_rad("snap", origin.xyz, origin.rpy).placement
 }
 
 ///|
@@ -119,31 +135,27 @@ priv struct CompileCtx {
 /// queuing any non-merged sub-attachments onto `kinematic_out`.
 fn merge_rigid_into(
   bodies : Array[BodyPart],
-  mates : Map[String, @urdf.MateConnector],
+  mates : Map[String, @step_common.MateConnector],
   kinematic_out : Array[Attachment],
   att : Attachment,
-  p_mate : @urdf.MateConnector,
-  c_mate : @urdf.MateConnector,
+  p_mate : @step_common.MateConnector,
+  c_mate : @step_common.MateConnector,
 ) -> Unit {
-  let (snap_origin, _axis) = @urdf.snap_mates(
+  let pair = att.spec.pair
+  let (snap_placement, _axis) = @step_common.snap_connectors(
     p_mate,
     c_mate,
-    offset=att.spec.offset_mm / 1000.0,
-    angle_rad=att.spec.angle_deg * @math.PI / 180.0,
-    flip_axis=att.spec.flip_axis,
+    offset_mm=pair.offset_mm,
+    twist_rad=pair.twist_deg * @math.PI / 180.0,
+    flip_axis=pair.flip_axis,
   )
-  let snap_xform = @urdf.Transform::from_origin(snap_origin)
+  let snap_xform = transform_of_placement(snap_placement)
+  let snap_shared = placement_of_transform(snap_xform)
   for body in att.child.bodies {
     bodies.push(body.transform_by(snap_xform))
   }
   for mate_name, mate in att.child.mates {
-    let rebased = @urdf.MateConnector::new(
-      mate.name,
-      origin=snap_xform
-        .compose(@urdf.Transform::from_origin(mate.origin))
-        .to_origin(),
-      axis=snap_xform.apply_dir(mate.axis),
-    )
+    let rebased = mate.transformed(snap_shared)
     let qualified = "\{att.child.name}.\{mate_name}"
     mates.set(qualified, rebased)
     if !mates.contains(mate_name) {
@@ -152,10 +164,16 @@ fn merge_rigid_into(
   }
   // Re-home the merged child's own attachments onto this link.
   for sub in att.child.attachments {
-    let remapped = {
-      ..sub,
-      parent_mate: "\{att.child.name}.\{sub.parent_mate}",
-    }
+    let remapped_pair = @step_common.MatePair::new(
+      parent="\{att.child.name}.\{sub.spec.pair.parent}",
+      child=sub.spec.pair.child,
+      offset_mm=sub.spec.pair.offset_mm,
+      twist_deg=sub.spec.pair.twist_deg,
+      flip_axis=sub.spec.pair.flip_axis,
+      fit=sub.spec.pair.fit,
+      description=sub.spec.pair.description,
+    )
+    let remapped = { ..sub, spec: { ..sub.spec, pair: remapped_pair, }, }
     collect_attachment(bodies, mates, kinematic_out, remapped)
   }
 }
@@ -166,18 +184,18 @@ fn merge_rigid_into(
 /// second pass.
 fn collect_attachment(
   bodies : Array[BodyPart],
-  mates : Map[String, @urdf.MateConnector],
+  mates : Map[String, @step_common.MateConnector],
   kinematic_out : Array[Attachment],
   att : Attachment,
 ) -> Unit {
   match att.spec.kind {
     MergeRigid => {
       let p_mate = mates
-        .get(att.parent_mate)
-        .unwrap_or(identity_mate(att.parent_mate))
+        .get(att.spec.pair.parent)
+        .unwrap_or(identity_mate(att.spec.pair.parent))
       let c_mate = att.child
-        .get_mate(att.child_mate)
-        .unwrap_or(identity_mate(att.child_mate))
+        .get_mate(att.spec.pair.child)
+        .unwrap_or(identity_mate(att.spec.pair.child))
       merge_rigid_into(bodies, mates, kinematic_out, att, p_mate, c_mate)
     }
     _ => kinematic_out.push(att)
@@ -190,31 +208,23 @@ fn attach_kinematic(
   ctx : CompileCtx,
   link_name : String,
   att : Attachment,
-  p_mate : @urdf.MateConnector,
-  c_mate : @urdf.MateConnector,
+  p_mate : @step_common.MateConnector,
+  c_mate : @step_common.MateConnector,
 ) -> Unit {
-  let rebase_inv = @urdf.Transform::from_origin(c_mate.origin).inverse()
+  let rebase_inv = transform_of_placement(c_mate.placement).inverse()
+  let rebase_shared = placement_of_transform(rebase_inv)
   let child_bodies : Array[BodyPart] = att.child.bodies.map(fn(b) {
     b.transform_by(rebase_inv)
   })
-  let child_mates : Map[String, @urdf.MateConnector] = Map([])
+  let child_mates : Map[String, @step_common.MateConnector] = Map([])
   for mate_name, mate in att.child.mates {
-    child_mates.set(
-      mate_name,
-      @urdf.MateConnector::new(
-        mate.name,
-        origin=rebase_inv
-          .compose(@urdf.Transform::from_origin(mate.origin))
-          .to_origin(),
-        axis=rebase_inv.apply_dir(mate.axis),
-      ),
-    )
+    child_mates.set(mate_name, mate.transformed(rebase_shared))
   }
-  let c_mate_at_origin = @urdf.MateConnector::new(
+  let c_mate_at_origin = @step_common.MateConnector::new(
     c_mate.name,
-    origin=@urdf.Origin::identity(),
-    axis=rebase_inv.apply_dir(c_mate.axis),
+    axis=@step_common.normalize_dir(rebase_inv.apply_dir(c_mate.axis)),
   )
+  let pair = att.spec.pair
   let mut joint = @urdf.Joint::from_mates(
     att.joint_name,
     joint_type_of(att.spec.kind),
@@ -222,9 +232,9 @@ fn attach_kinematic(
     parent_mate=p_mate,
     child_link=att.child.name,
     child_mate=c_mate_at_origin,
-    offset=att.spec.offset_mm / 1000.0,
-    angle_rad=att.spec.angle_deg * @math.PI / 180.0,
-    flip_axis=att.spec.flip_axis,
+    offset=pair.offset_mm / 1000.0,
+    angle_rad=pair.twist_deg * @math.PI / 180.0,
+    flip_axis=pair.flip_axis,
     limit=limit_of(att.spec.kind),
     dynamics=att.spec.dynamics,
   )
@@ -261,7 +271,7 @@ fn compile_link(
   ctx : CompileCtx,
   link_name : String,
   bodies : Array[BodyPart],
-  mates : Map[String, @urdf.MateConnector],
+  mates : Map[String, @step_common.MateConnector],
   attachments : Array[Attachment],
 ) -> Unit {
   let kinematic_atts : Array[Attachment] = []
@@ -272,11 +282,11 @@ fn compile_link(
   ctx.links.push({ name: link_name, bodies, urdf_link, })
   for att in kinematic_atts {
     let p_mate = mates
-      .get(att.parent_mate)
-      .unwrap_or(identity_mate(att.parent_mate))
+      .get(att.spec.pair.parent)
+      .unwrap_or(identity_mate(att.spec.pair.parent))
     let c_mate = att.child
-      .get_mate(att.child_mate)
-      .unwrap_or(identity_mate(att.child_mate))
+      .get_mate(att.spec.pair.child)
+      .unwrap_or(identity_mate(att.spec.pair.child))
     attach_kinematic(ctx, link_name, att, p_mate, c_mate)
   }
 }
@@ -296,7 +306,7 @@ pub fn Component::compile_links(
   for body in self.bodies {
     bodies.push(body)
   }
-  let mates : Map[String, @urdf.MateConnector] = Map([])
+  let mates : Map[String, @step_common.MateConnector] = Map([])
   for mate_name, mate in self.mates {
     mates.set(mate_name, mate)
   }

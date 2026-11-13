@@ -51,7 +51,7 @@ test "component parameters are recorded" {
 test "joint spec constructors" {
   let merge = @cad.JointSpec::merge_rigid(offset_mm=2.0)
   assert_true(merge.kind is @cad.MergeRigid)
-  assert_true(merge.offset_mm == 2.0)
+  assert_true(merge.pair.offset_mm == 2.0)
   assert_true(@cad.JointSpec::fixed().kind is @cad.Fixed)
   let limit = @urdf.JointLimit::new(effort=1.0, velocity=1.0)
   let rev = @cad.JointSpec::revolute(limit)

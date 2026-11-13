@@ -646,11 +646,11 @@ fn Component::collect_assembly_steps(
         notes="mate " +
           self.name +
           "/" +
-          att.parent_mate +
+          att.spec.pair.parent +
           " -> " +
           att.child.name +
           "/" +
-          att.child_mate,
+          att.spec.pair.child,
       ),
     )
   }

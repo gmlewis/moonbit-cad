@@ -95,9 +95,7 @@ pub fn AssemblyStep::to_line(Self) -> String
 
 pub(all) struct Attachment {
   joint_name : String
-  parent_mate : String
   child : Component
-  child_mate : String
   spec : JointSpec
   bom_external : Bool
 }
@@ -174,7 +172,7 @@ pub(all) struct Component {
   description : String
   parameters : Map[String, String]
   bodies : Array[BodyPart]
-  mates : Map[String, @urdf.MateConnector]
+  mates : Map[String, @common.MateConnector]
   attachments : Array[Attachment]
   robot_name : String?
   part : PartMeta?
@@ -194,7 +192,7 @@ pub fn Component::add_cable_route(Self, CableRoute) -> Self
 pub fn Component::add_control_binding(Self, ControlBinding) -> Self
 pub fn Component::add_fastener(Self, Fastener) -> Self
 pub fn Component::add_fit(Self, Fit) -> Self
-pub fn Component::add_mate(Self, @urdf.MateConnector) -> Self
+pub fn Component::add_mate(Self, @common.MateConnector) -> Self
 pub fn Component::add_mate_mm_deg(Self, String, x? : Double, y? : Double, z? : Double, rx_deg? : Double, ry_deg? : Double, rz_deg? : Double, axis? : (Double, Double, Double)) -> Self
 pub fn Component::add_port(Self, Port) -> Self
 pub fn Component::add_wire_run(Self, WireRun) -> Self
@@ -219,7 +217,7 @@ pub fn Component::fastener_table_csv(Self) -> String
 pub fn Component::firmware_header(Self) -> String
 pub fn Component::format_documentation(Self) -> String
 pub fn Component::from_step_component(String, @common.Component, density? : @urdf.Density, part? : PartMeta?, x_mm? : Double, y_mm? : Double, z_mm? : Double, rx_deg? : Double, ry_deg? : Double, rz_deg? : Double) -> Self
-pub fn Component::get_mate(Self, String) -> @urdf.MateConnector?
+pub fn Component::get_mate(Self, String) -> @common.MateConnector?
 pub fn Component::harness_checks(Self) -> Array[String]
 pub fn Component::link_design(Self, String) -> @gmlewis/step/cad.Design?
 pub fn Component::link_parts_csv(Self) -> String
@@ -318,9 +316,7 @@ pub(all) enum FitClass {
 #derive(Eq, @debug.Debug)
 pub(all) struct JointSpec {
   kind : ConnectionKind
-  offset_mm : Double
-  angle_deg : Double
-  flip_axis : Bool
+  pair : @common.MatePair
   dynamics : @urdf.JointDynamics?
   mimic : @urdf.JointMimic?
   transmission_reduction : Double?
