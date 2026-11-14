@@ -780,6 +780,36 @@ fn Component::collect_assembly_checks(
   }
   self.collect_electronics_checks(path, warnings)
   for att in self.attachments {
+    // Validate an explicitly paired mate when both connectors resolve. Generic
+    // default `origin` mates are universal and pass trivially.
+    match
+      (
+        self.mates.get(att.spec.pair.parent),
+        att.child.mates.get(att.spec.pair.child),
+      ) {
+      (Some(parent_mate), Some(child_mate)) =>
+        match
+          @step_common.MatePair::validate(
+            att.spec.pair,
+            parent_mate,
+            child_mate,
+          ) {
+          Ok(_) => ()
+          Err(error) =>
+            warnings.push(
+              path +
+              ": joint '" +
+              att.joint_name +
+              "' mate '" +
+              att.spec.pair.parent +
+              "' -> '" +
+              att.spec.pair.child +
+              "': " +
+              error.message(),
+            )
+        }
+      _ => ()
+    }
     // An internal attachment belongs to this purchased/assembled item; an
     // external one is a separate item even when the parent has a part.
     let child_covered = if att.bom_external { false } else { self_covered }

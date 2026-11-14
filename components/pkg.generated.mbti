@@ -38,6 +38,8 @@ pub fn caster_fork_assembly(name? : String, wheel_diam_mm? : Double, wheel_width
 
 pub fn compression_spring_part(name? : String, wire_diam_mm? : Double, mean_diam_mm? : Double, free_length_mm? : Double, active_coils? : Int32, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
 
+pub fn counterbored_plate_part(name? : String, width_mm? : Double, height_mm? : Double, thickness_mm? : Double, holes? : Array[@stock.CounterboredHole], detail? : @common.DetailLevel) -> @gmlewis/cad.Component
+
 pub fn cylindrical_spacer(name? : String, outer_diam_mm? : Double, bore_diam_mm? : Double, length_mm? : Double, detail? : @common.DetailLevel, density? : @urdf.Density) -> @gmlewis/cad.Component
 
 pub fn deep_groove_bearing_part(name? : String, designation? : String, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
@@ -90,7 +92,7 @@ pub fn nema_motor_by_designation(name? : String, designation? : String, body_len
 
 pub fn nema_mount_plate_part(name? : String, designation? : String, width_mm? : Double, height_mm? : Double, thickness_mm? : Double, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
 
-pub fn nema_stepper(name? : String, frame_size_mm? : Double, body_length_mm? : Double, boss_diam_mm? : Double, boss_height_mm? : Double, shaft_diam_mm? : Double, shaft_length_mm? : Double, max_effort_nm? : Double, max_vel_rad_s? : Double, detail? : @common.DetailLevel, threads? : @common.ThreadRepresentation) -> @gmlewis/cad.Component
+pub fn nema_stepper(name? : String, frame_size_mm? : Double, body_length_mm? : Double, boss_diam_mm? : Double, boss_height_mm? : Double, shaft_diam_mm? : Double, shaft_length_mm? : Double, max_effort_nm? : Double, max_vel_rad_s? : Double, detail? : @common.DetailLevel, threads? : @common.ThreadRepresentation, designation? : String, mount_plate? : Bool) -> @gmlewis/cad.Component
 
 pub fn parallel_gripper(name? : String, opening_mm? : Double, travel_mm? : Double, finger_len_mm? : Double, finger_width_mm? : Double, finger_thick_mm? : Double, base_thick_mm? : Double, finger_overlap_mm? : Double, effort_n? : Double, velocity_mps? : Double, detail? : @common.DetailLevel, threads? : @common.ThreadRepresentation, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/cad.Component
 
@@ -110,7 +112,7 @@ pub fn planetary_reduction(Int32, Int32, Int32) -> Double
 
 pub fn planetary_wheel_drive_unit(name? : String, preset? : String, stages? : Int32, module_mm? : Double, sun_teeth? : Int32, planet_teeth? : Int32, planet_count? : Int32, gear_length_mm? : Double, gear_type? : String, wheel_diam_mm? : Double, wheel_width_mm? : Double, detail? : @common.DetailLevel, threads? : @common.ThreadRepresentation) -> @gmlewis/cad.Component
 
-pub fn quadruped_leg_assembly(String, is_left~ : Bool, hip_offset_y_mm? : Double, thigh_length_mm? : Double, calf_length_mm? : Double, wheel_diam_mm? : Double, detail? : @common.DetailLevel, threads? : @common.ThreadRepresentation) -> @gmlewis/cad.Component
+pub fn quadruped_leg_assembly(String, is_left~ : Bool, hip_offset_y_mm? : Double, thigh_length_mm? : Double, calf_length_mm? : Double, wheel_diam_mm? : Double, max_effort_nm? : Double, max_vel_rad_s? : Double, wheeled? : Bool, detail? : @common.DetailLevel, threads? : @common.ThreadRepresentation) -> @gmlewis/cad.Component
 
 pub fn rigid_coupling_part(name? : String, outer_diam_mm? : Double, bore_diam_mm? : Double, length_mm? : Double) -> @gmlewis/cad.Component
 
@@ -120,7 +122,7 @@ pub fn sensor_mount_bracket(name? : String, width_mm? : Double, height_mm? : Dou
 
 pub fn shaft_collar(name? : String, bore_diam_mm? : Double, outer_diam_mm? : Double, width_mm? : Double, style? : String, thread_size? : @standards.MetricSize, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
 
-pub fn shaft_coupler(name? : String, outer_diam_mm? : Double, bore_in_mm? : Double, bore_out_mm? : Double, length_mm? : Double, detail? : @common.DetailLevel, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/cad.Component
+pub fn shaft_coupler(name? : String, outer_diam_mm? : Double, bore_in_mm? : Double, bore_out_mm? : Double, length_mm? : Double, detail? : @common.DetailLevel, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb, style? : String) -> @gmlewis/cad.Component
 
 pub fn sleeve_bushing(name? : String, bore_diam_mm? : Double, outer_diam_mm? : Double, length_mm? : Double, flange_outer_mm? : Double, flange_thickness_mm? : Double, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
 

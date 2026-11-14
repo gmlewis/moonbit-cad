@@ -527,12 +527,36 @@ pub fn shaft_coupler(
   name~ : String = "coupler",
   outer_diam_mm~ : Double = 19.0,
   bore_in_mm~ : Double = 5.0,
-  bore_out_mm~ : Double = 8.0,
+  bore_out_mm~ : Double = 5.0,
   length_mm~ : Double = 25.0,
   detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
   density~ : @urdf.Density = @urdf.Density::aluminum_6061(),
   color~ : @step_cad.Rgb = @step_cad.Rgb::cyan(),
+  style~ : String = "auto",
 ) -> @cad.Component {
+  // Equal bores use the Tier-1 rigid coupling. Stepped bores keep the
+  // two-bore composite that the lead-screw gripper needs.
+  if style != "stepped" && (style == "rigid" || bore_in_mm == bore_out_mm) {
+    let bore = if style == "rigid" && bore_in_mm != bore_out_mm {
+      if bore_in_mm > bore_out_mm {
+        bore_in_mm
+      } else {
+        bore_out_mm
+      }
+    } else {
+      bore_in_mm
+    }
+    return rigid_coupling_part(
+        name~,
+        outer_diam_mm~,
+        bore_diam_mm=bore,
+        length_mm~,
+      )
+      .with_param("outer_diam_mm", outer_diam_mm.to_string())
+      .with_param("bore_in_mm", bore_in_mm.to_string())
+      .with_param("bore_out_mm", bore_out_mm.to_string())
+      .with_param("length_mm", length_mm.to_string())
+  }
   let segments = @step_common.DetailPolicy::for_level(detail).circle_segments
   let half = length_mm / 2.0
   let part = purchased_part(
@@ -1364,6 +1388,45 @@ pub fn deep_groove_bearing_part(
   .with_param("bore_mm", size.bore_mm.to_string())
   .with_param("outer_mm", size.outer_mm.to_string())
   .with_param("width_mm", size.width_mm.to_string())
+}
+
+///|
+/// A plate with counterbored through-holes.
+pub fn counterbored_plate_part(
+  name~ : String = "counterbored_plate",
+  width_mm~ : Double = 60.0,
+  height_mm~ : Double = 40.0,
+  thickness_mm~ : Double = 6.0,
+  holes~ : Array[@step_stock.CounterboredHole] = [],
+  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
+) -> @cad.Component {
+  let _ = detail
+  let step_comp = expect_step(
+    "counterbored plate",
+    @step_stock.plate_with_counterbores(
+      width_mm,
+      height_mm,
+      thickness_mm,
+      holes~,
+    ),
+  )
+  let part = fabricated_part(
+    "CBORE-PLATE-\{width_mm}x\{height_mm}x\{thickness_mm}",
+    "Counterbored plate \{width_mm} x \{height_mm} x \{thickness_mm}",
+    "6061-T6",
+    "3D print / CNC",
+    9.0,
+  )
+  fabricated_from_step(
+    name,
+    step_comp,
+    "Counterbored plate",
+    part,
+    ["top", "bottom"],
+    density=@urdf.Density::aluminum_6061(),
+  )
+  .add_mate_mm_deg("top", z=thickness_mm)
+  .add_mate_mm_deg("bottom")
 }
 
 ///|

@@ -257,7 +257,7 @@ fn pgb_carrier_component(
       @cad.BodyPart::tube_mm(
         name + "_plate",
         plate_radius * 2.0,
-        20.0,
+        36.0,
         thickness,
         z_mm=thickness / 2.0,
         density=@urdf.Density::petg(),
@@ -283,7 +283,7 @@ fn pgb_carrier_component(
     @cad.BodyPart::tube_mm(
       name + "_output_boss",
       plate_radius * 0.55 * 2.0,
-      20.0,
+      36.0,
       pgb_output_boss_mm,
       z_mm=thickness + pgb_output_boss_mm / 2.0,
       density=@urdf.Density::petg(),

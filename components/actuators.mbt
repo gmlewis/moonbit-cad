@@ -21,7 +21,37 @@ pub fn nema_stepper(
   max_vel_rad_s~ : Double = 30.0,
   detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
   threads? : @step_common.ThreadRepresentation,
+  designation~ : String = "",
+  mount_plate~ : Bool = false,
 ) -> @cad.Component {
+  // Modern delegation path: use the Tier-1 NEMA motor envelope when a
+  // designation is supplied. The custom frame-size path below is kept for
+  // odd envelopes and for callers that predate `@step_motors`.
+  if designation != "" {
+    let mut comp = nema_motor_by_designation(
+      name~,
+      designation~,
+      body_length_mm~,
+      detail~,
+    )
+    if mount_plate {
+      comp = comp.attach(
+        "mount_plate_merge",
+        parent_mate="face_mount",
+        nema_mount_plate_part(
+          name=name + "_mount_plate",
+          designation~,
+          width_mm=frame_size_mm * 1.6,
+          height_mm=frame_size_mm * 1.6,
+          thickness_mm=5.0,
+          detail~,
+        ),
+        child_mate="origin",
+        spec=@cad.JointSpec::merge_rigid(),
+      )
+    }
+    return comp
+  }
   let stator_name = name + "_stator"
   let rotor_name = name + "_rotor"
   let policy = @step_common.DetailPolicy::for_level(detail)
@@ -649,7 +679,7 @@ pub fn low_kv_bldc_motor(
     .add_body(
       @cad.BodyPart::cylinder_mm(
         stator_name + "_endbell",
-        p.diameter_mm,
+        p.diameter_mm * 0.88,
         endbell_thickness,
         z_mm=-endbell_thickness / 2.0,
         density=@urdf.Density::aluminum_6061(),
@@ -687,9 +717,10 @@ pub fn low_kv_bldc_motor(
     .add_port(@cad.Port::new("ground", @cad.PortKind::Ground, spec="0 V"))
   // Rear sensor/encoder boss and mounting bolt circle.
   stator = stator.add_body(
-    @cad.BodyPart::cylinder_mm(
+    @cad.BodyPart::tube_mm(
       stator_name + "_sensor_boss",
       12.0,
+      10.0,
       4.0,
       z_mm=-p.body_length_mm - 2.0,
       density=@urdf.Density::aluminum_6061(),
@@ -770,9 +801,9 @@ pub fn low_kv_bldc_motor(
           rotor_name + "_bell",
           p.diameter_mm,
           p.diameter_mm - 2.0 * bell_wall,
-          p.body_length_mm - 4.0,
+          p.body_length_mm - 8.0,
           segments=policy.circle_segments,
-          z_mm=-p.body_length_mm / 2.0,
+          z_mm=-p.body_length_mm / 2.0 - 2.0,
           density=@urdf.Density::aluminum_6061(),
           color=@step_cad.Rgb::black(),
         ).with_part(rotor_part),
@@ -888,7 +919,9 @@ pub fn planetary_bldc_actuator(
   let _ = threads
   let p = resolve_bldc_preset(preset)
   let stage_count = if stages < 1 { 1 } else { stages }
-  let smooth = gear_type == "spur"
+  // Simplified actuators use exact line/arc gears for fast simulation meshes;
+  // herringbone sweeps are reserved for detailed and fully modeled builds.
+  let smooth = gear_type == "spur" || !detail_is_rich(detail)
   let motor = low_kv_bldc_motor(name=name + "_motor", preset~, detail~)
   let rotor_joint = name + "_motor_rotor_joint"
   let motor_plate_mm = 6.0
@@ -961,7 +994,11 @@ pub fn planetary_bldc_actuator(
         color=@step_cad.Rgb::black(),
       ).with_part(housing_part),
     )
-    .add_mate_mm_deg("motor_mount", z=-motor_plate_mm, axis=(0.0, 0.0, -1.0))
+    .add_mate_mm_deg(
+      "motor_mount",
+      z=-motor_plate_mm - 4.0,
+      axis=(0.0, 0.0, -1.0),
+    )
     .add_mate_mm_deg("gearbox_mount")
     .add_mate_mm_deg("output_face", z=gear_length_mm * stage_count.to_double())
     .add_mate_mm_deg(
@@ -1035,7 +1072,7 @@ pub fn planetary_bldc_actuator(
     parent_mate="gearbox_mount",
     first,
     child_mate="origin",
-    spec=@cad.JointSpec::merge_rigid(offset_mm=1.0),
+    spec=@cad.JointSpec::merge_rigid(offset_mm=motor_plate_mm + 1.0),
   )
   set_joint_mimic(
     housing,
@@ -1043,6 +1080,7 @@ pub fn planetary_bldc_actuator(
     @urdf.JointMimic::new(rotor_joint, multiplier=1.0),
   )
   let mut output_joint = name + "_stage1_carrier_joint"
+  let mut output_carrier = name + "_stage1_carrier"
   let per_stage = 1.0 +
     (sun_teeth.to_double() + 2.0 * planet_teeth.to_double()) /
     sun_teeth.to_double()
@@ -1071,7 +1109,12 @@ pub fn planetary_bldc_actuator(
     housing = housing
       .add_mate_mm_deg(
         "stage2_mount",
-        z=gear_length_mm + pgb_carrier_thickness_mm + pgb_output_boss_mm + 4.0,
+        z=motor_plate_mm +
+          1.0 +
+          gear_length_mm +
+          pgb_carrier_thickness_mm +
+          pgb_output_boss_mm +
+          4.0,
       )
       .attach(
         "stage2_mount_merge",
@@ -1086,6 +1129,7 @@ pub fn planetary_bldc_actuator(
       @urdf.JointMimic::new(output_joint, multiplier=1.0),
     )
     output_joint = name + "_stage2_carrier_joint"
+    output_carrier = name + "_stage2_carrier"
   }
   let reduction = if stage_count >= 2 {
     per_stage * per_stage
@@ -1094,7 +1138,47 @@ pub fn planetary_bldc_actuator(
   }
   let efficiency = if stage_count >= 2 { 0.80 } else { 0.90 }
   let output_torque = bldc_rated_torque(p) * reduction * efficiency
+  if detail_is_rich(detail) {
+    // A rear magnetic encoder reads the rotor magnet.
+    let encoder = magnetic_encoder(name=name + "_encoder", detail~)
+    housing = housing.attach(
+      "encoder_merge",
+      parent_mate="rear",
+      encoder,
+      child_mate="mount",
+      spec=@cad.JointSpec::merge_rigid(offset_mm=-(motor_plate_mm + 14.0)),
+    )
+    // A set-screw collar retains the output carrier's shaft.
+    let collar = shaft_collar(
+      name=name + "_output_collar",
+      bore_diam_mm=p.shaft_diameter_mm,
+      outer_diam_mm=p.shaft_diameter_mm * 2.0,
+      width_mm=8.0,
+      style="set_screw",
+      detail~,
+    )
+    housing = housing.attach_to(
+      output_carrier,
+      "output_collar_merge",
+      parent_mate="output_shaft",
+      collar,
+      child_mate="bore",
+      spec=@cad.JointSpec::merge_rigid(),
+    )
+  }
+  let geared_spec = @cad.ActuatorSpec::new(
+    @cad.ActuatorKind::Bldc,
+    model="Planetary BLDC " + p.name,
+    voltage_v=p.voltage_v,
+    current_rated_a=p.current_rated_a,
+    current_stall_a=p.current_peak_a,
+    torque_rated_nm=output_torque,
+    driver="VESC / SimpleFOC",
+    interface="CAN",
+    encoder="AS5600",
+  )
   housing
+  .with_actuator(geared_spec)
   .with_param("reduction", reduction.to_string())
   .with_param("output_torque_nm", output_torque.to_string())
   .add_control_binding(

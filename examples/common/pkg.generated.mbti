@@ -38,6 +38,8 @@ pub(all) struct OutputPaths {
   threads : String
   check : Bool
   collisions : Bool
+  validate : Bool
+  validate_meshes : Bool
 }
 pub fn OutputPaths::detail_level(Self) -> @gmlewis/step/components/common.DetailLevel
 pub fn OutputPaths::thread_rep(Self) -> @gmlewis/step/components/common.ThreadRepresentation?

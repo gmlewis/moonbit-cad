@@ -119,6 +119,30 @@ tree, so a load can be snapped onto a motor's nested rotor link.
 - **`components/kicad`** — KiCad `.pos` CSV import: board envelope with mounting
   holes, connector placements, and ports.
 
+## Low-KV BLDC and planetary actuators
+
+The component package now builds realistic, inexpensive robotic actuators from
+the Tier-1 STEP primitives:
+
+- `bldc_preset` / `bldc_preset_names` — `5010_360kv`, `5008_335kv`,
+  `5208_180kv`, `5065_270kv`, and `6354_190kv` outrunners with KV, pole pairs,
+  voltage/current, shaft, bearing, mass, and price data.
+- `bldc_torque_constant` / `bldc_rated_torque` — `Kt = 8.27 / KV` N·m/A and the
+  rated motor torque.
+- `low_kv_bldc_motor` — stator with endbell, stack, mounting flange, sensor
+  boss, bearings and heat-set inserts; out-runner bell, flux ring, shaft, and
+  sensor magnet on a continuous `<name>_rotor_joint`.
+- `planetary_bldc_actuator` — a low-KV motor driving a Tier-1 herringbone or
+  exact-arc planetary stage (or two compounded stages), with a printed housing,
+  rear motor plate, output bearings, encoder, output collar, mimic-linked gears,
+  and a geared output torque in its `ActuatorSpec`.
+- `planetary_wheel_drive_unit` — a heavy `6354_190kv` two-stage wheel drive for
+  the wheelchair, and `caster_fork_assembly` for its front casters.
+
+Examples 02, 05, and 06 use these modules. Example 02 also accepts
+`--motor nema`; example 05 accepts `--foot` for a rubber-foot quadruped; example
+06 accepts `--layout scooter` for the lighter single-fork vehicle.
+
 ## Showcase examples
 
 Each example is a MoonBit executable under `examples/`. Run one by number or
@@ -300,6 +324,8 @@ Validation and rendering helpers live in `scripts/` (they run from a clone of
 this repository alone; only the external tools named below are required):
 
 ```bash
+./run-example.sh 05 --validate                                  # STEP + URDF checks
+./run-example.sh 05 --bundle build/05 --validate --validate-meshes  # + meshes
 python3 scripts/validate_step.py --no-mesh model.step
 python3 scripts/validate_urdf.py --check-meshes model.urdf
 python3 scripts/check_interferences.py --parts-dir posed/       # exact OCCT link interference

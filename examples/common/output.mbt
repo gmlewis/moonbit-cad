@@ -28,6 +28,8 @@ pub(all) struct OutputPaths {
   threads : String
   check : Bool
   collisions : Bool
+  validate : Bool
+  validate_meshes : Bool
 }
 
 ///|
@@ -136,6 +138,18 @@ pub fn with_output_args(spec : Map[String, @cli.Arg]) -> Map[String, @cli.Arg] {
     "collisions",
     @cli.flag(help="Analyze placed parts for unintended overlaps"),
   )
+  spec.set(
+    "validate",
+    @cli.flag(
+      help="Run scripts/validate_step.py --no-mesh and validate_urdf.py on the generated STEP and URDF",
+    ),
+  )
+  spec.set(
+    "validate-meshes",
+    @cli.flag(
+      help="With --validate, also check the URDF bundle meshes (requires --bundle)",
+    ),
+  )
   spec
 }
 
@@ -164,6 +178,8 @@ pub fn output_paths(args : @cli.Args) -> OutputPaths {
     threads: args.string_opt("threads").unwrap_or(""),
     check: args.flag("check"),
     collisions: args.flag("collisions"),
+    validate: args.flag("validate"),
+    validate_meshes: args.flag("validate-meshes"),
   }
 }
 
@@ -221,7 +237,9 @@ fn any_output(output : OutputPaths) -> Bool {
   output.build_package is Some(_) ||
   output.print_parts is Some(_) ||
   output.posed_parts is Some(_) ||
-  output.collisions
+  output.collisions ||
+  output.validate ||
+  output.validate_meshes
 }
 
 ///|
@@ -468,5 +486,87 @@ pub async fn write_output(
       comp.to_urdf_bundle().write_to_dir(dir + "/bundle", checked=true)
     }
     None => ()
+  }
+  if output.validate || output.validate_meshes {
+    let tag = comp.name.replace(old=" ", new="-")
+    let mut temp_step = false
+    let step_path = match output.step {
+      Some(path) =>
+        if path == "-" {
+          @cli.eprintln(
+            "error: --validate cannot check a STEP stream on stdout",
+          )
+          abort("")
+        } else {
+          path
+        }
+      None => {
+        temp_step = true
+        "/tmp/" + tag + ".validate.step"
+      }
+    }
+    if temp_step {
+      design.write_step_file(Some(step_path))
+    }
+    @cli.eprintln(
+      "validate: scripts/validate_step.py " + step_path + " --no-mesh",
+    )
+    let step_code = @process.run("python3", [
+      "scripts/validate_step.py", step_path, "--no-mesh",
+    ])
+    if step_code != 0 {
+      if temp_step {
+        @fs.remove(step_path, allow_missing=true)
+      }
+      @cli.eprintln("error: STEP validation failed")
+      abort("")
+    }
+    let mut temp_urdf = false
+    let urdf_path = if output.validate_meshes {
+      match output.bundle {
+        Some(dir) => dir + "/urdf/" + robot.name + ".urdf"
+        None => {
+          @cli.eprintln(
+            "error: --validate-meshes needs --bundle <dir> so the meshes exist",
+          )
+          abort("")
+        }
+      }
+    } else {
+      match output.urdf {
+        Some(path) =>
+          if path == "-" {
+            @cli.eprintln(
+              "error: --validate cannot check a URDF stream on stdout",
+            )
+            abort("")
+          } else {
+            path
+          }
+        None => {
+          temp_urdf = true
+          "/tmp/" + tag + ".validate.urdf"
+        }
+      }
+    }
+    if temp_urdf {
+      robot.write_urdf(Some(urdf_path), checked=true)
+    }
+    let urdf_args : Array[String] = ["scripts/validate_urdf.py", urdf_path]
+    if output.validate_meshes {
+      urdf_args.push("--check-meshes")
+    }
+    @cli.eprintln("validate: python3 " + urdf_args.join(" "))
+    let urdf_code = @process.run("python3", urdf_args)
+    if temp_step {
+      @fs.remove(step_path, allow_missing=true)
+    }
+    if temp_urdf {
+      @fs.remove(urdf_path, allow_missing=true)
+    }
+    if urdf_code != 0 {
+      @cli.eprintln("error: URDF validation failed")
+      abort("")
+    }
   }
 }

@@ -69,7 +69,7 @@ async fn main {
   // Two-stage 12/18/48 planetary drive: 25:1.
   let reduction = @components.planetary_reduction(12, 18, 2)
   let stage_length = 14.0
-  let drive_length = stage_length * 2.0 + 74.0
+  let drive_length = stage_length * 2.0 + 92.0
   let mut chassis = @cad.Component::new(
       "chassis_link",
       description="Motorized wheelchair chassis",
@@ -86,8 +86,8 @@ async fn main {
   // Structural lower frame: two 2040 V-slot side rails and 2020 cross rails.
   for
     rail in [
-      ("left_rail", track_width * 0.22),
-      ("right_rail", -track_width * 0.22),
+      ("left_rail", track_width * 0.20),
+      ("right_rail", -track_width * 0.20),
     ] {
     chassis = chassis
       .add_mate_mm_deg("\{rail.0}_mount", y=rail.1, z=frame_z, ry_deg=90.0)
@@ -103,6 +103,18 @@ async fn main {
         child_mate="start",
         spec=@cad.JointSpec::merge_rigid(offset_mm=-wheelbase / 2.0),
       )
+    chassis = chassis.attach(
+      "\{rail.0}_tnut_merge",
+      parent_mate="\{rail.0}_mount",
+      @components.extrusion_tnut_part(
+        name=rail.0 + "_tnut",
+        thread="M5",
+        slot_width_mm=6.0,
+        detail~,
+      ),
+      child_mate="origin",
+      spec=@cad.JointSpec::merge_rigid(),
+    )
   }
   for
     cross in [
@@ -122,20 +134,20 @@ async fn main {
         @components.vslot_extrusion_strut(
           name=cross.0,
           profile=@step_profiles.VSlotProfile::vslot_2020(),
-          length_mm=track_width * 0.45,
+          length_mm=track_width * 0.42,
           detail~,
         ),
         child_mate="start",
-        spec=@cad.JointSpec::merge_rigid(offset_mm=-track_width * 0.225),
+        spec=@cad.JointSpec::merge_rigid(offset_mm=-track_width * 0.21),
       )
   }
   // Corner brackets and joining plates tie the frame together.
   for
     corner in [
-      ("frame_fl", wheelbase * 0.45, track_width * 0.22),
-      ("frame_fr", wheelbase * 0.45, -track_width * 0.22),
-      ("frame_rl", -wheelbase * 0.45, track_width * 0.22),
-      ("frame_rr", -wheelbase * 0.45, -track_width * 0.22),
+      ("frame_fl", wheelbase * 0.45, track_width * 0.20),
+      ("frame_fr", wheelbase * 0.45, -track_width * 0.20),
+      ("frame_rl", -wheelbase * 0.45, track_width * 0.20),
+      ("frame_rr", -wheelbase * 0.45, -track_width * 0.20),
     ] {
     let (corner_name, cx, cy) = corner
     chassis = chassis
@@ -151,6 +163,18 @@ async fn main {
         child_mate="mount_a",
         spec=@cad.JointSpec::merge_rigid(),
       )
+    chassis = chassis.attach(
+      "\{corner_name}_joining_merge",
+      parent_mate="\{corner_name}_mount",
+      @components.vslot_joining_plate_part(
+        name=corner_name + "_joining",
+        length_mm=40.0,
+        width_mm=20.0,
+        thickness_mm=4.0,
+      ),
+      child_mate="bottom",
+      spec=@cad.JointSpec::merge_rigid(),
+    )
   }
   // Printable deck, battery bay, seat pan, backrest, and armrests.
   chassis = chassis.add_body(
@@ -243,7 +267,7 @@ async fn main {
       @cad.Port::new("estop", @cad.PortKind::Signal, spec="NC to ground"),
     )
   // Differential rear planetary drives.
-  for drive in [("left_drive", 1.0), ("right_drive", -1.0)] {
+  for drive in [("left", 1.0), ("right", -1.0)] {
     let (drive_name, side) = drive
     let mount_y = if side > 0.0 {
       half_track - drive_length
@@ -397,7 +421,7 @@ async fn main {
       "left_drive_can",
       from_component="chassis_link",
       from_port="can",
-      to_component="left_drive_drive",
+      to_component="left_drive",
       to_port="can",
       gauge_awg=24,
       length_mm=900.0,
@@ -408,7 +432,7 @@ async fn main {
       "right_drive_can",
       from_component="chassis_link",
       from_port="can",
-      to_component="right_drive_drive",
+      to_component="right_drive",
       to_port="can",
       gauge_awg=24,
       length_mm=900.0,
@@ -427,7 +451,7 @@ async fn main {
       material="PVC",
       from_component="chassis_link",
       from_port="can",
-      to_component="left_drive_drive",
+      to_component="left_drive",
       to_port="can",
     ),
   )
@@ -482,8 +506,8 @@ async fn main {
   }
   let _ = chassis.add_control_binding(
     @cad.ControlBinding::new(
-      "left_drive_wheel_joint",
-      actuator="left_drive_drive",
+      "left_wheel_joint",
+      actuator="left_drive",
       channel="can0:1",
       gear_ratio=reduction,
       soft_lower=Some(-1000.0),
@@ -492,8 +516,8 @@ async fn main {
   )
   let _ = chassis.add_control_binding(
     @cad.ControlBinding::new(
-      "right_drive_wheel_joint",
-      actuator="right_drive_drive",
+      "right_wheel_joint",
+      actuator="right_drive",
       channel="can0:2",
       gear_ratio=reduction,
       soft_lower=Some(-1000.0),
@@ -501,8 +525,8 @@ async fn main {
     ),
   )
   let positions : Map[String, Double] = Map([])
-  positions.set("left_drive_wheel_joint", args.double("leftWheelDeg") * deg)
-  positions.set("right_drive_wheel_joint", args.double("rightWheelDeg") * deg)
+  positions.set("left_wheel_joint", args.double("leftWheelDeg") * deg)
+  positions.set("right_wheel_joint", args.double("rightWheelDeg") * deg)
   if layout == "scooter" {
     positions.set("steering_joint", args.double("steerDeg") * deg)
   } else {

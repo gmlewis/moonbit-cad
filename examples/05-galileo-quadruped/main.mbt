@@ -97,6 +97,7 @@ async fn main {
     "hipPitchDeg": @cli.opt_double(25.0, help="Hip pitch angle"),
     "kneePitchDeg": @cli.opt_double(-50.0, help="Knee pitch angle"),
     "wheelSpinDeg": @cli.opt_double(0.0, help="Wheel spin angle"),
+    "foot": @cli.flag(help="Build rubber feet instead of driven wheels"),
   }
   let spec = @common.with_output_args(base_spec)
   guard @cli.parse(
@@ -116,6 +117,11 @@ async fn main {
   let thigh_len = args.double("thighLength")
   let calf_len = args.double("calfLength")
   let wheel_diam = args.double("wheelDiam")
+  let wheeled = !args.flag("foot")
+  let pod = @components.bldc_preset("5010_360kv").unwrap()
+  let leg_reduction = @components.planetary_reduction(12, 12, 1)
+  let leg_effort = @components.bldc_rated_torque(pod) * leg_reduction * 0.9
+  let leg_velocity = 30.0 / leg_reduction
   let half_len = body_len / 2.0
   let half_width = body_width / 2.0
   let mut base = @cad.Component::new("base_link", description="Galileo chassis")
@@ -220,6 +226,18 @@ async fn main {
       child_mate="start",
       spec=@cad.JointSpec::merge_rigid(offset_mm=-rail_length / 2.0),
     )
+    base = base.attach(
+      "\{rail_name}_tnut_merge",
+      parent_mate="\{rail_name}_mount",
+      @components.extrusion_tnut_part(
+        name=rail_name + "_tnut",
+        thread="M5",
+        slot_width_mm=6.0,
+        detail~,
+      ),
+      child_mate="origin",
+      spec=@cad.JointSpec::merge_rigid(),
+    )
   }
   // V-slot corner brackets tie the rails together.
   for corner in corners_for_brackets(half_len, half_width, body_height) {
@@ -306,6 +324,61 @@ async fn main {
     child_mate="mount",
     spec=@cad.JointSpec::merge_rigid(),
   )
+  // Heat-set inserts in the printable bulkheads.
+  for bulkhead in [("front", half_len), ("rear", -half_len)] {
+    for i in 0..<4 {
+      let theta = 2.0 * @math.PI * i.to_double() / 4.0
+      let insert = @components.heat_set_insert(
+        name="\{bulkhead.0}_insert_\{i}",
+        outer_diam_mm=4.5,
+        inner_diam_mm=3.0,
+        length_mm=6.0,
+      )
+      base = base.add_mate_mm_deg(
+        "\{bulkhead.0}_insert_mount_\{i}",
+        x=bulkhead.1,
+        y=body_width * 0.3 * @math.cos(theta),
+        z=body_height * 0.3 * @math.sin(theta),
+      )
+      base = base.attach(
+        "\{bulkhead.0}_insert_merge_\{i}",
+        parent_mate="\{bulkhead.0}_insert_mount_\{i}",
+        insert,
+        child_mate="seat",
+        spec=@cad.JointSpec::merge_rigid(),
+      )
+    }
+  }
+  // A counterbored camera mounting plate.
+  base = base.attach(
+    "camera_plate_merge",
+    parent_mate="camera_mount",
+    @components.counterbored_plate_part(
+      name="camera_plate",
+      width_mm=70.0,
+      height_mm=50.0,
+      thickness_mm=5.0,
+      holes=[
+        {
+          x_mm: 22.0,
+          y_mm: 14.0,
+          through_diameter_mm: 3.2,
+          counterbore_diameter_mm: 6.0,
+          counterbore_depth_mm: 3.0,
+        },
+        {
+          x_mm: -22.0,
+          y_mm: 14.0,
+          through_diameter_mm: 3.2,
+          counterbore_diameter_mm: 6.0,
+          counterbore_depth_mm: 3.0,
+        },
+      ],
+      detail~,
+    ),
+    child_mate="bottom",
+    spec=@cad.JointSpec::merge_rigid(),
+  )
   // Four legs.
   let corners : Array[(String, Double, Double, Bool)] = [
     ("fl", half_len, half_width, true),
@@ -327,6 +400,9 @@ async fn main {
       thigh_length_mm=thigh_len,
       calf_length_mm=calf_len,
       wheel_diam_mm=wheel_diam,
+      max_effort_nm=leg_effort,
+      max_vel_rad_s=leg_velocity,
+      wheeled~,
       detail~,
       threads?,
     )
@@ -339,10 +415,10 @@ async fn main {
         @urdf.JointLimit::new(
           lower=Some(-0.8),
           upper=Some(0.8),
-          effort=45.0,
-          velocity=21.0,
+          effort=leg_effort,
+          velocity=leg_velocity,
         ),
-        transmission_reduction=Some(6.0),
+        transmission_reduction=Some(leg_reduction),
       ),
     )
   }
@@ -397,8 +473,9 @@ async fn main {
     "_hip_link", "_thigh_link", "_calf_link", "_wheel_link",
   ]
   let mut channel = 1
+  let dof = if wheeled { 4 } else { 3 }
   for prefix in ["fl", "fr", "rl", "rr"] {
-    for i in 0..<4 {
+    for i in 0..<dof {
       let _ = base.add_control_binding(
         @cad.ControlBinding::new(
           "\{prefix}_\{joint_names[i]}",
@@ -418,7 +495,9 @@ async fn main {
     positions.set("\{prefix}_hip_joint", args.double("hipAbductionDeg") * deg)
     positions.set("\{prefix}_thigh_joint", args.double("hipPitchDeg") * deg)
     positions.set("\{prefix}_calf_joint", args.double("kneePitchDeg") * deg)
-    positions.set("\{prefix}_wheel_joint", args.double("wheelSpinDeg") * deg)
+    if wheeled {
+      positions.set("\{prefix}_wheel_joint", args.double("wheelSpinDeg") * deg)
+    }
   }
   @common.write_output(base, output, joint_positions=positions)
 }

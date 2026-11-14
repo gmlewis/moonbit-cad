@@ -313,6 +313,9 @@ pub fn quadruped_leg_assembly(
   thigh_length_mm~ : Double = 210.0,
   calf_length_mm~ : Double = 210.0,
   wheel_diam_mm~ : Double = 140.0,
+  max_effort_nm~ : Double = 45.0,
+  max_vel_rad_s~ : Double = 21.0,
+  wheeled~ : Bool = true,
   detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
   threads? : @step_common.ThreadRepresentation,
 ) -> @cad.Component {
@@ -501,16 +504,55 @@ pub fn quadruped_leg_assembly(
     hub_bolt_circle_mm=20.0,
     detail~,
   )
+  let foot_part = fabricated_part(
+    "FOOT-\{wheel_diam_mm}",
+    "Rubber foot pad",
+    "TPU",
+    "3D print",
+    4.0,
+  )
+  let foot = @cad.Component::new(
+      prefix + "_foot_link",
+      description="Rubber foot link",
+    )
+    .add_body(
+      @cad.BodyPart::cylinder_mm(
+        prefix + "_foot",
+        wheel_diam_mm * 0.42,
+        40.0,
+        z_mm=-calf_length_mm - 20.0,
+        density=@urdf.Density::tpu(),
+        color=@step_cad.Rgb::black(),
+      ).with_part(foot_part),
+    )
+    .add_mate_mm_deg("mount")
+  let (distal, distal_joint_name, distal_child, distal_spec, distal_offset) = if wheeled {
+    (
+      wheel,
+      "\{prefix}_wheel_joint",
+      "axle",
+      @cad.JointSpec::continuous(
+        limit=Some(
+          @urdf.JointLimit::new(
+            effort=max_effort_nm * 0.45,
+            velocity=max_vel_rad_s * 1.6,
+          ),
+        ),
+        offset_mm=calf_to_wheel_mm,
+        transmission_reduction=Some(1.0),
+      ),
+      calf_to_wheel_mm,
+    )
+  } else {
+    (foot, "\{prefix}_ankle_joint", "mount", @cad.JointSpec::fixed(), 0.0)
+  }
+  let _ = distal_offset
   let calf_with_wheel = calf.attach(
-    "\{prefix}_wheel_joint",
+    distal_joint_name,
     parent_mate="distal_joint",
-    wheel,
-    child_mate="axle",
-    spec=@cad.JointSpec::continuous(
-      limit=Some(@urdf.JointLimit::new(effort=20.0, velocity=35.0)),
-      offset_mm=calf_to_wheel_mm,
-      transmission_reduction=Some(1.0),
-    ),
+    distal,
+    child_mate=distal_child,
+    spec=distal_spec,
   )
   let thigh_with_calf = thigh.attach(
     "\{prefix}_calf_joint",
@@ -521,8 +563,8 @@ pub fn quadruped_leg_assembly(
       @urdf.JointLimit::new(
         lower=Some(-2.7),
         upper=Some(-0.5),
-        effort=55.0,
-        velocity=18.0,
+        effort=max_effort_nm * 1.2,
+        velocity=max_vel_rad_s * 0.85,
       ),
       offset_mm=thigh_to_calf_mm,
       transmission_reduction=Some(6.0),
@@ -538,8 +580,8 @@ pub fn quadruped_leg_assembly(
       @urdf.JointLimit::new(
         lower=Some(-1.57),
         upper=Some(3.14),
-        effort=45.0,
-        velocity=21.0,
+        effort=max_effort_nm,
+        velocity=max_vel_rad_s,
       ),
       offset_mm=hip_to_thigh_mm,
       transmission_reduction=Some(6.0),
@@ -957,7 +999,7 @@ pub fn planetary_wheel_drive_unit(
     detail~,
   )
   let wheel_center_z = gear_length_mm * stages.to_double() +
-    (if stages >= 2 { 74.0 } else { 50.0 })
+    (if stages >= 2 { 92.0 } else { 68.0 })
   let output = actuator
     .add_mate_mm_deg(
       "axle_output",

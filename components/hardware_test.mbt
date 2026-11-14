@@ -220,3 +220,121 @@ test "detailed hardware wrappers are printable and glTF safe" {
   assert_true(gltf.contains("\"2.0\""))
   assert_true(bearing.to_step_file().contains("ISO-10303-21;"))
 }
+
+///|
+/// Converts a Tier-1 STEP component and checks STEP + glTF validity.
+fn check_step_and_gltf(
+  name : String,
+  step_comp : @step_common.Component,
+) -> Unit raise {
+  let comp = @cad.Component::from_step_component(name, step_comp)
+  assert_true(comp.to_step_file().contains("ISO-10303-21;"))
+  let gltf = @cad.gltf_safe_design(comp.to_design()).to_gltf()
+  assert_true(gltf.contains("\"2.0\""))
+}
+
+///|
+test "Tier-1 primitives export STEP and glTF at every detail level" {
+  let size = @step_motion.bearing_size("608").unwrap()
+  let frame = @step_motors.nema_frame("NEMA17").unwrap()
+  let levels : Array[@step_common.DetailLevel] = [
+    @step_common.DetailLevel::Simplified,
+    @step_common.DetailLevel::Detailed,
+    @step_common.DetailLevel::FullyModeled,
+  ]
+  for level in levels {
+    check_step_and_gltf(
+      "deep-groove",
+      @step_motion.deep_groove_bearing(size, detail=level).unwrap(),
+    )
+    check_step_and_gltf(
+      "shielded",
+      @step_motion.shielded_bearing(size, detail=level).unwrap(),
+    )
+    check_step_and_gltf(
+      "nema",
+      @step_motors.nema_stepper_motor(frame, 40.0, detail=level).unwrap(),
+    )
+    check_step_and_gltf(
+      "vslot",
+      @step_profiles.vslot_extrusion(
+        @step_profiles.VSlotProfile::vslot_2020(),
+        200.0,
+        detail=level,
+      ).unwrap(),
+    )
+    check_step_and_gltf(
+      "tnut",
+      @step_fasteners.extrusion_tnut(
+        @step_fasteners.extrusion_tnut_spec("M5").unwrap(),
+        detail=level,
+      ).unwrap(),
+    )
+    check_step_and_gltf(
+      "counterbores",
+      @step_stock.plate_with_counterbores(60.0, 40.0, 6.0, holes=[
+        {
+          x_mm: 15.0,
+          y_mm: 10.0,
+          through_diameter_mm: 4.2,
+          counterbore_diameter_mm: 8.0,
+          counterbore_depth_mm: 3.0,
+        },
+        {
+          x_mm: -15.0,
+          y_mm: 10.0,
+          through_diameter_mm: 4.2,
+          counterbore_diameter_mm: 8.0,
+          counterbore_depth_mm: 3.0,
+        },
+      ]).unwrap(),
+    )
+    check_step_and_gltf(
+      "insert",
+      @step_fasteners.heat_set_insert_m3("short").unwrap(),
+    )
+  }
+}
+
+///|
+test "swept gear STEP keeps B-spline surfaces while glTF proxies them" {
+  let params = @step_planetary.HerringbonePlanetaryParams::new(
+    module_mm=1.5,
+    gear_length_mm=8.0,
+    num_elbows=4,
+    sun_teeth=12,
+    planet_teeth=12,
+    planet_count=3,
+  ).unwrap()
+  let gearbox = @step_planetary.herringbone_planetary_gearbox(params).unwrap()
+  let sun = @cad.Component::from_step_layer("sun", gearbox, "sun")
+  let step = sun.to_step_file()
+  assert_true(step.contains("B_SPLINE"))
+  let mut saw_swept = false
+  for node in sun.to_design().nodes {
+    if node.shape is @step_cad.Shape::SweptProfile(_) {
+      saw_swept = true
+      assert_true(@cad.gltf_safe_node(node).shape is @step_cad.Shape::Cuboid(_))
+    }
+  }
+  assert_true(saw_swept)
+}
+
+///|
+test "planetary gearbox is a valid robot in both smooth and swept modes" {
+  for smooth in [true, false] {
+    let gearbox = @components.planetary_gearbox(
+      smooth~,
+      detail=@step_common.DetailLevel::Detailed,
+    )
+    let robot = gearbox.to_robot()
+    if robot.has_errors() {
+      let mut msg = "gearbox diagnostics:"
+      for diagnostic in robot.diagnostics() {
+        msg = msg + "\n  " + diagnostic.message()
+      }
+      fail(msg)
+    }
+    assert_true(gearbox.total_mass_kg() > 0.0)
+  }
+}
