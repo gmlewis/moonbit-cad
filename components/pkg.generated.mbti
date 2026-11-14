@@ -44,6 +44,8 @@ pub fn deep_groove_bearing_part(name? : String, designation? : String, detail? :
 
 pub fn din976_stud(name? : String, size? : @standards.MetricSize, length_mm? : Double, detail? : @common.DetailLevel, threads? : @common.ThreadRepresentation) -> @gmlewis/cad.Component
 
+pub fn encoder_magnet(name? : String, diameter_mm? : Double, thickness_mm? : Double, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/cad.Component
+
 pub fn extrusion_tnut_part(name? : String, thread? : String, slot_width_mm? : Double, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
 
 pub fn flange_plate(name? : String, outer_diam_mm? : Double, center_bore_mm? : Double, thickness_mm? : Double, bolt_count? : Int32, bolt_circle_mm? : Double, bolt_diam_mm? : Double, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/cad.Component
@@ -86,6 +88,10 @@ pub fn low_kv_bldc_motor(name? : String, preset? : String, detail? : @common.Det
 
 pub fn magnetic_encoder(name? : String, disc_diam_mm? : Double, board_len_mm? : Double, voltage_v? : Double, current_ma? : Double) -> @gmlewis/cad.Component
 
+pub fn moteus_position_sensor(name? : String, board_len_mm? : Double, board_w_mm? : Double, thickness_mm? : Double, mounting_hole_diam_mm? : Double, hole_inset_mm? : Double, chip_size_mm? : Double, chip_height_mm? : Double, voltage_v? : Double, current_ma? : Double, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
+
+pub fn nema_frame_dims(String) -> (Double, Double, Double, Double)
+
 pub fn nema_mount_plate_part(name? : String, designation? : String, width_mm? : Double, height_mm? : Double, thickness_mm? : Double, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
 
 pub fn nema_stepper(name? : String, frame_size_mm? : Double, body_length_mm? : Double, boss_diam_mm? : Double, boss_height_mm? : Double, shaft_diam_mm? : Double, shaft_length_mm? : Double, max_effort_nm? : Double, max_vel_rad_s? : Double, detail? : @common.DetailLevel, threads? : @common.ThreadRepresentation, designation? : String, mount_plate? : Bool) -> @gmlewis/cad.Component
@@ -102,7 +108,7 @@ pub fn planetary_bldc_actuator(name? : String, preset? : String, stages? : Int32
 
 pub fn planetary_gearbox(name? : String, params? : PlanetaryGearboxParams, smooth? : Bool, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
 
-pub fn planetary_gearset_stage(name? : String, module_mm? : Double, sun_teeth? : Int32, planet_teeth? : Int32, planet_count? : Int32, face_width_mm? : Double, pressure_angle_deg? : Double, sun_bore_mm? : Double, smooth? : Bool, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
+pub fn planetary_gearset_stage(name? : String, module_mm? : Double, sun_teeth? : Int32, planet_teeth? : Int32, planet_count? : Int32, face_width_mm? : Double, pressure_angle_deg? : Double, sun_bore_mm? : Double, planet_bore_mm? : Double, carrier_pin_diam_mm? : Double, carrier_bearing? : String, output_shaft_length_mm? : Double, smooth? : Bool, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
 
 pub fn planetary_reduction(Int32, Int32, Int32) -> Double
 
@@ -129,6 +135,8 @@ pub fn spur_gear_part(name? : String, module_mm? : Double, teeth? : Int32, face_
 pub fn stepped_shaft_part(name? : String, segments? : Array[(Double, Double)], fillet_radius_mm? : Double) -> @gmlewis/cad.Component
 
 pub fn stock_plate_part(name? : String, width_mm? : Double, height_mm? : Double, thickness_mm? : Double, holes? : Array[@stock.PlateHole], detail? : @common.DetailLevel) -> @gmlewis/cad.Component
+
+pub fn sun_clamp_hub(String, Double, Double, Double, @common.DetailLevel) -> @gmlewis/cad.Component
 
 pub fn suspension_fork_module(name? : String, fork_span_mm? : Double, fork_length_mm? : Double, wheel_diam_mm? : Double, detail? : @common.DetailLevel, density? : @urdf.Density) -> @gmlewis/cad.Component
 
@@ -189,6 +197,12 @@ pub(all) struct PlanetaryGearboxParams {
   num_elbows : Int32
   resolution : Int32
   bore_radius_mm : Double
+  planet_bore_radius_mm : Double
+  carrier_pin_diam_mm : Double
+  carrier_bearing_designation : String
+  output_shaft_diam_mm : Double
+  carrier_thickness_mm : Double
+  output_shaft_length_mm : Double
   tolerance_mm : Double
   outer_thickness_mm : Double
   include_carrier : Bool

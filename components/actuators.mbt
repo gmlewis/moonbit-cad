@@ -27,6 +27,7 @@ pub fn nema_stepper(
   designation~ : String = "",
   mount_plate~ : Bool = false,
 ) -> @cad.Component {
+  let _ = threads
   let frame = if designation != "" {
     expect_step("NEMA frame", @step_motors.nema_frame(designation))
   } else {
@@ -131,23 +132,6 @@ pub fn nema_stepper(
     .add_mate_mm_deg("base", z=-shaft_length_mm / 2.0)
     .add_mate_mm_deg("shaft_tip", z=shaft_length_mm / 2.0)
   }
-  if detail_is_rich(detail) {
-    for i in 0..<4 {
-      stator = stator.attach(
-        "mount_screw_\{i}",
-        parent_mate="mount_hole_\{i}",
-        iso_shcs_screw(
-          name="mount_screw_\{i}",
-          size=@step_standards.M3,
-          length_mm=8.0,
-          detail~,
-          threads?,
-        ),
-        child_mate="head_seat",
-        spec=@cad.JointSpec::merge_rigid(),
-      )
-    }
-  }
   if mount_plate {
     let plate = if designation != "" {
       nema_mount_plate_part(
@@ -186,6 +170,27 @@ pub fn nema_stepper(
     interface="STEP/DIR",
     encoder="none",
   )
+  let m4_mount = frame.mounting_hole_diameter_mm > 3.5
+  let mount_thread = if m4_mount { "M4" } else { "M3" }
+  let mount_length = if m4_mount { 12.0 } else { 10.0 }
+  let mount_part = purchased_part(
+    if m4_mount {
+      "ISO4762-M4x12"
+    } else {
+      "ISO4762-M3x10"
+    },
+    if m4_mount {
+      "ISO 4762 socket head cap screw M4 x 12 mm"
+    } else {
+      "ISO 4762 socket head cap screw M3 x 10 mm"
+    },
+    "steel",
+    if m4_mount {
+      0.50
+    } else {
+      0.35
+    },
+  )
   stator
   .with_actuator(spec)
   .add_port(@cad.Port::new("power", @cad.PortKind::Power, spec="24 V, 1.5 A"))
@@ -208,7 +213,37 @@ pub fn nema_stepper(
     ),
     bom_external=false,
   )
+  .add_fastener(
+    @cad.Fastener::new(
+      "motor_mount_screws",
+      @cad.FastenerKind::Screw,
+      thread=mount_thread,
+      length_mm=mount_length,
+      engagement_mm=4.0,
+      quantity=4,
+      torque_nm=if m4_mount { 2.0 } else { 0.8 },
+      references=[stator_name],
+      part=Some(mount_part),
+    ),
+  )
   .with_part(part)
+}
+
+///|
+/// shaft_diameter_mm)` for a NEMA frame designation.
+pub fn nema_frame_dims(
+  designation : String,
+) -> (Double, Double, Double, Double) {
+  match @step_motors.nema_frame(designation) {
+    Ok(frame) =>
+      (
+        frame.pilot_diameter_mm,
+        frame.bolt_spacing_mm,
+        frame.mounting_hole_diameter_mm,
+        frame.shaft_diameter_mm,
+      )
+    Err(_) => abort("unknown NEMA frame '\{designation}'")
+  }
 }
 
 ///|
@@ -522,7 +557,7 @@ pub fn bldc_preset(name : String) -> BldcPreset? {
         cost_usd: 16.0,
         bolt_circle_mm: 19.0,
         mount_hole_mm: 3.2,
-        bearing_designation: "608",
+        bearing_designation: "624",
       })
     "5008_335kv" =>
       Some({
@@ -540,7 +575,7 @@ pub fn bldc_preset(name : String) -> BldcPreset? {
         cost_usd: 18.0,
         bolt_circle_mm: 19.0,
         mount_hole_mm: 3.2,
-        bearing_designation: "608",
+        bearing_designation: "624",
       })
     "5208_180kv" =>
       Some({
@@ -558,7 +593,7 @@ pub fn bldc_preset(name : String) -> BldcPreset? {
         cost_usd: 22.0,
         bolt_circle_mm: 25.0,
         mount_hole_mm: 3.2,
-        bearing_designation: "6000",
+        bearing_designation: "626",
       })
     "5065_270kv" =>
       Some({
@@ -576,7 +611,7 @@ pub fn bldc_preset(name : String) -> BldcPreset? {
         cost_usd: 32.0,
         bolt_circle_mm: 25.0,
         mount_hole_mm: 3.2,
-        bearing_designation: "6001",
+        bearing_designation: "688",
       })
     "6354_190kv" =>
       Some({
@@ -594,7 +629,7 @@ pub fn bldc_preset(name : String) -> BldcPreset? {
         cost_usd: 38.0,
         bolt_circle_mm: 30.0,
         mount_hole_mm: 4.2,
-        bearing_designation: "6002",
+        bearing_designation: "6000",
       })
     _ => None
   }
@@ -729,36 +764,41 @@ pub fn low_kv_bldc_motor(
     )
   }
   if detail_is_rich(detail) {
-    for i in 0..<2 {
-      let bearing = ball_bearing(
-        name="\{stator_name}_bearing_\{i}",
-        designation=p.bearing_designation,
-        detail~,
-        density=@urdf.Density::steel_mild(),
-      )
-      stator = stator.attach(
-        "bearing_merge_\{i}",
+    // Front and rear bearings share the rotor shaft. The preset's bearing bore
+    // matches the shaft diameter.
+    stator = stator.add_mate_mm_deg(
+      "rear_bearing_seat",
+      z=-p.body_length_mm + 4.0,
+    )
+    let front_bearing = ball_bearing(
+      name="\{stator_name}_bearing_front",
+      designation=p.bearing_designation,
+      detail~,
+      density=@urdf.Density::steel_mild(),
+    )
+    let rear_bearing = ball_bearing(
+      name="\{stator_name}_bearing_rear",
+      designation=p.bearing_designation,
+      detail~,
+      density=@urdf.Density::steel_mild(),
+    )
+    stator = stator
+      .attach(
+        "bearing_front_merge",
         parent_mate="front_face",
-        bearing,
+        front_bearing,
         child_mate="origin",
         spec=@cad.JointSpec::merge_rigid(),
+        bom_external=false,
       )
-    }
-    for i in 0..<4 {
-      let insert = heat_set_insert(
-        name="\{stator_name}_insert_\{i}",
-        outer_diam_mm=4.5,
-        inner_diam_mm=3.0,
-        length_mm=6.0,
-      )
-      stator = stator.attach(
-        "insert_merge_\{i}",
-        parent_mate="mount_hole_\{i}",
-        insert,
-        child_mate="seat",
+      .attach(
+        "bearing_rear_merge",
+        parent_mate="rear_bearing_seat",
+        rear_bearing,
+        child_mate="origin",
         spec=@cad.JointSpec::merge_rigid(),
+        bom_external=false,
       )
-    }
   }
   let rotor_part = purchased_part(
     "BLDC-ROTOR-\{p.name}",
@@ -776,8 +816,8 @@ pub fn low_kv_bldc_motor(
       @cad.BodyPart::cylinder_mm(
         rotor_name + "_shaft",
         p.shaft_diameter_mm,
-        p.shaft_length_mm,
-        z_mm=p.shaft_length_mm / 2.0,
+        p.body_length_mm + p.shaft_length_mm,
+        z_mm=(p.shaft_length_mm - p.body_length_mm) / 2.0,
         density=@urdf.Density::steel_mild(),
         color=@step_cad.Rgb::grey(),
       ).with_part(rotor_part),
@@ -881,15 +921,129 @@ pub fn planetary_reduction(
 }
 
 ///|
+/// Builds a circular plate body with arbitrary bolt holes.
+///
+/// `holes` are `(x_mm, y_mm, diameter_mm)` in the plate's local frame.
+fn actuator_plate_body(
+  name : String,
+  outer_diam_mm : Double,
+  thickness_mm : Double,
+  z0_mm : Double,
+  holes : Array[(Double, Double, Double)],
+  density : @urdf.Density,
+  color : @step_cad.Rgb,
+  detail : @step_common.DetailLevel,
+) -> @cad.BodyPart {
+  let _ = detail
+  // Exact quarter-arc loops: the rim and every bolt hole are true cylindrical
+  // surfaces, not a 64-sided polygon.
+  let outer = @step_gears.arc_circle_segments(outer_diam_mm)
+  let hole_profiles : Array[Array[@step_cad.ProfileSegment]] = []
+  for hole in holes {
+    hole_profiles.push(
+      arc_segments_at(@step_gears.arc_circle_segments(hole.2), hole.0, hole.1),
+    )
+  }
+  arc_profile_body(
+    name, outer, thickness_mm, hole_profiles, density, color, z0_mm,
+  )
+}
+
+///|
+/// The outer diameter of a catalogue bearing, falling back to 20 mm.
+fn actuator_bearing_outer(designation : String) -> Double {
+  match @step_motion.bearing_size(designation) {
+    Ok(size) => size.outer_mm
+    Err(_) => 20.0
+  }
+}
+
+///|
+/// Builds a printed clamp hub that joins the sun gear to an input shaft.
+///
+/// The body extends `length_mm` below the `top` face, so attaching `top` to the
+/// sun gear's bottom face puts the hub on the input side. A radial M3 set
+/// screw locks the hub onto a D-flatted shaft; the screw is on the side, below
+/// the sun teeth, and is tightened before the output cover goes on.
+pub fn sun_clamp_hub(
+  name : String,
+  bore_diam_mm : Double,
+  outer_diam_mm : Double,
+  length_mm : Double,
+  detail : @step_common.DetailLevel,
+) -> @cad.Component {
+  let part = fabricated_part(
+    "ACT-SUN-HUB", "Printed sun clamp hub; drill/tap the M3 radial set-screw hole and bond or press the flange to the sun gear",
+    "carbon fiber nylon", "3D print", 4.0,
+  )
+  let screw_part = purchased_part(
+    "SET-M3x4", "M3 x 4 socket set screw", "steel", 0.15,
+  )
+  let comp = @cad.Component::new(name, description="Sun clamp hub")
+    .with_param("bore_diam_mm", bore_diam_mm.to_string())
+    .with_param("outer_diam_mm", outer_diam_mm.to_string())
+    .with_param("length_mm", length_mm.to_string())
+    .add_body(
+      @cad.BodyPart::tube_mm(
+        name + "_body",
+        outer_diam_mm,
+        bore_diam_mm,
+        length_mm,
+        z_mm=-length_mm / 2.0,
+        density=@urdf.Density::carbon_fiber(),
+        color=@step_cad.Rgb::orange(),
+      ).with_part(part),
+    )
+    .add_body(
+      @cad.BodyPart::cylinder_mm(
+        name + "_set_screw",
+        3.0,
+        4.0,
+        x_mm=outer_diam_mm / 2.0 - 2.0,
+        z_mm=-length_mm / 2.0,
+        ry_deg=90.0,
+        density=@urdf.Density::steel_mild(),
+        color=@step_cad.Rgb::grey(),
+      ).with_part(screw_part),
+    )
+    .add_mate_mm_deg("top")
+    .add_mate_mm_deg("bottom", z=-length_mm)
+    .with_part(part)
+    .add_fastener(
+      @cad.Fastener::new(
+        "sun_hub_set_screw",
+        @cad.FastenerKind::Screw,
+        thread="M3",
+        length_mm=4.0,
+        engagement_mm=2.0,
+        quantity=1,
+        torque_nm=0.6,
+        references=[name + "_body"],
+        part=Some(screw_part),
+      ),
+    )
+    .add_fit(
+      @cad.Fit::new(
+        "shaft_bore",
+        @cad.FitClass::Clearance,
+        nominal_mm=bore_diam_mm,
+        min_mm=bore_diam_mm,
+        max_mm=bore_diam_mm + 0.15,
+      ),
+    )
+  let _ = detail
+  comp
+}
+
+///|
 /// Builds an integrated planetary BLDC actuator: an inexpensive low-KV BLDC
 /// outrunner driving a printed Tier-1 planetary gearbox inside a printed
-/// housing with a rear motor plate, heat-set inserts, output bearings, and a
-/// bolted output carrier.
+/// housing with a rear motor plate, a clamped sun input, planet bearings, a
+/// two-bearing output cartridge, and an on-axis absolute output encoder.
 ///
 /// `stages = 1` gives a ~5:1–9:1 reduction; `stages = 2` compounds it to
-/// ~16:1–25:1 for a motorized wheelchair drive. The motor rotor is the
-/// command input and the gearbox sun mimics it, so one continuous joint drives
-/// the whole train.
+/// ~16:1–25:1. The motor rotor is the command input and the sun mimics it, so
+/// one continuous joint drives the whole train.
 pub fn planetary_bldc_actuator(
   name~ : String = "bldc_actuator",
   preset~ : String = "5010_360kv",
@@ -903,14 +1057,66 @@ pub fn planetary_bldc_actuator(
   detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
 ) -> @cad.Component {
   let p = resolve_bldc_preset(preset)
-  let stage_count = if stages < 1 { 1 } else { stages }
+  let stage_count = if stages < 1 { 1 } else if stages > 2 { 2 } else { stages }
   // Simplified actuators use exact line/arc gears for fast simulation meshes;
   // herringbone sweeps are reserved for detailed and fully modeled builds.
   let smooth = gear_type == "spur" || !detail_is_rich(detail)
   let motor = low_kv_bldc_motor(name=name + "_motor", preset~, detail~)
   let rotor_joint = name + "_motor_rotor_joint"
   let motor_plate_mm = 6.0
-  let housing_wall = 4.0
+  // A 6 mm wall leaves more than 1 mm of printed material around the M3
+  // cover screws at the bolt circle.
+  let housing_wall = 6.0
+  let stage_gap = 4.0
+  let carrier_thickness = 8.0
+  let gear_outer_thickness = 6.0
+  let center_delta = 0.2
+  // Printed gears need a little more backlash than machined ones. The Tier-1
+  // generator applies twice this value as a centre-distance allowance.
+  let tolerance = 0.2
+  let pa_deg = 20.0
+  let deg = @math.PI / 180.0
+  let ring_outer = module_mm *
+    (sun_teeth.to_double() + 2.0 * planet_teeth.to_double()) /
+    2.0 +
+    module_mm +
+    center_delta +
+    tolerance / @math.sin(pa_deg * deg) +
+    gear_outer_thickness
+  let housing_outer = ring_outer + housing_wall
+  let housing_inner = ring_outer - 0.05
+  let bolt_circle = (ring_outer + housing_wall / 2.0) * 2.0
+  let stage_pitch = gear_length_mm + carrier_thickness + 8.0
+  let housing_top = stage_gap +
+    (stage_count - 1).to_double() * stage_pitch +
+    gear_length_mm +
+    carrier_thickness +
+    2.0
+  let housing_bottom = -motor_plate_mm
+  let housing_height = housing_top - housing_bottom
+  let cover_plate_mm = 8.0
+  let cover_tube_mm = 8.0
+  let cover_top = housing_top + cover_plate_mm + cover_tube_mm
+  let shaft_end = cover_top + 0.5
+  let sensor_mount_z = cover_top + 2.5
+  let final_carrier_top = housing_top - 2.0 + pgb_carrier_clearance_mm
+  let final_shaft_len = shaft_end - final_carrier_top
+  let stage1_shaft_len = if stage_count >= 2 {
+    stage_pitch - gear_length_mm - carrier_thickness - pgb_carrier_clearance_mm
+  } else {
+    final_shaft_len
+  }
+  let stage1_sun_bore = p.shaft_diameter_mm / 2.0 + 0.1
+  let coupling_shaft_diam = 8.0
+  let coupling_bore = coupling_shaft_diam / 2.0 + 0.1
+  // A 688 bearing (8 x 16 x 5) needs a planet root radius above about 9.5 mm
+  // so at least 1.5 mm of printed material remains around the bore. Smaller
+  // planet gears fall back to a plain 4 mm bore on a 3.8 mm pin.
+  let planet_root = module_mm * (planet_teeth.to_double() / 2.0 - 1.25)
+  let use_planet_bearing = planet_root > 9.5
+  let planet_bore_radius = if use_planet_bearing { 8.0 } else { 2.0 }
+  let planet_pin_diam = if use_planet_bearing { 8.0 } else { 3.8 }
+  let planet_bearing = if use_planet_bearing { "688" } else { "" }
   let first = pgb_build(
     name + "_stage1",
     {
@@ -923,37 +1129,78 @@ pub fn planetary_bldc_actuator(
       pressure_angle_deg: 20.0,
       num_elbows: 2,
       resolution: 5,
-      bore_radius_mm: p.shaft_diameter_mm / 2.0,
-      tolerance_mm: 0.1,
-      outer_thickness_mm: 6.0,
+      bore_radius_mm: stage1_sun_bore,
+      planet_bore_radius_mm: planet_bore_radius,
+      carrier_pin_diam_mm: planet_pin_diam,
+      carrier_bearing_designation: planet_bearing,
+      output_shaft_diam_mm: coupling_shaft_diam,
+      carrier_thickness_mm: carrier_thickness,
+      output_shaft_length_mm: stage1_shaft_len,
+      tolerance_mm: tolerance,
+      outer_thickness_mm: gear_outer_thickness,
       include_carrier: true,
     },
     smooth,
     detail,
     false,
   )
-  let ring_outer = module_mm *
-    (sun_teeth.to_double() + 2.0 * planet_teeth.to_double()) /
-    2.0 +
-    module_mm +
-    6.0
-  let bearing_outer = match @step_motion.bearing_size(p.bearing_designation) {
-    Ok(size) => size.outer_mm
-    Err(_) => p.shaft_diameter_mm * 3.0
-  }
-  let plate_bore = if p.shaft_diameter_mm * 1.8 > bearing_outer + 2.0 {
-    p.shaft_diameter_mm * 1.8
-  } else {
-    bearing_outer + 2.0
-  }
   let housing_part = fabricated_part(
-    "ACT-HOUSING", "Printed planetary actuator housing", "carbon fiber nylon", "3D print",
-    18.0,
+    "ACT-HOUSING", "Printed planetary actuator housing; press the ring gear into the interference seat and tap the M3 cover screws into the 6 mm wall",
+    "carbon fiber nylon", "3D print", 18.0,
   )
   let plate_part = fabricated_part(
-    "ACT-MOTOR-PLATE", "Rear motor mounting plate", "carbon fiber nylon", "3D print",
-    10.0,
+    "ACT-MOTOR-PLATE", "Rear motor plate with motor bolt pattern and shaft clearance; the motor's own front bearing runs in the bore",
+    "carbon fiber nylon", "3D print", 10.0,
   )
+  let cover_part = fabricated_part(
+    "ACT-OUTPUT-COVER", "Output bearing cover with AS5047P sensor mount; press the 608 bearings into the 22.2 mm seats",
+    "carbon fiber nylon", "3D print", 10.0,
+  )
+  let cover_boss_part = fabricated_part(
+    "ACT-COVER-BOSS", "Printed output cover bearing boss; press the second 608 bearing into this seat",
+    "carbon fiber nylon", "3D print", 4.0,
+  )
+  let pad_part = fabricated_part(
+    "ACT-CONTROLLER-PAD", "Printed controller mounting pad", "carbon fiber nylon",
+    "3D print", 3.0,
+  )
+  let motor_bolt_radius = p.bolt_circle_mm / 2.0
+  let plate_holes : Array[(Double, Double, Double)] = []
+  plate_holes.push((0.0, 0.0, actuator_bearing_outer("624") + 0.2))
+  for i in 0..<4 {
+    let theta = 2.0 * @math.PI * i.to_double() / 4.0
+    plate_holes.push(
+      (
+        motor_bolt_radius * @math.cos(theta),
+        motor_bolt_radius * @math.sin(theta),
+        p.mount_hole_mm,
+      ),
+    )
+  }
+  for i in 0..<4 {
+    let theta = 2.0 * @math.PI * i.to_double() / 4.0
+    plate_holes.push(
+      (
+        bolt_circle / 2.0 * @math.cos(theta),
+        bolt_circle / 2.0 * @math.sin(theta),
+        3.4,
+      ),
+    )
+  }
+  // Motor phase-wire pass-through, outside the motor bell.
+  plate_holes.push((p.diameter_mm * 0.5 + 5.0, 0.0, 6.0))
+  let cover_holes : Array[(Double, Double, Double)] = []
+  cover_holes.push((0.0, 0.0, actuator_bearing_outer("608") + 0.2))
+  for i in 0..<4 {
+    let theta = 2.0 * @math.PI * i.to_double() / 4.0
+    cover_holes.push(
+      (
+        bolt_circle / 2.0 * @math.cos(theta),
+        bolt_circle / 2.0 * @math.sin(theta),
+        3.4,
+      ),
+    )
+  }
   let mut housing = @cad.Component::new(
       name,
       description="Planetary BLDC actuator",
@@ -961,44 +1208,99 @@ pub fn planetary_bldc_actuator(
     .with_param("preset", p.name)
     .with_param("stages", stage_count.to_string())
     .with_param("module_mm", module_mm.to_string())
-    .with_param("reduction_per_stage", gear_type)
-    .add_body(
-      @cad.BodyPart::tube_mm(
-        name + "_motor_plate",
-        p.diameter_mm * 1.18,
-        plate_bore,
-        motor_plate_mm,
-        z_mm=-motor_plate_mm / 2.0,
-        density=@urdf.Density::carbon_fiber(),
-        color=@step_cad.Rgb::black(),
-      ).with_part(plate_part),
-    )
+    .with_param("gear_type", gear_type)
+    .with_param("planet_bearing", planet_bearing)
+    .with_param("planet_pin_diam_mm", planet_pin_diam.to_string())
+    .with_param("output_shaft_diam_mm", coupling_shaft_diam.to_string())
     .add_body(
       @cad.BodyPart::tube_mm(
         name + "_housing",
-        (ring_outer + housing_wall) * 2.0,
-        (ring_outer + 0.5) * 2.0,
-        gear_length_mm * stage_count.to_double() + 2.0 * motor_plate_mm,
-        z_mm=gear_length_mm * stage_count.to_double() / 2.0,
+        housing_outer * 2.0,
+        housing_inner * 2.0,
+        housing_height,
+        z_mm=(housing_bottom + housing_top) / 2.0,
         density=@urdf.Density::carbon_fiber(),
         color=@step_cad.Rgb::black(),
       ).with_part(housing_part),
     )
-    .add_mate_mm_deg(
-      "motor_mount",
-      z=-motor_plate_mm - 4.0,
-      axis=(0.0, 0.0, -1.0),
+    .add_body(
+      actuator_plate_body(
+        name + "_motor_plate",
+        housing_outer * 2.0,
+        motor_plate_mm,
+        -motor_plate_mm,
+        plate_holes,
+        @urdf.Density::carbon_fiber(),
+        @step_cad.Rgb::black(),
+        detail,
+      ).with_part(plate_part),
     )
-    .add_mate_mm_deg(
-      "encoder_mount",
-      z=-(motor_plate_mm + 4.0) - p.body_length_mm - 4.0,
-      axis=(0.0, 0.0, -1.0),
+    .add_body(
+      actuator_plate_body(
+        name + "_output_cover_plate",
+        housing_outer * 2.0,
+        cover_plate_mm,
+        housing_top,
+        cover_holes,
+        @urdf.Density::carbon_fiber(),
+        @step_cad.Rgb::black(),
+        detail,
+      ).with_part(cover_part),
     )
+    .add_body(
+      @cad.BodyPart::tube_mm(
+        name + "_output_cover_tube",
+        32.0,
+        22.2,
+        cover_tube_mm,
+        z_mm=housing_top + cover_plate_mm + cover_tube_mm / 2.0,
+        density=@urdf.Density::carbon_fiber(),
+        color=@step_cad.Rgb::black(),
+      ).with_part(cover_boss_part),
+    )
+    .add_body(
+      @cad.BodyPart::tube_mm(
+        name + "_output_bearing_spacer",
+        12.0,
+        8.2,
+        2.0,
+        z_mm=housing_top + 8.0,
+        density=@urdf.Density::steel_mild(),
+        color=@step_cad.Rgb::grey(),
+      ).with_part(
+        purchased_part(
+          "SPACER-12x8x2", "Steel bearing spacer 12 x 8 x 2 mm", "steel", 0.40,
+        ),
+      ),
+    )
+    .add_body(
+      // 3 mm thick along X, tangent to the housing side. The 42 x 30 face is
+      // the mounting face for the controller board and matches the housing
+      // height, so every board screw lands in the wall.
+      @cad.BodyPart::box_mm(
+        name + "_controller_pad",
+        3.0,
+        42.0,
+        30.0,
+        x_mm=housing_outer + 1.5,
+        z_mm=(housing_bottom + housing_top) / 2.0,
+        density=@urdf.Density::carbon_fiber(),
+        color=@step_cad.Rgb::black(),
+      ).with_part(pad_part),
+    )
+    .add_mate_mm_deg("motor_mount", z=-motor_plate_mm, axis=(0.0, 0.0, -1.0))
+    .add_mate_mm_deg("bearing_seat", z=-3.0)
     .add_mate_mm_deg("gearbox_mount")
-    .add_mate_mm_deg("output_face", z=gear_length_mm * stage_count.to_double())
+    .add_mate_mm_deg("output_face", z=housing_top)
+    .add_mate_mm_deg("output_flange", z=housing_top)
+    .add_mate_mm_deg("output_shaft", z=shaft_end)
+    .add_mate_mm_deg("sensor_mount", z=sensor_mount_z, axis=(0.0, 0.0, -1.0))
     .add_mate_mm_deg(
-      "output_flange",
-      z=gear_length_mm * stage_count.to_double(),
+      "controller_mount",
+      x=housing_outer + 3.0,
+      z=(housing_bottom + housing_top) / 2.0,
+      ry_deg=90.0,
+      axis=(1.0, 0.0, 0.0),
     )
     .add_port(
       @cad.Port::new(
@@ -1011,46 +1313,146 @@ pub fn planetary_bldc_actuator(
       ),
     )
     .add_port(@cad.Port::new("can", @cad.PortKind::Bus, spec="CAN 2.0B"))
+    .add_port(
+      @cad.Port::new(
+        "encoder",
+        @cad.PortKind::Sensor,
+        spec="AS5047P, SPI/ABZ, 14-bit",
+      ),
+    )
     .add_port(@cad.Port::new("ground", @cad.PortKind::Ground, spec="0 V"))
-  if detail_is_rich(detail) {
-    for i in 0..<4 {
-      let theta = 2.0 * @math.PI * i.to_double() / 4.0
-      let insert = heat_set_insert(
-        name="\{name}_insert_\{i}",
-        outer_diam_mm=4.5,
-        inner_diam_mm=3.0,
-        length_mm=6.0,
+    .add_fit(
+      @cad.Fit::new(
+        "ring_seat",
+        @cad.FitClass::Interference,
+        nominal_mm=ring_outer * 2.0,
+        min_mm=ring_outer * 2.0 - 0.1,
+        max_mm=ring_outer * 2.0,
+      ),
+    )
+    .add_fit(
+      @cad.Fit::new(
+        "output_bearing_seat",
+        @cad.FitClass::Transition,
+        nominal_mm=22.0,
+        min_mm=21.95,
+        max_mm=22.05,
+      ),
+    )
+  // Motor and cover bolt mates.
+  for i in 0..<4 {
+    let theta = 2.0 * @math.PI * i.to_double() / 4.0
+    housing = housing
+      .add_mate_mm_deg(
+        "motor_bolt_\{i}",
+        x=motor_bolt_radius * @math.cos(theta),
+        y=motor_bolt_radius * @math.sin(theta),
+        axis=(0.0, 0.0, -1.0),
       )
-      housing = housing
-        .add_mate_mm_deg(
-          "cover_hole_\{i}",
-          x=p.diameter_mm * 0.45 * @math.cos(theta),
-          y=p.diameter_mm * 0.45 * @math.sin(theta),
-          z=-motor_plate_mm,
-        )
-        .attach(
-          "insert_merge_\{i}",
-          parent_mate="cover_hole_\{i}",
-          insert,
-          child_mate="seat",
-          spec=@cad.JointSpec::merge_rigid(),
-        )
-    }
-    for i in 0..<2 {
-      let bearing = ball_bearing(
-        name="\{name}_output_bearing_\{i}",
-        designation="6002",
-        detail~,
-        density=@urdf.Density::steel_mild(),
+      .add_mate_mm_deg(
+        "housing_bolt_\{i}",
+        x=bolt_circle / 2.0 * @math.cos(theta),
+        y=bolt_circle / 2.0 * @math.sin(theta),
+        z=-motor_plate_mm,
+        rx_deg=180.0,
       )
-      housing = housing.attach(
-        "output_bearing_merge_\{i}",
-        parent_mate="output_face",
-        bearing,
-        child_mate="origin",
-        spec=@cad.JointSpec::merge_rigid(offset_mm=6.0),
+      .add_mate_mm_deg(
+        "cover_bolt_\{i}",
+        x=bolt_circle / 2.0 * @math.cos(theta),
+        y=bolt_circle / 2.0 * @math.sin(theta),
+        z=housing_top + cover_plate_mm,
       )
-    }
+  }
+  let sensor_bolt_x = 10.0
+  let sensor_bolt_y = 7.5
+  let sensor_bolts : Array[(Double, Double)] = [
+    (-sensor_bolt_x, -sensor_bolt_y),
+    (sensor_bolt_x, -sensor_bolt_y),
+    (sensor_bolt_x, sensor_bolt_y),
+    (-sensor_bolt_x, sensor_bolt_y),
+  ]
+  for i in 0..<sensor_bolts.length() {
+    housing = housing
+      .add_mate_mm_deg(
+        "sensor_bolt_\{i}",
+        x=sensor_bolts[i].0,
+        y=sensor_bolts[i].1,
+        z=sensor_mount_z,
+      )
+      .add_mate_mm_deg(
+        "sensor_standoff_\{i}",
+        x=sensor_bolts[i].0,
+        y=sensor_bolts[i].1,
+        z=cover_top,
+      )
+  }
+  // Output cartridge: two 608 bearings in the cover, separated by a spacer.
+  housing = housing
+    .add_mate_mm_deg("output_bearing_1", z=housing_top + 3.5)
+    .add_mate_mm_deg("output_bearing_2", z=housing_top + 12.5)
+  for i in 0..<2 {
+    let bearing = ball_bearing(
+      name="\{name}_output_bearing_\{i}",
+      designation="608",
+      detail~,
+      density=@urdf.Density::steel_mild(),
+    )
+    let mate_name = if i == 0 { "output_bearing_1" } else { "output_bearing_2" }
+    housing = housing.attach(
+      "output_bearing_merge_\{i}",
+      parent_mate=mate_name,
+      bearing,
+      child_mate="origin",
+      spec=@cad.JointSpec::merge_rigid(),
+    )
+  }
+  // The motor's own front bearing runs in the plate bore, so the actuator does
+  // not add a second bearing there. The motor mounting screws pass through the
+  // plate's real bolt holes into the purchased motor; they are a fastener
+  // schedule rather than solids through the motor's envelope.
+  let motor_screw_part = purchased_part(
+    "ISO4762-M3x12", "ISO 4762 socket head cap screw M3 x 12 mm", "steel", 0.35,
+  )
+  housing = housing.add_fastener(
+    @cad.Fastener::new(
+      "motor_mount_screws",
+      @cad.FastenerKind::Screw,
+      thread="M3",
+      length_mm=12.0,
+      engagement_mm=5.0,
+      quantity=4,
+      torque_nm=0.8,
+      references=[name + "_motor_plate"],
+      part=Some(motor_screw_part),
+    ),
+  )
+  // Rear plate to housing screws and output cover screws.
+  for i in 0..<4 {
+    housing = housing
+      .attach(
+        "housing_screw_merge_\{i}",
+        parent_mate="housing_bolt_\{i}",
+        iso_shcs_screw(
+          name="\{name}_housing_screw_\{i}",
+          size=@step_standards.M3,
+          length_mm=10.0,
+          detail~,
+        ),
+        child_mate="head_seat",
+        spec=@cad.JointSpec::merge_rigid(),
+      )
+      .attach(
+        "cover_screw_merge_\{i}",
+        parent_mate="cover_bolt_\{i}",
+        iso_shcs_screw(
+          name="\{name}_cover_screw_\{i}",
+          size=@step_standards.M3,
+          length_mm=12.0,
+          detail~,
+        ),
+        child_mate="head_seat",
+        spec=@cad.JointSpec::merge_rigid(),
+      )
   }
   // The motor bolts onto the rear plate; its shaft points into the gearbox.
   housing = housing.attach(
@@ -1067,18 +1469,31 @@ pub fn planetary_bldc_actuator(
     parent_mate="gearbox_mount",
     first,
     child_mate="origin",
-    spec=@cad.JointSpec::merge_rigid(offset_mm=motor_plate_mm + 1.0),
+    spec=@cad.JointSpec::merge_rigid(offset_mm=stage_gap),
   )
   set_joint_mimic(
     housing,
     name + "_stage1_sun_joint",
     @urdf.JointMimic::new(rotor_joint, multiplier=1.0),
   )
+  // Clamp the sun onto the motor shaft. The hub's body is on the motor side
+  // of the sun, so the shaft engages the full sun face width.
+  housing = housing.attach_to(
+    name + "_stage1_sun",
+    "sun_hub_merge",
+    parent_mate="bottom",
+    sun_clamp_hub(
+      name + "_sun_hub",
+      p.shaft_diameter_mm + 0.2,
+      12.0,
+      4.5,
+      detail,
+    ),
+    child_mate="top",
+    spec=@cad.JointSpec::merge_rigid(),
+  )
   let mut output_joint = name + "_stage1_carrier_joint"
   let mut output_carrier = name + "_stage1_carrier"
-  let per_stage = 1.0 +
-    (sun_teeth.to_double() + 2.0 * planet_teeth.to_double()) /
-    sun_teeth.to_double()
   if stage_count >= 2 {
     let second = pgb_build(
       name + "_stage2",
@@ -1092,74 +1507,116 @@ pub fn planetary_bldc_actuator(
         pressure_angle_deg: 20.0,
         num_elbows: 2,
         resolution: 5,
-        bore_radius_mm: p.shaft_diameter_mm / 2.0,
-        tolerance_mm: 0.1,
-        outer_thickness_mm: 6.0,
+        bore_radius_mm: coupling_bore,
+        planet_bore_radius_mm: planet_bore_radius,
+        carrier_pin_diam_mm: planet_pin_diam,
+        carrier_bearing_designation: planet_bearing,
+        output_shaft_diam_mm: coupling_shaft_diam,
+        carrier_thickness_mm: carrier_thickness,
+        output_shaft_length_mm: final_shaft_len,
+        tolerance_mm: tolerance,
+        outer_thickness_mm: gear_outer_thickness,
         include_carrier: true,
       },
       smooth,
       detail,
       false,
     )
+    let stage2_z = stage_gap + stage_pitch
     housing = housing
-      .add_mate_mm_deg(
-        "stage2_mount",
-        z=motor_plate_mm +
-          1.0 +
-          gear_length_mm +
-          pgb_carrier_thickness_mm +
-          pgb_output_boss_mm +
-          4.0,
-      )
+      .add_mate_mm_deg("stage2_mount", z=stage2_z)
       .attach(
         "stage2_mount_merge",
         parent_mate="stage2_mount",
         second,
         child_mate="origin",
-        spec=@cad.JointSpec::merge_rigid(offset_mm=1.0),
+        spec=@cad.JointSpec::merge_rigid(),
       )
     set_joint_mimic(
       housing,
       name + "_stage2_sun_joint",
       @urdf.JointMimic::new(output_joint, multiplier=1.0),
     )
+    // The first stage carrier shaft drives the second stage through a clamp
+    // hub on the second stage sun.
+    housing = housing.attach_to(
+      name + "_stage2_sun",
+      "coupling_hub_merge",
+      parent_mate="bottom",
+      sun_clamp_hub(
+        name + "_coupling_hub",
+        coupling_shaft_diam + 0.2,
+        16.0,
+        stage1_shaft_len,
+        detail,
+      ),
+      child_mate="top",
+      spec=@cad.JointSpec::merge_rigid(),
+    )
     output_joint = name + "_stage2_carrier_joint"
     output_carrier = name + "_stage2_carrier"
   }
-  let reduction = if stage_count >= 2 {
-    per_stage * per_stage
-  } else {
-    per_stage
+  // Output magnet on the final carrier shaft and the AS5047P board on the
+  // fixed cover. The magnet top is 1 mm below the chip face.
+  housing = housing.attach_to(
+    output_carrier,
+    "output_magnet_merge",
+    parent_mate="output_shaft",
+    encoder_magnet(
+      name=name + "_output_magnet",
+      diameter_mm=6.0,
+      thickness_mm=2.5,
+    ),
+    child_mate="top",
+    spec=@cad.JointSpec::merge_rigid(),
+  )
+  housing = housing.attach(
+    "output_sensor_mount",
+    parent_mate="sensor_mount",
+    moteus_position_sensor(
+      name=name + "_output_sensor",
+      voltage_v=3.3,
+      current_ma=15.0,
+      detail~,
+    ),
+    child_mate="mount",
+    spec=@cad.JointSpec::merge_rigid(),
+  )
+  // Sensor standoffs and screws.
+  for i in 0..<sensor_bolts.length() {
+    housing = housing.attach(
+      "sensor_standoff_merge_\{i}",
+      parent_mate="sensor_standoff_\{i}",
+      hex_standoff(
+        name="\{name}_sensor_standoff_\{i}",
+        length_mm=2.5,
+        across_flats_mm=5.0,
+        bore_diam_mm=2.7,
+        detail~,
+      ),
+      child_mate="bottom",
+      spec=@cad.JointSpec::merge_rigid(),
+    )
+    // The screws belong to the sensor assembly, so the sensor's own fastener
+    // schedule is the single BOM entry for them.
+    housing = housing.attach_to(
+      name + "_output_sensor",
+      "sensor_screw_merge_\{i}",
+      parent_mate="bolt_\{i}",
+      iso_shcs_screw(
+        name="\{name}_sensor_screw_\{i}",
+        size=@step_standards.M2_5,
+        length_mm=6.0,
+        detail~,
+      ),
+      child_mate="head_seat",
+      spec=@cad.JointSpec::merge_rigid(),
+      bom_external=false,
+    )
   }
+  let reduction = planetary_reduction(sun_teeth, planet_teeth, stage_count)
   let efficiency = if stage_count >= 2 { 0.80 } else { 0.90 }
   let output_torque = bldc_rated_torque(p) * reduction * efficiency
-  if detail_is_rich(detail) {
-    // A rear magnetic encoder reads the rotor magnet.
-    let encoder = magnetic_encoder(name=name + "_encoder")
-    housing = housing.attach(
-      "encoder_merge",
-      parent_mate="encoder_mount",
-      encoder,
-      child_mate="mount",
-      spec=@cad.JointSpec::merge_rigid(),
-    )
-    // A set-screw collar retains the output carrier's shaft.
-    let collar = shaft_collar(
-      name=name + "_output_collar",
-      bore_diam_mm=p.shaft_diameter_mm,
-      outer_diam_mm=p.shaft_diameter_mm * 2.0,
-      width_mm=8.0,
-      style="set_screw",
-    )
-    housing = housing.attach_to(
-      output_carrier,
-      "output_collar_merge",
-      parent_mate="output_shaft",
-      collar,
-      child_mate="bore",
-      spec=@cad.JointSpec::merge_rigid(),
-    )
-  }
   let geared_spec = @cad.ActuatorSpec::new(
     @cad.ActuatorKind::Bldc,
     model="Planetary BLDC " + p.name,
@@ -1169,12 +1626,25 @@ pub fn planetary_bldc_actuator(
     torque_rated_nm=output_torque,
     driver="VESC / SimpleFOC",
     interface="CAN",
-    encoder="AS5600",
+    encoder="AS5047P output + rotor encoder",
   )
   housing
   .with_actuator(geared_spec)
   .with_param("reduction", reduction.to_string())
   .with_param("output_torque_nm", output_torque.to_string())
+  .with_param("output_shaft_length_mm", final_shaft_len.to_string())
+  .with_param("output_joint", output_joint)
+  .with_param("output_magnet_pocket", "6.1 mm dia x 2.6 mm deep")
+  .with_param("sensor_air_gap_mm", "1.0")
+  .add_fit(
+    @cad.Fit::new(
+      "output_magnet_pocket",
+      @cad.FitClass::Clearance,
+      nominal_mm=6.1,
+      min_mm=6.1,
+      max_mm=6.2,
+    ),
+  )
   .add_control_binding(
     @cad.ControlBinding::new(
       rotor_joint,

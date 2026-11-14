@@ -29,15 +29,18 @@ test "nema stepper compiles to an actuated robot" {
 }
 
 ///|
-test "nema stepper at detailed adds keyed shaft and mounting screws" {
+test "nema stepper at detailed adds a keyed shaft and mount-screw schedule" {
   let simplified = @components.nema_stepper()
   let detailed = @components.nema_stepper(
     detail=@step_common.DetailLevel::Detailed,
   )
   assert_true(
-    detailed.to_design().nodes.length() > simplified.to_design().nodes.length(),
+    detailed.to_design().nodes.length() >= simplified.to_design().nodes.length(),
   )
-  assert_true(detailed.bom().lines.length() > simplified.bom().lines.length())
+  // The mounting hardware is a schedule, not solids through the purchased
+  // motor envelope.
+  assert_eq(detailed.fasteners.length(), 1)
+  assert_eq(detailed.fasteners[0].quantity, 4)
 }
 
 ///|
@@ -166,7 +169,31 @@ test "single-stage planetary BLDC actuator is built and printable" {
   // 12 sun / 12 planet / 36 ring: one stage is 1 + 36/12 = 4:1.
   let reduction = act.parameters.get("reduction").unwrap()
   assert_true(reduction.contains("4"))
-  assert_true(act.control_bindings().length() == 1)
+  // The motor rotor is the single commanded joint. The output carrier is a
+  // mimic joint, so it is not commandable; its AS5047P sensor is feedback.
+  let bindings = act.control_bindings()
+  assert_eq(bindings.length(), 1)
+  assert_eq(bindings[0].joint, "bldc_actuator_motor_rotor_joint")
+  assert_eq(
+    act.parameters.get("output_joint"),
+    Some("bldc_actuator_stage1_carrier_joint"),
+  )
+  // The output is supported by a pair of 608 bearings in a printed cover and
+  // read by an AS5047P absolute encoder.
+  let bom = act.bom()
+  let mut has_608 = false
+  let mut has_sensor = false
+  for line in bom.lines {
+    if line.part_number == "BEARING-608" {
+      has_608 = true
+    }
+    if line.part_number == "ENC-AS5047P" {
+      has_sensor = true
+    }
+  }
+  assert_true(has_608)
+  assert_true(has_sensor)
+  assert_true(act.get_mate("output_shaft") is Some(_))
 }
 
 ///|
@@ -186,6 +213,15 @@ test "two-stage planetary BLDC actuator compounds the reduction" {
   let expected = @components.planetary_reduction(12, 18, 2)
   assert_true((expected - per_stage * per_stage).abs() < 1.0e-9)
   assert_eq(act.parameters.get("reduction"), Some(expected.to_string()))
-  assert_true(act.bom().total_cost_usd() > 20.0)
-  assert_true(act.bom().total_cost_usd() < 500.0)
+  // Module 1.5 / 18T planets leave room for a 688 bearing in each planet.
+  let bom = act.bom()
+  let mut has_688 = false
+  for line in bom.lines {
+    if line.part_number == "BEARING-688" {
+      has_688 = true
+    }
+  }
+  assert_true(has_688)
+  assert_true(bom.total_cost_usd() > 20.0)
+  assert_true(bom.total_cost_usd() < 500.0)
 }

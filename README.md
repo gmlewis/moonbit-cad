@@ -134,8 +134,10 @@ the Tier-1 STEP primitives:
   sensor magnet on a continuous `<name>_rotor_joint`.
 - `planetary_bldc_actuator` — a low-KV motor driving a Tier-1 herringbone or
   exact-arc planetary stage (or two compounded stages), with a printed housing,
-  rear motor plate, output bearings, encoder, output collar, mimic-linked gears,
-  and a geared output torque in its `ActuatorSpec`.
+  a clamped sun input, 688 planet bearings on steel carrier pins, a two-bearing
+  608 output cartridge, an on-axis AS5047P output encoder, and mimic-linked
+  gears. The output carrier is a true mimic joint; the output sensor supplies
+  absolute joint feedback rather than a second command binding.
 - `planetary_wheel_drive_unit` — a heavy `6354_190kv` two-stage wheel drive for
   the wheelchair, and `caster_fork_assembly` for its front casters.
 
@@ -169,7 +171,7 @@ Every example supports the shared output flags:
 
 | Example | Description |
 | --- | --- |
-| `02-planetary-actuator` | Low-KV BLDC outrunner (or NEMA stepper) driving a Tier-1 planetary gearbox, with a controller PCB and output encoder. |
+| `02-planetary-actuator` | Low-KV BLDC outrunner (or NEMA stepper) driving a Tier-1 planetary gearbox, with planet bearings, a twin-bearing output cartridge, a moteus-style AS5047P output encoder, and a controller PCB. |
 | `05-galileo-quadruped` | Flagship 17-link wheeled quadruped with V-slot chassis and four low-KV BLDC planetary actuator pods per leg; STEP, glTF, URDF, or full ROS 2 bundle. |
 | `06-assistive-scooter` | Motorized wheelchair with two-stage planetary rear drives, a V-slot frame, seat, armrests, and front casters (or a steerable fork). |
 
@@ -297,8 +299,8 @@ imported, and full STEP B-Rep geometry import remains future work.
 ./test-all.sh
 ```
 
-`test-all.sh` formats the root package, regenerates its interface, and runs the
-native unit tests. The unit tests cover primitive bridges, component
+`test-all.sh` runs `moon fmt`, `moon info`, and `moon test -j 12` across the
+workspace. The unit tests cover primitive bridges, component
 composition, URDF compilation (including rigid merges), posed STEP export,
 bill-of-materials roll-up, assembly plans and hardware checks, power/IO
 budgets, cable-route length and wire checks, control export and

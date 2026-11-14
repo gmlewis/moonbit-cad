@@ -325,23 +325,29 @@ fn Component::collect_bom(
   skip_bodies : Bool,
 ) -> Unit {
   let is_part = self.part is Some(_)
-  if is_part {
-    match self.part {
-      Some(part) => bom.add(part, 1)
-      None => ()
-    }
-  } else if !skip_bodies {
-    for body in self.bodies {
-      match body.part {
+  // `skip_bodies` means this component is internal to a purchased item (for
+  // example the rotor or bearings inside a motor). Its own part number and
+  // fasteners are part of that purchased item, so none of them are counted
+  // again as separate BOM lines.
+  if !skip_bodies {
+    if is_part {
+      match self.part {
         Some(part) => bom.add(part, 1)
-        None => bom.add_unassigned(1)
+        None => ()
+      }
+    } else {
+      for body in self.bodies {
+        match body.part {
+          Some(part) => bom.add(part, 1)
+          None => bom.add_unassigned(1)
+        }
       }
     }
-  }
-  for fastener in self.fasteners {
-    match fastener.part {
-      Some(part) => bom.add(part, fastener.quantity)
-      None => bom.add_unassigned(fastener.quantity)
+    for fastener in self.fasteners {
+      match fastener.part {
+        Some(part) => bom.add(part, fastener.quantity)
+        None => bom.add_unassigned(fastener.quantity)
+      }
     }
   }
   for att in self.attachments {

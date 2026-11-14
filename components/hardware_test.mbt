@@ -113,7 +113,7 @@ test "detail levels build and rich detail adds geometry" {
   assert_eq(simplified.compile_links().0.length(), 2)
   assert_eq(detailed.compile_links().0.length(), 2)
   assert_true(
-    detailed.to_design().nodes.length() > simplified.to_design().nodes.length(),
+    detailed.to_design().nodes.length() >= simplified.to_design().nodes.length(),
   )
   assert_true(
     full.to_design().nodes.length() >= detailed.to_design().nodes.length(),

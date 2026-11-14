@@ -20,7 +20,22 @@ pub(all) struct PlanetaryGearboxParams {
   pressure_angle_deg : Double
   num_elbows : Int32
   resolution : Int32
+  /// Sun central bore radius (the input shaft bore).
   bore_radius_mm : Double
+  /// Planet central bore radius. Set this larger than the sun bore when the
+  /// planets carry bearings; the Tier-1 generator now supports per-gear bores.
+  planet_bore_radius_mm : Double
+  /// Carrier pin diameter. Zero derives a plain pin from the planet bore.
+  carrier_pin_diam_mm : Double
+  /// Bearing pressed into each planet, e.g. `"688"`; empty means a plain
+  /// printed bushing on the pin.
+  carrier_bearing_designation : String
+  /// Carrier output shaft diameter.
+  output_shaft_diam_mm : Double
+  /// Carrier plate thickness.
+  carrier_thickness_mm : Double
+  /// Carrier output shaft length above the plate.
+  output_shaft_length_mm : Double
   tolerance_mm : Double
   outer_thickness_mm : Double
   include_carrier : Bool
@@ -40,6 +55,12 @@ pub fn PlanetaryGearboxParams::default() -> PlanetaryGearboxParams {
     num_elbows: 2,
     resolution: 5,
     bore_radius_mm: 6.0,
+    planet_bore_radius_mm: 6.0,
+    carrier_pin_diam_mm: 0.0,
+    carrier_bearing_designation: "",
+    output_shaft_diam_mm: 8.0,
+    carrier_thickness_mm: 8.0,
+    output_shaft_length_mm: 12.0,
     tolerance_mm: 0.35,
     outer_thickness_mm: 10.0,
     include_carrier: true,
@@ -49,6 +70,11 @@ pub fn PlanetaryGearboxParams::default() -> PlanetaryGearboxParams {
 ///|
 /// The carrier plate thickness in mm.
 let pgb_carrier_thickness_mm : Double = 8.0
+
+///|
+/// The axial gap between the rotating carrier plate and the fixed ring and
+/// gear faces. The carrier is mounted this far above the stage's output face.
+let pgb_carrier_clearance_mm : Double = 0.5
 
 ///|
 /// The carrier output boss height in mm.
@@ -141,8 +167,9 @@ fn pgb_resolution(
 ///|
 /// Converts user parameters into validated Tier-1 gearbox parameters.
 ///
-/// A central bore is only requested when it fits inside both the sun and the
-/// planet root circles; otherwise the gears are exported solid.
+/// Sun and planet bores are sized independently. Each bore is only requested
+/// when it fits inside that gear's root circle; otherwise the gears are
+/// exported solid.
 fn pgb_step_params(
   params : PlanetaryGearboxParams,
   smooth : Bool,
@@ -154,16 +181,18 @@ fn pgb_step_params(
     dedendum * params.gear_module
   let planet_root = params.gear_module * params.planet_teeth.to_double() * half -
     dedendum * params.gear_module
-  let smallest_root = if sun_root < planet_root {
-    sun_root
+  let planet_bore = if params.planet_bore_radius_mm > 0.0 {
+    params.planet_bore_radius_mm
   } else {
-    planet_root
+    params.bore_radius_mm
   }
-  let (hole_type, hole_radius) = if params.bore_radius_mm > 0.0 &&
-    params.bore_radius_mm < smallest_root - 0.5 {
-    ("Circular", params.bore_radius_mm)
+  let sun_hole_ok = params.bore_radius_mm > 0.0 &&
+    params.bore_radius_mm < sun_root - 0.5
+  let planet_hole_ok = planet_bore > 0.0 && planet_bore < planet_root - 0.5
+  let (hole_type, sun_hole, planet_hole) = if sun_hole_ok && planet_hole_ok {
+    ("Circular", params.bore_radius_mm, planet_bore)
   } else {
-    ("None", 0.0)
+    ("None", 0.0, 0.0)
   }
   expect_step(
     "planetary gearbox parameters",
@@ -175,7 +204,9 @@ fn pgb_step_params(
       num_elbows=pgb_elbows(params, smooth, detail),
       resolution=pgb_resolution(params, detail),
       hole_type~,
-      hole_radius_mm=hole_radius,
+      hole_radius_mm=sun_hole,
+      sun_hole_radius_mm=sun_hole,
+      planet_hole_radius_mm=planet_hole,
       tolerance_mm=params.tolerance_mm,
       outer_thickness_mm=params.outer_thickness_mm,
       sun_teeth=params.sun_teeth,
@@ -232,69 +263,213 @@ fn pgb_gear_part(
 }
 
 ///|
-/// Builds the printed carrier plate with planet pins and an output boss.
+/// Builds the printed carrier plate with planet pins and an output shaft.
+///
+/// The pins run from the far (input) face of the planets, through the planet
+/// bores, and into the carrier plate, so the planets are genuinely carried and
+/// the carrier drives the output. A shoulder head at each pin's far end keeps
+/// the planet from walking off. When the planets carry bearings the pin
+/// diameter is the bearing bore; otherwise it is a plain bushing pin slightly
+/// smaller than the planet bore.
 fn pgb_carrier_component(
   name : String,
   layout : @step_planetary.HerringbonePlanetaryLayout,
+  params : PlanetaryGearboxParams,
+  detail : @step_common.DetailLevel,
 ) -> @cad.Component {
-  let thickness = pgb_carrier_thickness_mm
+  let thickness = if params.carrier_thickness_mm >= 4.0 {
+    params.carrier_thickness_mm
+  } else {
+    pgb_carrier_thickness_mm
+  }
   let plate_radius = layout.center_distance_mm +
     layout.planet.outer_radius_mm +
     4.0
+  let planet_bore_diam = params.planet_bore_radius_mm * 2.0
+  // The carrier plate sits above the gear faces with a small axial gap, so the
+  // rotating plate does not rub the sun, planet, or ring end faces.
+  let carrier_clearance = pgb_carrier_clearance_mm
+  let pin_diam = if params.carrier_pin_diam_mm > 0.0 {
+    params.carrier_pin_diam_mm
+  } else if planet_bore_diam > 0.4 {
+    planet_bore_diam - 0.2
+  } else {
+    3.0
+  }
+  let pin_length = layout.gear_length_mm + carrier_clearance + thickness
+  let shaft_diam = if params.output_shaft_diam_mm > 0.0 {
+    params.output_shaft_diam_mm
+  } else {
+    8.0
+  }
+  let shaft_length = if params.output_shaft_length_mm > 0.0 {
+    params.output_shaft_length_mm
+  } else {
+    pgb_output_boss_mm
+  }
   let part = fabricated_part(
     "PGB-CARRIER",
-    "Planetary carrier plate with output boss",
+    "Planetary carrier plate and top hub (print); drill/tap the M4 radial set-screw hole, press the 8 mm pins into the 8.1 mm holes, and fit the separate steel pins, washers, and output shaft",
     "PETG / carbon fiber nylon",
     "3D print",
     pgb_carrier_cost_usd(),
   )
-  let mut comp = @cad.Component::new(
-      name,
-      description="Planetary carrier plate",
+  let pin_part = purchased_part(
+    "DOWEL-\{pin_diam}x\{pin_length}",
+    "Hardened dowel pin \{pin_diam} x \{pin_length} mm",
+    "steel",
+    0.80,
+  )
+  let washer_part = purchased_part(
+    "WASHER-\{pin_diam + 6.0}x\{pin_diam + 0.2}x1",
+    "Retaining washer \{pin_diam + 6.0} x \{pin_diam + 0.2} x 1 mm",
+    "steel",
+    0.15,
+  )
+  let shaft_part = purchased_part(
+    "SHAFT-\{shaft_diam}x\{shaft_length}",
+    "Steel carrier output shaft \{shaft_diam} x \{shaft_length} mm",
+    "steel",
+    2.50,
+  )
+  // The plate has a 22 mm central clearance hole so it cannot touch the sun
+  // end face, plus real press-fit holes for the three steel pins. A raised
+  // top hub bridges the central hole and carries the output shaft; a radial M4
+  // set screw locks the shaft into that hub.
+  let plate_holes : Array[(Double, Double, Double)] = []
+  plate_holes.push((0.0, 0.0, 22.0))
+  for i in 0..<layout.planets.length() {
+    let planet = layout.planets[i]
+    plate_holes.push((planet.x, -planet.z, pin_diam + 0.1))
+  }
+  let hub_diam = 32.0
+  let hub_height = 4.0
+  let hub_x = hub_diam / 2.0 - 6.0
+  let set_screw_part = purchased_part(
+    "SET-M4x12", "M4 x 12 socket set screw", "steel", 0.25,
+  )
+  // The printed plate is its own component so the standalone print export
+  // contains only the printed body, not the steel pins or output shaft.
+  let printed = @cad.Component::new(
+      name + "_printed",
+      description="Printed planetary carrier plate",
     )
-    .with_param("center_distance_mm", layout.center_distance_mm.to_string())
+    .with_param("plate_diameter_mm", (plate_radius * 2.0).to_string())
+    .with_param("shaft_bore_mm", (shaft_diam + 0.1).to_string())
     .add_body(
-      @cad.BodyPart::tube_mm(
+      actuator_plate_body(
         name + "_plate",
         plate_radius * 2.0,
-        36.0,
         thickness,
-        z_mm=thickness / 2.0,
+        0.0,
+        plate_holes,
+        @urdf.Density::petg(),
+        @step_cad.Rgb::purple(),
+        detail,
+      ).with_part(part),
+    )
+    .add_body(
+      @cad.BodyPart::tube_mm(
+        name + "_plate_hub",
+        hub_diam,
+        shaft_diam + 0.1,
+        hub_height,
+        z_mm=thickness - hub_height / 2.0,
         density=@urdf.Density::petg(),
         color=@step_cad.Rgb::purple(),
+      ).with_part(part),
+    )
+    .add_body(
+      @cad.BodyPart::cylinder_mm(
+        name + "_hub_set_screw",
+        4.0,
+        12.0,
+        x_mm=hub_x,
+        z_mm=thickness - hub_height / 2.0,
+        ry_deg=90.0,
+        density=@urdf.Density::steel_mild(),
+        color=@step_cad.Rgb::grey(),
+      ).with_part(set_screw_part),
+    )
+    .with_part(part)
+    .add_fastener(
+      @cad.Fastener::new(
+        "carrier_hub_set_screw",
+        @cad.FastenerKind::Screw,
+        thread="M4",
+        length_mm=12.0,
+        engagement_mm=4.0,
+        quantity=1,
+        torque_nm=1.5,
+        references=[name + "_plate_hub"],
+        part=Some(set_screw_part),
       ),
+    )
+  let mut comp = @cad.Component::new(
+      name,
+      description="Planetary carrier plate with steel planet pins and output shaft",
+    )
+    .with_param("center_distance_mm", layout.center_distance_mm.to_string())
+    .with_param("carrier_pin_diam_mm", pin_diam.to_string())
+    .with_param("carrier_thickness_mm", thickness.to_string())
+    .with_param("output_shaft_diam_mm", shaft_diam.to_string())
+    .add_body(
+      @cad.BodyPart::cylinder_mm(
+        name + "_output_shaft",
+        shaft_diam,
+        thickness + shaft_length,
+        z_mm=(thickness + shaft_length) / 2.0,
+        density=@urdf.Density::steel_mild(),
+        color=@step_cad.Rgb::grey(),
+      ).with_part(shaft_part),
+    )
+    .attach(
+      "printed_carrier_merge",
+      parent_mate="origin",
+      printed,
+      child_mate="origin",
+      spec=@cad.JointSpec::merge_rigid(),
     )
   for i in 0..<layout.planets.length() {
     let planet = layout.planets[i]
-    comp = comp.add_body(
-      @cad.BodyPart::cylinder_mm(
-        "\{name}_pin_\{i}",
-        8.0,
-        thickness,
-        x_mm=planet.x,
-        y_mm=-planet.z,
-        z_mm=thickness / 2.0,
-        density=@urdf.Density::petg(),
-        color=@step_cad.Rgb::purple(),
-      ),
-    )
+    comp = comp
+      .add_body(
+        @cad.BodyPart::cylinder_mm(
+          "\{name}_pin_\{i}",
+          pin_diam,
+          pin_length,
+          x_mm=planet.x,
+          y_mm=-planet.z,
+          z_mm=(thickness - layout.gear_length_mm - carrier_clearance) / 2.0,
+          density=@urdf.Density::steel_mild(),
+          color=@step_cad.Rgb::grey(),
+        ).with_part(pin_part),
+      )
+      .add_body(
+        @cad.BodyPart::tube_mm(
+          "\{name}_pin_washer_\{i}",
+          pin_diam + 6.0,
+          pin_diam + 0.2,
+          1.0,
+          x_mm=planet.x,
+          y_mm=-planet.z,
+          z_mm=-layout.gear_length_mm - carrier_clearance - 0.5,
+          density=@urdf.Density::steel_mild(),
+          color=@step_cad.Rgb::grey(),
+        ).with_part(washer_part),
+      )
+      .add_mate_mm_deg(
+        "pin_\{i}",
+        x=planet.x,
+        y=-planet.z,
+        z=-layout.gear_length_mm - carrier_clearance,
+        rz_deg=-planet.phi_deg,
+      )
   }
-  comp = comp.add_body(
-    @cad.BodyPart::tube_mm(
-      name + "_output_boss",
-      plate_radius * 0.55 * 2.0,
-      36.0,
-      pgb_output_boss_mm,
-      z_mm=thickness + pgb_output_boss_mm / 2.0,
-      density=@urdf.Density::petg(),
-      color=@step_cad.Rgb::purple(),
-    ),
-  )
   comp
   .add_mate_mm_deg("bottom")
-  .add_mate_mm_deg("output_flange", z=thickness + pgb_output_boss_mm)
-  .add_mate_mm_deg("output_shaft", z=thickness + pgb_output_boss_mm)
-  .with_part(part)
+  .add_mate_mm_deg("output_flange", z=thickness)
+  .add_mate_mm_deg("output_shaft", z=thickness + shaft_length)
 }
 
 ///|
@@ -378,12 +553,48 @@ fn pgb_build(
       transmission_reduction=Some(1.0),
     ),
   )
-  let planet_multiplier = -(params.sun_teeth.to_double() /
-    params.planet_teeth.to_double())
+  let z_sun = params.sun_teeth.to_double()
+  let z_planet = params.planet_teeth.to_double()
+  let z_ring = layout.ring_teeth.to_double()
+  let carrier_name = "\{name}_carrier"
+  // With the ring fixed and the sun driven, the carrier turns at
+  // Zs / (Zs + Zr) of the sun. A planet's spin *relative to the carrier* is
+  // -Zs * Zr / (Zp * (Zs + Zr)) of the sun; that relative angle is what a
+  // planet joint whose parent is the carrier must mimic.
+  let carrier_multiplier = z_sun / (z_sun + z_ring)
+  let planet_multiplier = if params.include_carrier {
+    -(z_sun * z_ring) / (z_planet * (z_sun + z_ring))
+  } else {
+    // Display-only fallback: with no carrier the planets are fixed-axis
+    // idlers, so the simple sun/planet mesh ratio is the best available.
+    -z_sun / z_planet
+  }
+  // The carrier must exist before the planets, because the planet pins are on
+  // the carrier. Attach the carrier to the ring, then the planets to the
+  // carrier, so the planets genuinely orbit with the carrier.
+  let mut has_carrier = false
+  if params.include_carrier {
+    has_carrier = true
+    let carrier = pgb_carrier_component(carrier_name, layout, params, detail)
+    comp = comp.attach(
+      "\{name}_carrier_joint",
+      parent_mate="output_face",
+      carrier,
+      child_mate="bottom",
+      spec=@cad.JointSpec::continuous(
+        limit=Some(@urdf.JointLimit::new(effort=10.0, velocity=30.0)),
+        dynamics=Some(@urdf.JointDynamics::new(damping=0.02, friction=0.01)),
+        offset_mm=pgb_carrier_clearance_mm,
+        mimic=Some(
+          @urdf.JointMimic::new(sun_joint, multiplier=carrier_multiplier),
+        ),
+      ),
+    )
+  }
   for i in 0..<layout.planets.length() {
     let planet = layout.planets[i]
     let planet_name = "\{name}_planet_\{i}"
-    let planet_part = pgb_gear_part(
+    let mut planet_part = pgb_gear_part(
       planet_name,
       step_comp,
       "planet-\{i + 1}",
@@ -393,42 +604,58 @@ fn pgb_build(
       length,
       smooth,
     )
-    comp = comp.add_mate_mm_deg(
-      "planet_orbit_\{i}",
-      x=planet.x,
-      y=-planet.z,
-      rz_deg=-planet.phi_deg,
+    if params.carrier_bearing_designation != "" {
+      let bearing = ball_bearing(
+        name="\{planet_name}_bearing",
+        designation=params.carrier_bearing_designation,
+        detail~,
+        density=@urdf.Density::steel_mild(),
+      )
+      let bearing_width = match
+        @step_motion.bearing_size(params.carrier_bearing_designation) {
+        Ok(size) => size.width_mm
+        Err(_) => 5.0
+      }
+      planet_part = planet_part.attach(
+        "\{planet_name}_bearing_merge",
+        parent_mate="bottom",
+        bearing,
+        child_mate="origin",
+        spec=@cad.JointSpec::merge_rigid(offset_mm=bearing_width / 2.0),
+      )
+    }
+    let planet_spec = @cad.JointSpec::continuous(
+      limit=Some(@urdf.JointLimit::new(effort=10.0, velocity=30.0)),
+      dynamics=Some(@urdf.JointDynamics::new(damping=0.02, friction=0.01)),
+      mimic=Some(@urdf.JointMimic::new(sun_joint, multiplier=planet_multiplier)),
     )
-    comp = comp.attach(
-      "\{name}_planet_\{i}_joint",
-      parent_mate="planet_orbit_\{i}",
-      planet_part,
-      child_mate="origin",
-      spec=@cad.JointSpec::continuous(
-        limit=Some(@urdf.JointLimit::new(effort=10.0, velocity=30.0)),
-        dynamics=Some(@urdf.JointDynamics::new(damping=0.02, friction=0.01)),
-        mimic=Some(
-          @urdf.JointMimic::new(sun_joint, multiplier=planet_multiplier),
-        ),
-      ),
-    )
-  }
-  if params.include_carrier {
-    let carrier = pgb_carrier_component("\{name}_carrier", layout)
-    let carrier_multiplier = params.sun_teeth.to_double() /
-      (params.sun_teeth.to_double() + layout.ring_teeth.to_double())
-    comp = comp.attach(
-      "\{name}_carrier_joint",
-      parent_mate="output_face",
-      carrier,
-      child_mate="bottom",
-      spec=@cad.JointSpec::continuous(
-        limit=Some(@urdf.JointLimit::new(effort=10.0, velocity=30.0)),
-        mimic=Some(
-          @urdf.JointMimic::new(sun_joint, multiplier=carrier_multiplier),
-        ),
-      ),
-    )
+    if has_carrier {
+      // The planet's bottom sits at the carrier pin's far end; the pin passes
+      // through the planet bore and the planet spins about it.
+      comp = comp.attach_to(
+        carrier_name,
+        "\{name}_planet_\{i}_joint",
+        parent_mate="pin_\{i}",
+        planet_part,
+        child_mate="origin",
+        spec=planet_spec,
+      )
+    } else {
+      // No carrier: keep the old display-only layout with fixed orbit points.
+      comp = comp.add_mate_mm_deg(
+        "planet_orbit_\{i}",
+        x=planet.x,
+        y=-planet.z,
+        rz_deg=-planet.phi_deg,
+      )
+      comp = comp.attach(
+        "\{name}_planet_\{i}_joint",
+        parent_mate="planet_orbit_\{i}",
+        planet_part,
+        child_mate="origin",
+        spec=planet_spec,
+      )
+    }
   }
   comp
 }
@@ -575,9 +802,18 @@ pub fn planetary_gearset_stage(
   face_width_mm~ : Double = 8.0,
   pressure_angle_deg~ : Double = 20.0,
   sun_bore_mm~ : Double = 0.0,
+  planet_bore_mm~ : Double = 0.0,
+  carrier_pin_diam_mm~ : Double = 0.0,
+  carrier_bearing~ : String = "",
+  output_shaft_length_mm~ : Double = 12.0,
   smooth~ : Bool = true,
   detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
 ) -> @cad.Component {
+  let planet_bore = if planet_bore_mm > 0.0 {
+    planet_bore_mm
+  } else {
+    sun_bore_mm
+  }
   let params : PlanetaryGearboxParams = {
     gear_module: module_mm,
     gear_length_mm: face_width_mm,
@@ -589,6 +825,12 @@ pub fn planetary_gearset_stage(
     num_elbows: 2,
     resolution: 5,
     bore_radius_mm: sun_bore_mm / 2.0,
+    planet_bore_radius_mm: planet_bore / 2.0,
+    carrier_pin_diam_mm,
+    carrier_bearing_designation: carrier_bearing,
+    output_shaft_diam_mm: 8.0,
+    carrier_thickness_mm: 8.0,
+    output_shaft_length_mm,
     tolerance_mm: 0.1,
     outer_thickness_mm: 6.0,
     include_carrier: true,

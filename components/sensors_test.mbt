@@ -59,6 +59,25 @@ test "detailed PCB adds standoffs" {
 }
 
 ///|
+test "moteus-style output sensor and encoder magnet are buildable" {
+  let sensor = @components.moteus_position_sensor()
+  assert_true(sensor.sensor is Some(_))
+  assert_true(sensor.part is Some(_))
+  check_component(sensor, [
+    "mount", "sensor_face", "top", "bolt_0", "bolt_1", "bolt_2", "bolt_3",
+  ])
+  assert_eq(sensor.ports.length(), 4)
+  assert_eq(sensor.power_budget().sensors.length(), 1)
+  assert_eq(sensor.bom().unassigned, 0)
+  assert_true(!sensor.to_robot().has_errors())
+  let magnet = @components.encoder_magnet()
+  assert_true(magnet.part is Some(_))
+  check_component(magnet, ["top", "bottom", "shaft"])
+  assert_eq(magnet.bom().unassigned, 0)
+  assert_true(!magnet.to_robot().has_errors())
+}
+
+///|
 test "sensor mount bracket is printable" {
   let bracket = @components.sensor_mount_bracket()
   check_component(bracket, ["mount", "sensor_face"])

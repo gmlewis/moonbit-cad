@@ -1,10 +1,15 @@
 ///|
 /// 02-planetary-actuator
 ///
-/// A showcase for the Tier-1 planetary gearboxes and motors. The default build
-/// is an inexpensive low-KV BLDC outrunner driving a printed herringbone
-/// planetary stage inside a printed housing; `--motor nema` builds a NEMA
-/// stepper variant instead.
+/// A motorized, printable planetary actuator. The default build is an
+/// inexpensive low-KV BLDC outrunner driving a printed herringbone planetary
+/// stage inside a printed housing. The sun is clamped to the motor shaft, the
+/// planets run on 688 bearings on steel carrier pins, and the carrier output
+/// shaft turns in two 608 bearings in a printed cover. An on-axis AS5047P
+/// reads a diametrically magnetized magnet on the output shaft, giving absolute
+/// joint position for a moteus-style controller.
+///
+/// `--motor nema` builds a NEMA stepper variant instead.
 
 ///|
 async fn main {
@@ -51,6 +56,19 @@ async fn main {
   let motor_angle = args.double("motorDeg") * deg
   let positions : Map[String, Double] = Map([])
   let comp = if motor_kind.has_prefix("nema") {
+    let designation = if motor_kind.contains("23") {
+      "NEMA23"
+    } else {
+      "NEMA17"
+    }
+    let (pilot_mm, nema_bolt_mm, nema_hole_mm, nema_shaft_mm) = @components.nema_frame_dims(
+      designation,
+    )
+    let sun_bore = nema_shaft_mm + 0.2
+    // A 688 bearing needs a planet root radius above about 9.5 mm.
+    let use_planet_bearing = module_mm * (planet_teeth.to_double() / 2.0 - 1.25) >
+      9.5
+    let planet_bore = if use_planet_bearing { 16.0 } else { sun_bore }
     let stage = @components.planetary_gearset_stage(
       name="planetary_gearbox",
       module_mm~,
@@ -59,58 +77,69 @@ async fn main {
       planet_count~,
       face_width_mm=gear_length,
       pressure_angle_deg=20.0,
-      sun_bore_mm=6.0,
+      sun_bore_mm=sun_bore,
+      planet_bore_mm=planet_bore,
+      carrier_pin_diam_mm=if use_planet_bearing { 8.0 } else { 0.0 },
+      carrier_bearing=if use_planet_bearing { "688" } else { "" },
       smooth=gear_type == "spur",
       detail~,
     )
+    // The adapter matches the NEMA pilot and bolt pattern, not an arbitrary
+    // bolt circle. The motor face sits directly against the adapter, so the
+    // shaft reaches the sun and no screws bridge a gap.
     let adapter = @components.flange_plate(
       name="motor_adapter",
-      outer_diam_mm=60.0,
-      center_bore_mm=22.0,
+      outer_diam_mm=if designation == "NEMA23" { 80.0 } else { 60.0 },
+      center_bore_mm=pilot_mm,
       thickness_mm=6.0,
       bolt_count=4,
-      bolt_circle_mm=44.0,
+      bolt_circle_mm=nema_bolt_mm,
+      bolt_diam_mm=nema_hole_mm,
     )
-    let designation = if motor_kind.contains("23") {
-      "NEMA23"
-    } else {
-      "NEMA17"
-    }
     let stepper = @components.nema_stepper(
       name="nema_motor",
       designation~,
       detail~,
     )
+    // Drop the adapter and motor together so the planet retaining washers
+    // (which sit just below the gear faces) clear the adapter plate.
+    let adapter_drop = 1.5
     let mut assembly = stage
       .attach(
         "adapter_merge",
         parent_mate="input_flange",
         adapter,
         child_mate="bottom",
-        spec=@cad.JointSpec::merge_rigid(),
+        spec=@cad.JointSpec::merge_rigid(offset_mm=adapter_drop),
       )
       .attach(
         "motor_flange_joint",
         parent_mate="input_flange",
         stepper,
         child_mate="face_mount",
-        spec=@cad.JointSpec::fixed(offset_mm=-10.0),
+        spec=@cad.JointSpec::fixed(offset_mm=adapter_drop),
       )
-    for i in 0..<4 {
-      assembly = assembly.attach(
-        "adapter_screw_merge_\{i}",
-        parent_mate="motor_adapter.bolt_\{i}",
-        @components.iso_shcs_screw(
-          name="adapter_screw_\{i}",
-          size=@step_standards.M3,
-          length_mm=10.0,
-          detail~,
-          threads?,
-        ),
-        child_mate="head_seat",
-        spec=@cad.JointSpec::merge_rigid(),
-      )
-    }
+    // Clamp the sun onto the NEMA shaft. The motor mount screws are a
+    // fastener schedule on the motor; they are not modeled through its solid
+    // envelope.
+    assembly = assembly.attach_to(
+      "planetary_gearbox_sun",
+      "nema_sun_hub_merge",
+      parent_mate="bottom",
+      @components.sun_clamp_hub(
+        "nema_sun_hub",
+        sun_bore,
+        if designation == "NEMA23" {
+          14.0
+        } else {
+          12.0
+        },
+        4.5,
+        detail,
+      ),
+      child_mate="top",
+      spec=@cad.JointSpec::merge_rigid(),
+    )
     positions.set("nema_motor_shaft_joint", motor_angle)
     assembly
   } else {
@@ -126,44 +155,50 @@ async fn main {
       gear_type~,
       detail~,
     )
+    // The actuator carries a flat controller pad on the housing side.
     let controller = @components.pcb_board(
       name="foc_driver",
-      length_mm=45.0,
-      width_mm=35.0,
+      // Small enough that all four mounting screws land in the 30 mm-tall
+      // housing wall behind the pad.
+      length_mm=40.0,
+      width_mm=28.0,
       connectors=["power", "can", "motor", "encoder"],
-      detail~,
+      // The board sits flat on the actuator's printed pad, so it does not need
+      // the detailed PCB's underside standoffs.
+      detail=@step_common.DetailLevel::Simplified,
+    ).add_port(
+      @cad.Port::new(
+        "encoder",
+        @cad.PortKind::Sensor,
+        spec="SPI/ABZ, 3.3 V from AS5047P",
+      ),
     )
-    let mut assembly = act
-      .add_mate_mm_deg("controller_mount", x=40.0, z=gear_length / 2.0)
-      .attach(
-        "controller_merge",
-        parent_mate="controller_mount",
-        controller,
-        child_mate="mount",
-        spec=@cad.JointSpec::merge_rigid(),
-      )
-    for i in 0..<4 {
-      assembly = assembly.attach(
-        "controller_standoff_merge_\{i}",
-        parent_mate="controller_mount",
-        @components.hex_standoff(
-          name="controller_standoff_\{i}",
-          length_mm=6.0,
-          across_flats_mm=5.0,
-          bore_diam_mm=2.7,
-        ),
-        child_mate="bottom",
-        spec=@cad.JointSpec::merge_rigid(),
-      )
-    }
-    let encoder = @components.magnetic_encoder(name="output_encoder")
-    assembly = assembly.attach(
-      "encoder_merge",
-      parent_mate="output_face",
-      encoder,
-      child_mate="shaft",
+    let mut assembly = act.attach(
+      "controller_merge",
+      parent_mate="controller_mount",
+      controller,
+      child_mate="mount",
       spec=@cad.JointSpec::merge_rigid(),
     )
+    // Four M2.5 screws hold the board to the pad; the board's own bolt mates
+    // keep them from piling up at one point.
+    for i in 0..<4 {
+      assembly = assembly.attach_to(
+        "foc_driver",
+        "controller_screw_merge_\{i}",
+        parent_mate="bolt_\{i}",
+        @components.iso_shcs_screw(
+          name="controller_screw_\{i}",
+          size=@step_standards.M2_5,
+          length_mm=6.0,
+          detail~,
+          threads?,
+        ),
+        child_mate="head_seat",
+        spec=@cad.JointSpec::merge_rigid(),
+        bom_external=false,
+      )
+    }
     assembly = assembly.add_wire_run(
       @cad.WireRun::new(
         "motor_can",
@@ -175,19 +210,55 @@ async fn main {
         length_mm=180.0,
       ),
     )
-    assembly = assembly.add_cable_route(
-      @cad.CableRoute::new(
-        "actuator_harness",
-        points=[(0.0, 0.0, 0.0), (20.0, 0.0, 0.0), (40.0, 0.0, 4.0)],
-        jacket_diameter_mm=6.0,
-        wire_names=["motor_can"],
-        material="PVC",
-        from_component="bldc_actuator",
-        from_port="can",
+    assembly = assembly.add_wire_run(
+      @cad.WireRun::new(
+        "output_encoder_spi",
+        from_component="bldc_actuator_output_sensor",
+        from_port="spi",
         to_component="foc_driver",
-        to_port="can",
+        to_port="encoder",
+        gauge_awg=28,
+        length_mm=120.0,
       ),
     )
+    assembly = assembly.add_wire_run(
+      @cad.WireRun::new(
+        "output_encoder_power",
+        from_component="bldc_actuator_output_sensor",
+        from_port="power",
+        to_component="foc_driver",
+        to_port="power",
+        gauge_awg=28,
+        length_mm=120.0,
+      ),
+    )
+    assembly = assembly
+      .add_cable_route(
+        @cad.CableRoute::new(
+          "actuator_harness",
+          points=[(0.0, 0.0, 0.0), (20.0, 0.0, 0.0), (40.0, 0.0, 4.0)],
+          jacket_diameter_mm=6.0,
+          wire_names=["motor_can"],
+          material="PVC",
+          from_component="bldc_actuator",
+          from_port="can",
+          to_component="foc_driver",
+          to_port="can",
+        ),
+      )
+      .add_cable_route(
+        @cad.CableRoute::new(
+          "sensor_harness",
+          points=[(0.0, 0.0, 0.0), (10.0, 20.0, 0.0), (40.0, 20.0, 4.0)],
+          jacket_diameter_mm=4.0,
+          wire_names=["output_encoder_spi", "output_encoder_power"],
+          material="PVC",
+          from_component="bldc_actuator_output_sensor",
+          from_port="spi",
+          to_component="foc_driver",
+          to_port="encoder",
+        ),
+      )
     positions.set("bldc_actuator_motor_rotor_joint", motor_angle)
     assembly
   }

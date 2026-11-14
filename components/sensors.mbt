@@ -136,6 +136,185 @@ pub fn magnetic_encoder(
 }
 
 ///|
+/// Builds a moteus-style on-axis absolute position sensor: an AS5047P (or
+/// equivalent 14-bit) magnetic encoder on a small PCB, with the chip on the
+/// face that looks at a diametrically magnetized magnet.
+///
+/// The board bottom is at `z = 0`, the chip sits `chip_height_mm` below it, and
+/// the `sensor_face` mate is at the chip face. Attach `mount` to a fixed cover
+/// and place the magnet on the rotating shaft with a 0.5–1.5 mm air gap.
+pub fn moteus_position_sensor(
+  name~ : String = "position_sensor",
+  board_len_mm~ : Double = 28.0,
+  board_w_mm~ : Double = 22.0,
+  thickness_mm~ : Double = 1.6,
+  mounting_hole_diam_mm~ : Double = 2.7,
+  hole_inset_mm~ : Double = 3.5,
+  chip_size_mm~ : Double = 6.0,
+  chip_height_mm~ : Double = 1.0,
+  voltage_v~ : Double = 3.3,
+  current_ma~ : Double = 15.0,
+  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
+) -> @cad.Component {
+  let _ = detail
+  let half_l = board_len_mm / 2.0
+  let half_w = board_w_mm / 2.0
+  let hx = half_l - hole_inset_mm
+  let hy = half_w - hole_inset_mm
+  let board_outer = rect_arc_segments(board_len_mm, board_w_mm)
+  let board_holes : Array[Array[@step_cad.ProfileSegment]] = [
+    arc_segments_at(
+      @step_gears.arc_circle_segments(mounting_hole_diam_mm),
+      hx,
+      hy,
+    ),
+    arc_segments_at(
+      @step_gears.arc_circle_segments(mounting_hole_diam_mm),
+      -hx,
+      hy,
+    ),
+    arc_segments_at(
+      @step_gears.arc_circle_segments(mounting_hole_diam_mm),
+      -hx,
+      -hy,
+    ),
+    arc_segments_at(
+      @step_gears.arc_circle_segments(mounting_hole_diam_mm),
+      hx,
+      -hy,
+    ),
+  ]
+  let part = purchased_part(
+    "ENC-AS5047P", "AS5047P 14-bit on-axis magnetic encoder board", "FR-4 / mixed",
+    12.0,
+  )
+  let sensor = @cad.SensorSpec::new(
+    @cad.SensorKind::Encoder,
+    model="AS5047P",
+    interface="SPI/ABZ",
+    voltage_v~,
+    current_ma~,
+    range="360 deg",
+    resolution="14-bit (0.022 deg)",
+  )
+  let screw = purchased_part(
+    "ISO4762-M2.5x6", "ISO 4762 socket head cap screw M2.5 x 6 mm", "steel", 0.25,
+  )
+  let comp = @cad.Component::new(
+      name,
+      description="On-axis absolute magnetic position sensor",
+    )
+    .with_param("board_len_mm", board_len_mm.to_string())
+    .with_param("board_w_mm", board_w_mm.to_string())
+    .with_param("chip", "AS5047P")
+    .add_body(
+      arc_profile_body(
+        name + "_board",
+        board_outer,
+        thickness_mm,
+        board_holes,
+        @urdf.Density::pla(),
+        @step_cad.Rgb::green(),
+        0.0,
+      ).with_part(part),
+    )
+    .add_body(
+      @cad.BodyPart::box_mm(
+        name + "_chip",
+        chip_size_mm,
+        chip_size_mm,
+        chip_height_mm,
+        z_mm=-chip_height_mm / 2.0,
+        density=@urdf.Density::kg_per_m3(1850.0),
+        color=@step_cad.Rgb::black(),
+      ).with_part(part),
+    )
+    .add_mate_mm_deg("mount", axis=(0.0, 0.0, -1.0))
+    .add_mate_mm_deg("top", z=thickness_mm)
+    .add_mate_mm_deg("sensor_face", z=-chip_height_mm, axis=(0.0, 0.0, -1.0))
+    .with_part(part)
+    .with_sensor(sensor)
+    .add_port(
+      @cad.Port::new(
+        "power",
+        @cad.PortKind::Power,
+        spec=voltage_v.to_string() + " V, " + current_ma.to_string() + " mA",
+      ),
+    )
+    .add_port(@cad.Port::new("spi", @cad.PortKind::Bus, spec="SPI, 10 MHz"))
+    .add_port(@cad.Port::new("abz", @cad.PortKind::Signal, spec="A/B/Z 5 V"))
+    .add_port(@cad.Port::new("ground", @cad.PortKind::Ground, spec="0 V"))
+    .add_fastener(
+      @cad.Fastener::new(
+        "sensor_screws",
+        @cad.FastenerKind::Screw,
+        thread="M2.5",
+        length_mm=6.0,
+        engagement_mm=3.0,
+        quantity=4,
+        torque_nm=0.4,
+        references=[name + "_board"],
+        part=Some(screw),
+      ),
+    )
+  let holes : Array[(Double, Double)] = [
+    (-hx, -hy),
+    (hx, -hy),
+    (hx, hy),
+    (-hx, hy),
+  ]
+  let mut out = comp
+  for i in 0..<holes.length() {
+    out = out.add_mate_mm_deg(
+      "bolt_" + i.to_string(),
+      x=holes[i].0,
+      y=holes[i].1,
+    )
+  }
+  out
+}
+
+///|
+/// Builds a diametrically magnetized encoder magnet.
+///
+/// The magnet's top face is at `z = 0` and it extends `thickness_mm` below, so
+/// attaching `top` to an output-shaft end puts the magnet in the shaft's end
+/// pocket. The `bottom`/`shaft` mates are on the far face.
+pub fn encoder_magnet(
+  name~ : String = "encoder_magnet",
+  diameter_mm~ : Double = 6.0,
+  thickness_mm~ : Double = 2.5,
+  color~ : @step_cad.Rgb = @step_cad.Rgb::purple(),
+) -> @cad.Component {
+  let part = purchased_part(
+    "MAG-\{diameter_mm}x\{thickness_mm}-DIA",
+    "Diametrically magnetized NdFeB encoder magnet \{diameter_mm} x \{thickness_mm} mm",
+    "NdFeB N42",
+    1.20,
+  )
+  @cad.Component::new(
+    name,
+    description="Diametrically magnetized encoder magnet",
+  )
+  .with_param("diameter_mm", diameter_mm.to_string())
+  .with_param("magnetization", "diametric")
+  .add_body(
+    @cad.BodyPart::cylinder_mm(
+      name + "_magnet",
+      diameter_mm,
+      thickness_mm,
+      z_mm=-thickness_mm / 2.0,
+      density=@urdf.Density::kg_per_m3(7500.0),
+      color~,
+    ).with_part(part),
+  )
+  .add_mate_mm_deg("top")
+  .add_mate_mm_deg("bottom", z=-thickness_mm)
+  .add_mate_mm_deg("shaft", z=-thickness_mm)
+  .with_part(part)
+}
+
+///|
 /// Builds a six-axis IMU board.
 pub fn imu_module(
   name~ : String = "imu_module",
@@ -380,13 +559,29 @@ pub fn pcb_board(
   let half_w = width_mm / 2.0
   let hx = half_l - hole_inset_mm
   let hy = half_w - hole_inset_mm
-  let profile = @step_cad.Profile2D::new(
-      @step_cad.Profile2D::centered_rect(length_mm, width_mm),
-    )
-    .with_hole_at(hx, hy, mounting_hole_diam_mm)
-    .with_hole_at(-hx, hy, mounting_hole_diam_mm)
-    .with_hole_at(-hx, -hy, mounting_hole_diam_mm)
-    .with_hole_at(hx, -hy, mounting_hole_diam_mm)
+  let board_outer = rect_arc_segments(length_mm, width_mm)
+  let board_holes : Array[Array[@step_cad.ProfileSegment]] = [
+    arc_segments_at(
+      @step_gears.arc_circle_segments(mounting_hole_diam_mm),
+      hx,
+      hy,
+    ),
+    arc_segments_at(
+      @step_gears.arc_circle_segments(mounting_hole_diam_mm),
+      -hx,
+      hy,
+    ),
+    arc_segments_at(
+      @step_gears.arc_circle_segments(mounting_hole_diam_mm),
+      -hx,
+      -hy,
+    ),
+    arc_segments_at(
+      @step_gears.arc_circle_segments(mounting_hole_diam_mm),
+      hx,
+      -hy,
+    ),
+  ]
   let unit_cost_usd = 18.0
   let part = fabricated_part(
     "PCB-" + length_mm.to_string() + "x" + width_mm.to_string(),
@@ -406,21 +601,21 @@ pub fn pcb_board(
     connectors~,
   )
   let screw = purchased_part(
-    "SHCS-M2.5x6", "Socket head cap screw M2.5 x 6", "steel", 0.25,
+    "ISO4762-M2.5x6", "ISO 4762 socket head cap screw M2.5 x 6 mm", "steel", 0.25,
   )
   let comp = @cad.Component::new(name, description="Controller PCB")
     .with_param("length_mm", length_mm.to_string())
     .with_param("width_mm", width_mm.to_string())
     .with_param("thickness_mm", thickness_mm.to_string())
     .add_body(
-      @cad.BodyPart::extruded_profile_mm(
+      arc_profile_body(
         name + "_board",
-        profile.outer,
+        board_outer,
         thickness_mm,
-        holes=profile.holes,
-        z_mm=thickness_mm / 2.0,
-        density=@urdf.Density::pla(),
-        color=@step_cad.Rgb::green(),
+        board_holes,
+        @urdf.Density::pla(),
+        @step_cad.Rgb::green(),
+        0.0,
       ),
     )
     .add_mate_mm_deg("mount")

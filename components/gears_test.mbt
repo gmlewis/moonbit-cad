@@ -14,7 +14,9 @@ test "default planetary gearbox compiles to a mimic-coupled robot" {
       Some(mimic) => {
         mimics = mimics + 1
         if joint.name.has_prefix("planetary_gearbox_planet_") {
-          assert_true((mimic.multiplier + 1.0).abs() < 1.0e-9)
+          // 12/12/36 with a fixed ring: the planet's spin relative to the
+          // carrier is -Zs*Zr / (Zp*(Zs+Zr)) = -0.75 of the sun.
+          assert_true((mimic.multiplier + 0.75).abs() < 1.0e-9)
         } else if joint.name == "planetary_gearbox_carrier_joint" {
           assert_true((mimic.multiplier - 0.25).abs() < 1.0e-9)
         }
