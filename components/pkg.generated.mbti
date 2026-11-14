@@ -18,6 +18,8 @@ pub fn ball_bearing(name? : String, designation? : String, outer_diam_mm? : Doub
 
 pub fn bearing_plate_part(name? : String, bearing_outer_mm? : Double, bore_fit_mm? : Double, width_mm? : Double, height_mm? : Double, thickness_mm? : Double, bolt_hole_mm? : Double, bolt_spacing_mm? : Double) -> @gmlewis/cad.Component
 
+pub fn bldc_front_bearing_outer(String) -> Double
+
 pub fn bldc_preset(String) -> BldcPreset?
 
 pub fn bldc_preset_names() -> Array[String]
@@ -123,6 +125,8 @@ pub fn rigid_coupling_part(name? : String, outer_diam_mm? : Double, bore_diam_mm
 pub fn robot_leg_segment(String, length_mm~ : Double, width_mm? : Double, thickness_mm? : Double, bore_diam_mm? : Double, detail? : @common.DetailLevel, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/cad.Component
 
 pub fn sensor_mount_bracket(name? : String, width_mm? : Double, height_mm? : Double, thickness_mm? : Double, hole_diam_mm? : Double, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
+
+pub fn set_joint_mimic(@gmlewis/cad.Component, String, @urdf.JointMimic) -> Unit
 
 pub fn shaft_collar(name? : String, bore_diam_mm? : Double, outer_diam_mm? : Double, width_mm? : Double, style? : String, thread_size? : @standards.MetricSize) -> @gmlewis/cad.Component
 

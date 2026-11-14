@@ -9,13 +9,15 @@
 /// reads a diametrically magnetized magnet on the output shaft, giving absolute
 /// joint position for a moteus-style controller.
 ///
-/// `--motor nema` builds a NEMA stepper variant instead.
+/// `--motor exposed` drives the same low-KV BLDC motor into an exposed
+/// `planetary_gearset_stage` with no printed housing, useful for viewing or
+/// bench testing the gear train. Only low-KV BLDC motors are supported.
 
 ///|
 async fn main {
   let base_spec = {
     "motor": @cli.opt_string(
-      help="Motor: bldc (low-KV outrunner) or nema (stepper); default bldc",
+      help="Motor layout: bldc (housed actuator) or exposed (BLDC on an exposed stage); default bldc",
     ),
     "preset": @cli.opt_string(
       help="BLDC preset: 5010_360kv, 5008_335kv, 5208_180kv, 5065_270kv, 6354_190kv (default 5010_360kv)",
@@ -23,7 +25,10 @@ async fn main {
     "gearType": @cli.opt_string(
       help="Gear type: herringbone (swept) or spur (smooth exact arcs); default herringbone",
     ),
-    "stages": @cli.opt_int(1, help="Planetary stages: 1 or 2"),
+    "stages": @cli.opt_int(
+      1,
+      help="Housed actuator planetary stages: 1 or 2 (the exposed variant is single-stage)",
+    ),
     "module": @cli.opt_double(1.5, help="Gear module (tooth size)"),
     "sunTeeth": @cli.opt_int(12, help="Sun gear tooth count"),
     "planetTeeth": @cli.opt_int(18, help="Planet gear tooth count"),
@@ -44,6 +49,12 @@ async fn main {
   let detail = output.detail_level()
   let threads = output.thread_rep()
   let motor_kind = args.string_opt("motor").unwrap_or("bldc")
+  if motor_kind != "bldc" && motor_kind != "exposed" {
+    @cli.eprintln(
+      "error: --motor must be 'bldc' or 'exposed'; NEMA stepper support was removed",
+    )
+    abort("")
+  }
   let preset = args.string_opt("preset").unwrap_or("5010_360kv")
   let gear_type = args.string_opt("gearType").unwrap_or("herringbone")
   let stages = args.int("stages")
@@ -55,16 +66,16 @@ async fn main {
   let deg = @math.PI / 180.0
   let motor_angle = args.double("motorDeg") * deg
   let positions : Map[String, Double] = Map([])
-  let comp = if motor_kind.has_prefix("nema") {
-    let designation = if motor_kind.contains("23") {
-      "NEMA23"
-    } else {
-      "NEMA17"
+  let comp = if motor_kind == "exposed" {
+    let p = match @components.bldc_preset(preset) {
+      Some(p) => p
+      None =>
+        abort(
+          "unknown BLDC preset '\{preset}'; choose one of " +
+          @components.bldc_preset_names().join(", "),
+        )
     }
-    let (pilot_mm, nema_bolt_mm, nema_hole_mm, nema_shaft_mm) = @components.nema_frame_dims(
-      designation,
-    )
-    let sun_bore = nema_shaft_mm + 0.2
+    let sun_bore = p.shaft_diameter_mm + 0.2
     // A 688 bearing needs a planet root radius above about 9.5 mm.
     let use_planet_bearing = module_mm * (planet_teeth.to_double() / 2.0 - 1.25) >
       9.5
@@ -81,28 +92,34 @@ async fn main {
       planet_bore_mm=planet_bore,
       carrier_pin_diam_mm=if use_planet_bearing { 8.0 } else { 0.0 },
       carrier_bearing=if use_planet_bearing { "688" } else { "" },
+      output_shaft_length_mm=12.0,
       smooth=gear_type == "spur",
       detail~,
     )
-    // The adapter matches the NEMA pilot and bolt pattern, not an arbitrary
-    // bolt circle. The motor face sits directly against the adapter, so the
-    // shaft reaches the sun and no screws bridge a gap.
+    // Adapter plate at the BLDC motor's actual mounting circle. The center
+    // bore clears the motor's front bearing, which sits in the motor face.
+    let bearing_clearance = @components.bldc_front_bearing_outer(preset) + 0.3
+    let adapter_bore = if p.shaft_diameter_mm + 2.0 > bearing_clearance {
+      p.shaft_diameter_mm + 2.0
+    } else {
+      bearing_clearance
+    }
     let adapter = @components.flange_plate(
       name="motor_adapter",
-      outer_diam_mm=if designation == "NEMA23" { 80.0 } else { 60.0 },
-      center_bore_mm=pilot_mm,
+      outer_diam_mm=p.diameter_mm * 1.2,
+      center_bore_mm=adapter_bore,
       thickness_mm=6.0,
       bolt_count=4,
-      bolt_circle_mm=nema_bolt_mm,
-      bolt_diam_mm=nema_hole_mm,
+      bolt_circle_mm=p.bolt_circle_mm,
+      bolt_diam_mm=p.mount_hole_mm,
     )
-    let stepper = @components.nema_stepper(
-      name="nema_motor",
-      designation~,
+    let motor = @components.low_kv_bldc_motor(
+      name="bldc_motor",
+      preset~,
       detail~,
     )
     // Drop the adapter and motor together so the planet retaining washers
-    // (which sit just below the gear faces) clear the adapter plate.
+    // clear the adapter plate.
     let adapter_drop = 1.5
     let mut assembly = stage
       .attach(
@@ -115,32 +132,73 @@ async fn main {
       .attach(
         "motor_flange_joint",
         parent_mate="input_flange",
-        stepper,
-        child_mate="face_mount",
+        motor,
+        child_mate="mount",
         spec=@cad.JointSpec::fixed(offset_mm=adapter_drop),
       )
-    // Clamp the sun onto the NEMA shaft. The motor mount screws are a
-    // fastener schedule on the motor; they are not modeled through its solid
-    // envelope.
+    // The motor envelope is a purchased solid, so the mounting hardware is a
+    // schedule rather than screws modeled through it.
+    let m4 = p.mount_hole_mm > 3.5
+    let screw_part = @cad.PartMeta::new(
+      if m4 {
+        "ISO4762-M4x12"
+      } else {
+        "ISO4762-M3x10"
+      },
+      description=if m4 {
+        "ISO 4762 socket head cap screw M4 x 12 mm"
+      } else {
+        "ISO 4762 socket head cap screw M3 x 10 mm"
+      },
+      material="steel",
+      process="purchased",
+      unit_cost_usd=if m4 { 0.50 } else { 0.35 },
+    )
+    assembly = assembly.add_fastener(
+      @cad.Fastener::new(
+        "motor_mount_screws",
+        @cad.FastenerKind::Screw,
+        thread=if m4 { "M4" } else { "M3" },
+        length_mm=if m4 { 12.0 } else { 10.0 },
+        engagement_mm=4.0,
+        quantity=4,
+        torque_nm=if m4 { 2.0 } else { 0.8 },
+        references=["bldc_motor"],
+        part=Some(screw_part),
+      ),
+    )
+    // Clamp the sun to the BLDC shaft and make the sun follow the rotor.
+    let hub_outer = if p.shaft_diameter_mm > 8.0 {
+      p.shaft_diameter_mm * 2.0
+    } else {
+      12.0
+    }
     assembly = assembly.attach_to(
       "planetary_gearbox_sun",
-      "nema_sun_hub_merge",
+      "bldc_sun_hub_merge",
       parent_mate="bottom",
       @components.sun_clamp_hub(
-        "nema_sun_hub",
-        sun_bore,
-        if designation == "NEMA23" {
-          14.0
-        } else {
-          12.0
-        },
-        4.5,
-        detail,
+        "bldc_sun_hub", sun_bore, hub_outer, 4.5, detail,
       ),
       child_mate="top",
       spec=@cad.JointSpec::merge_rigid(),
     )
-    positions.set("nema_motor_shaft_joint", motor_angle)
+    @components.set_joint_mimic(
+      assembly,
+      "planetary_gearbox_sun_joint",
+      @urdf.JointMimic::new("bldc_motor_rotor_joint", multiplier=1.0),
+    )
+    assembly = assembly.add_control_binding(
+      @cad.ControlBinding::new(
+        "bldc_motor_rotor_joint",
+        actuator="bldc_motor_stator",
+        channel="can0:1",
+        gear_ratio=@components.planetary_reduction(sun_teeth, planet_teeth, 1),
+        soft_lower=Some(-1000.0),
+        soft_upper=Some(1000.0),
+      ),
+    )
+    positions.set("bldc_motor_rotor_joint", motor_angle)
     assembly
   } else {
     let act = @components.planetary_bldc_actuator(

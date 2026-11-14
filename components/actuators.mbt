@@ -884,7 +884,7 @@ pub fn low_kv_bldc_motor(
 
 ///|
 /// Recursively retargets a named joint's mimic to another joint.
-fn set_joint_mimic(
+pub fn set_joint_mimic(
   comp : @cad.Component,
   joint_name : String,
   mimic : @urdf.JointMimic,
@@ -950,6 +950,16 @@ fn actuator_plate_body(
 }
 
 ///|
+/// The front-bearing outside diameter of a BLDC preset, for sizing an adapter
+/// plate's bearing clearance bore.
+pub fn bldc_front_bearing_outer(preset : String) -> Double {
+  match bldc_preset(preset) {
+    Some(p) => actuator_bearing_outer(p.bearing_designation)
+    None => 20.0
+  }
+}
+
+///|
 /// The outer diameter of a catalogue bearing, falling back to 20 mm.
 fn actuator_bearing_outer(designation : String) -> Double {
   match @step_motion.bearing_size(designation) {
@@ -976,8 +986,14 @@ pub fn sun_clamp_hub(
     "ACT-SUN-HUB", "Printed sun clamp hub; drill/tap the M3 radial set-screw hole and bond or press the flange to the sun gear",
     "carbon fiber nylon", "3D print", 4.0,
   )
+  // Reach from the shaft bore to just past the hub's outer surface.
+  let screw_len = outer_diam_mm / 2.0 - bore_diam_mm / 2.0 + 2.0
+  let screw_center = (bore_diam_mm / 2.0 + outer_diam_mm / 2.0 + 2.0) / 2.0
   let screw_part = purchased_part(
-    "SET-M3x4", "M3 x 4 socket set screw", "steel", 0.15,
+    "SET-M3x\{screw_len}",
+    "M3 x \{screw_len} socket set screw",
+    "steel",
+    0.15,
   )
   let comp = @cad.Component::new(name, description="Sun clamp hub")
     .with_param("bore_diam_mm", bore_diam_mm.to_string())
@@ -998,8 +1014,8 @@ pub fn sun_clamp_hub(
       @cad.BodyPart::cylinder_mm(
         name + "_set_screw",
         3.0,
-        4.0,
-        x_mm=outer_diam_mm / 2.0 - 2.0,
+        screw_len,
+        x_mm=screw_center,
         z_mm=-length_mm / 2.0,
         ry_deg=90.0,
         density=@urdf.Density::steel_mild(),
@@ -1014,7 +1030,7 @@ pub fn sun_clamp_hub(
         "sun_hub_set_screw",
         @cad.FastenerKind::Screw,
         thread="M3",
-        length_mm=4.0,
+        length_mm=screw_len,
         engagement_mm=2.0,
         quantity=1,
         torque_nm=0.6,
@@ -1166,7 +1182,8 @@ pub fn planetary_bldc_actuator(
   )
   let motor_bolt_radius = p.bolt_circle_mm / 2.0
   let plate_holes : Array[(Double, Double, Double)] = []
-  plate_holes.push((0.0, 0.0, actuator_bearing_outer("624") + 0.2))
+  // Size the plate bore to the motor's own front bearing, which runs in it.
+  plate_holes.push((0.0, 0.0, bldc_front_bearing_outer(p.name) + 0.2))
   for i in 0..<4 {
     let theta = 2.0 * @math.PI * i.to_double() / 4.0
     plate_holes.push(

@@ -142,7 +142,8 @@ the Tier-1 STEP primitives:
   the wheelchair, and `caster_fork_assembly` for its front casters.
 
 Examples 02, 05, and 06 use these modules. Example 02 also accepts
-`--motor nema`; example 05 accepts `--foot` for a rubber-foot quadruped; example
+`--motor exposed` for the exposed-stage BLDC variant; example 05 accepts
+`--foot` for a rubber-foot quadruped; example
 06 accepts `--layout scooter` for the lighter single-fork vehicle.
 
 ## Showcase examples
@@ -171,7 +172,7 @@ Every example supports the shared output flags:
 
 | Example | Description |
 | --- | --- |
-| `02-planetary-actuator` | Low-KV BLDC outrunner (or NEMA stepper) driving a Tier-1 planetary gearbox, with planet bearings, a twin-bearing output cartridge, a moteus-style AS5047P output encoder, and a controller PCB. |
+| `02-planetary-actuator` | Low-KV BLDC outrunner driving a Tier-1 planetary gearbox — housed with a twin-bearing output cartridge and moteus-style AS5047P encoder, or exposed as a bench/viewing stage. |
 | `05-galileo-quadruped` | Flagship 17-link wheeled quadruped with V-slot chassis and four low-KV BLDC planetary actuator pods per leg; STEP, glTF, URDF, or full ROS 2 bundle. |
 | `06-assistive-scooter` | Motorized wheelchair with two-stage planetary rear drives, a V-slot frame, seat, armrests, and front casters (or a steerable fork). |
 
