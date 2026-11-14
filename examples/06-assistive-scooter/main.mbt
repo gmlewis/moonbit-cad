@@ -53,7 +53,6 @@ async fn main {
   }
   let output = @common.output_paths(args)
   let detail = output.detail_level()
-  let threads = output.thread_rep()
   let layout = args.string_opt("layout").unwrap_or("wheelchair")
   let wheelbase = args.double("wheelbase")
   let track_width = args.double("trackWidth")
@@ -155,11 +154,7 @@ async fn main {
       .attach(
         "\{corner_name}_merge",
         parent_mate="\{corner_name}_mount",
-        @components.vslot_corner_bracket_part(
-          name=corner_name,
-          leg_mm=20.0,
-          detail~,
-        ),
+        @components.vslot_corner_bracket_part(name=corner_name, leg_mm=20.0),
         child_mate="mount_a",
         spec=@cad.JointSpec::merge_rigid(),
       )
@@ -298,7 +293,6 @@ async fn main {
           wheel_diam_mm=rear_wheel_diam,
           wheel_width_mm=52.0,
           detail~,
-          threads?,
         ),
         child_mate="motor_mount",
         spec=@cad.JointSpec::fixed(),
@@ -329,7 +323,6 @@ async fn main {
           fork_length_mm=fork_length,
           wheel_diam_mm=front_wheel_diam,
           detail~,
-          threads?,
         ),
         child_mate="mount",
         spec=@cad.JointSpec::revolute(
@@ -363,7 +356,6 @@ async fn main {
             fork_span_mm=90.0,
             fork_length_mm=fork_length,
             detail~,
-            threads?,
           ),
           child_mate="steering_axis",
           spec=@cad.JointSpec::revolute(
@@ -395,7 +387,7 @@ async fn main {
       child_mate="mount",
       spec=@cad.JointSpec::merge_rigid(),
     )
-  let imu = @components.imu_module(name="imu", detail~)
+  let imu = @components.imu_module(name="imu")
   chassis = chassis
     .add_mate_mm_deg("imu_mount", x=-wheelbase * 0.10, z=frame_z + 30.0)
     .attach(
@@ -405,7 +397,7 @@ async fn main {
       child_mate="mount",
       spec=@cad.JointSpec::merge_rigid(),
     )
-  let camera = @components.camera_module(name="front_camera", detail~)
+  let camera = @components.camera_module(name="front_camera")
   chassis = chassis
     .add_mate_mm_deg("camera_mount", x=wheelbase * 0.45, z=frame_z + 200.0)
     .attach(
@@ -416,7 +408,7 @@ async fn main {
       spec=@cad.JointSpec::merge_rigid(),
     )
   // Wiring and control.
-  let _ = chassis.add_wire_run(
+  chassis = chassis.add_wire_run(
     @cad.WireRun::new(
       "left_drive_can",
       from_component="chassis_link",
@@ -427,7 +419,7 @@ async fn main {
       length_mm=900.0,
     ),
   )
-  let _ = chassis.add_wire_run(
+  chassis = chassis.add_wire_run(
     @cad.WireRun::new(
       "right_drive_can",
       from_component="chassis_link",
@@ -438,7 +430,7 @@ async fn main {
       length_mm=900.0,
     ),
   )
-  let _ = chassis.add_cable_route(
+  chassis = chassis.add_cable_route(
     @cad.CableRoute::new(
       "drive_harness",
       points=[
@@ -456,7 +448,7 @@ async fn main {
     ),
   )
   if layout == "scooter" {
-    let _ = chassis.add_control_binding(
+    chassis = chassis.add_control_binding(
       @cad.ControlBinding::new(
         "steering_joint",
         actuator="front_fork",
@@ -466,7 +458,7 @@ async fn main {
         soft_upper=Some(0.75),
       ),
     )
-    let _ = chassis.add_control_binding(
+    chassis = chassis.add_control_binding(
       @cad.ControlBinding::new(
         "front_fork_wheel_joint",
         actuator="front_fork",
@@ -482,7 +474,7 @@ async fn main {
         ("caster_left", "can0:3", "can0:4"),
         ("caster_right", "can0:5", "can0:6"),
       ] {
-      let _ = chassis.add_control_binding(
+      chassis = chassis.add_control_binding(
         @cad.ControlBinding::new(
           "\{caster.0}_swivel_joint",
           actuator=caster.0,
@@ -492,7 +484,7 @@ async fn main {
           soft_upper=Some(1.4),
         ),
       )
-      let _ = chassis.add_control_binding(
+      chassis = chassis.add_control_binding(
         @cad.ControlBinding::new(
           "\{caster.0}_wheel_joint",
           actuator=caster.0,
@@ -504,7 +496,7 @@ async fn main {
       )
     }
   }
-  let _ = chassis.add_control_binding(
+  chassis = chassis.add_control_binding(
     @cad.ControlBinding::new(
       "left_wheel_joint",
       actuator="left_drive",
@@ -514,7 +506,7 @@ async fn main {
       soft_upper=Some(1000.0),
     ),
   )
-  let _ = chassis.add_control_binding(
+  chassis = chassis.add_control_binding(
     @cad.ControlBinding::new(
       "right_wheel_joint",
       actuator="right_drive",

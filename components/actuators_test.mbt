@@ -42,7 +42,7 @@ test "nema stepper at detailed adds keyed shaft and mounting screws" {
 
 ///|
 test "bldc actuator pod compiles to an actuated robot" {
-  let comp = @components.bldc_actuator_pod()
+  let comp = @components.qdd_actuator_pod()
   check_actuator(comp)
   let robot = comp.to_robot()
   assert_eq(robot.joints[0].name, "actuator_pod_joint")
@@ -51,7 +51,7 @@ test "bldc actuator pod compiles to an actuated robot" {
 
 ///|
 test "detailed bldc pod carries bearing and flange screws" {
-  let comp = @components.bldc_actuator_pod(
+  let comp = @components.qdd_actuator_pod(
     detail=@step_common.DetailLevel::Detailed,
   )
   check_actuator(comp)

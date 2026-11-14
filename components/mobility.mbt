@@ -13,11 +13,9 @@ pub fn box_tube_strut(
   height_mm~ : Double,
   length_mm~ : Double,
   wall_mm~ : Double = 3.0,
-  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
   density~ : @urdf.Density = @urdf.Density::aluminum_6061(),
   color~ : @step_cad.Rgb = @step_cad.Rgb::grey(),
 ) -> @cad.Component {
-  let _ = detail
   let outer = @step_cad.Profile2D::centered_rect(width_mm, height_mm)
   let inner = @step_cad.Profile2D::centered_rect(
     width_mm - 2.0 * wall_mm,
@@ -180,7 +178,6 @@ pub fn treaded_wheel(
   detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
   density~ : @urdf.Density = @urdf.Density::tpu(),
 ) -> @cad.Component {
-  let policy = @step_common.DetailPolicy::for_level(detail)
   let hub_part = fabricated_part(
     "WHEEL-HUB-\{radius_mm}",
     "Wheel hub",
@@ -206,7 +203,6 @@ pub fn treaded_wheel(
           hub_radius_mm * 2.0,
           hub_bore_mm,
           width_mm,
-          segments=policy.circle_segments,
           rx_deg=90.0,
           density=@urdf.Density::petg(),
           color=@step_cad.Rgb::orange(),
@@ -228,7 +224,6 @@ pub fn treaded_wheel(
         radius_mm * 2.0,
         hub_radius_mm * 2.0,
         width_mm,
-        segments=policy.circle_segments,
         rx_deg=90.0,
         density~,
         color=@step_cad.Rgb::black(),
@@ -248,12 +243,11 @@ pub fn treaded_wheel(
           width_mm * 0.35,
           z_mm=0.0,
           rx_deg=90.0,
-          ry_deg=0.0,
+          ry_deg=theta * 180.0 / @math.PI,
           density=@urdf.Density::petg(),
           color=@step_cad.Rgb::orange(),
         ).with_part(hub_part),
       )
-      let _ = theta
     }
     // Bolt pattern matching the actuator output flange.
     if hub_bolt_circle_mm > 0.0 {
@@ -287,7 +281,6 @@ pub fn treaded_wheel(
       outer_diam_mm=hub_bore_mm * 2.0,
       width_mm=bearing_width,
       style="set_screw",
-      detail~,
     )
     wheel = wheel.attach(
       "hub_collar_merge",
@@ -317,7 +310,6 @@ pub fn quadruped_leg_assembly(
   max_vel_rad_s~ : Double = 21.0,
   wheeled~ : Bool = true,
   detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
-  threads? : @step_common.ThreadRepresentation,
 ) -> @cad.Component {
   let sign = if is_left { 1.0 } else { -1.0 }
   // Clevis stack: each link's bosses sit beside its parent's boss rather than
@@ -407,7 +399,7 @@ pub fn quadruped_leg_assembly(
   )
   let mut calf = robot_leg_segment(calf_name, length_mm=calf_length_mm, detail~)
   if detail_is_rich(detail) {
-    let force = force_sensor(name=calf_name + "_foot_sensor", detail~)
+    let force = force_sensor(name=calf_name + "_foot_sensor")
     calf = calf.attach(
       "foot_sensor_merge",
       parent_mate="distal_joint",
@@ -439,7 +431,6 @@ pub fn quadruped_leg_assembly(
       from_port="power",
       to_component=calf_name,
       to_port="power",
-      detail~,
     )
     calf = calf.attach(
       "leg_harness_merge",
@@ -526,7 +517,7 @@ pub fn quadruped_leg_assembly(
       ).with_part(foot_part),
     )
     .add_mate_mm_deg("mount")
-  let (distal, distal_joint_name, distal_child, distal_spec, distal_offset) = if wheeled {
+  let (distal, distal_joint_name, distal_child, distal_spec) = if wheeled {
     (
       wheel,
       "\{prefix}_wheel_joint",
@@ -541,12 +532,10 @@ pub fn quadruped_leg_assembly(
         offset_mm=calf_to_wheel_mm,
         transmission_reduction=Some(1.0),
       ),
-      calf_to_wheel_mm,
     )
   } else {
-    (foot, "\{prefix}_ankle_joint", "mount", @cad.JointSpec::fixed(), 0.0)
+    (foot, "\{prefix}_ankle_joint", "mount", @cad.JointSpec::fixed())
   }
-  let _ = distal_offset
   let calf_with_wheel = calf.attach(
     distal_joint_name,
     parent_mate="distal_joint",
@@ -570,7 +559,6 @@ pub fn quadruped_leg_assembly(
       transmission_reduction=Some(6.0),
     ),
   )
-  let _ = threads
   hip.attach(
     "\{prefix}_thigh_joint",
     parent_mate="thigh_mount",
@@ -598,10 +586,8 @@ pub fn suspension_fork_module(
   fork_length_mm~ : Double = 220.0,
   wheel_diam_mm~ : Double = 200.0,
   detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
-  threads? : @step_common.ThreadRepresentation,
   density~ : @urdf.Density = @urdf.Density::aluminum_6061(),
 ) -> @cad.Component {
-  let _ = threads
   let crown_part = fabricated_part(
     "FORK-CROWN", "Suspension fork crown", "6061-T6", "3D print / CNC", 16.0,
   )
@@ -688,7 +674,6 @@ pub fn suspension_fork_module(
     wire_diam_mm=4.0,
     mean_diam_mm=fork_span_mm * 0.35,
     free_length_mm=fork_length_mm * 0.7,
-    detail~,
   )
   fork = fork.attach(
     "spring_merge",
@@ -851,7 +836,6 @@ pub fn actuator_pod_geometry(
   detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
 ) -> @cad.Component {
   let p = resolve_bldc_preset(preset)
-  let policy = @step_common.DetailPolicy::for_level(detail)
   let motor_part = purchased_part(
     "BLDC-\{p.name}",
     "Low-KV brushless outrunner \{p.name} (\{p.kv} KV)",
@@ -888,7 +872,6 @@ pub fn actuator_pod_geometry(
         (ring_outer_mm + 4.0) * 2.0,
         (ring_outer_mm + 0.5) * 2.0,
         gear_length_mm + 12.0,
-        segments=policy.circle_segments,
         z_mm=gear_length_mm / 2.0,
         density=@urdf.Density::carbon_fiber(),
         color=@step_cad.Rgb::grey(),
@@ -975,7 +958,6 @@ pub fn planetary_wheel_drive_unit(
   wheel_diam_mm~ : Double = 250.0,
   wheel_width_mm~ : Double = 50.0,
   detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
-  threads? : @step_common.ThreadRepresentation,
 ) -> @cad.Component {
   let actuator = planetary_bldc_actuator(
     name=name + "_drive",
@@ -988,7 +970,6 @@ pub fn planetary_wheel_drive_unit(
     gear_length_mm~,
     gear_type~,
     detail~,
-    threads?,
   )
   let wheel = treaded_wheel(
     name + "_wheel",
@@ -1032,9 +1013,7 @@ pub fn caster_fork_assembly(
   fork_span_mm~ : Double = 90.0,
   fork_length_mm~ : Double = 150.0,
   detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
-  threads? : @step_common.ThreadRepresentation,
 ) -> @cad.Component {
-  let _ = threads
   let half_span = fork_span_mm / 2.0
   let plate_part = fabricated_part(
     "CASTER-PLATE", "Caster fork side plate", "6061-T6", "3D print / CNC", 7.0,
@@ -1103,7 +1082,6 @@ pub fn caster_fork_assembly(
     wire_diam_mm=3.5,
     mean_diam_mm=fork_span_mm * 0.2,
     free_length_mm=fork_length_mm * 0.6,
-    detail~,
   )
   fork = fork.attach(
     "spring_merge",

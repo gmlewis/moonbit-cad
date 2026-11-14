@@ -436,26 +436,18 @@ fn pgb_build(
 ///|
 /// Builds a standalone involute gear component with an optional bore.
 ///
-/// The public API is unchanged; the geometry delegates to the Tier-1 involute
-/// spur gear and the detail level controls the tooth-outline resolution.
-pub fn herringbone_gear_component(
+/// The geometry delegates to the Tier-1 involute spur gear; the detail level
+/// controls the tooth-outline resolution.
+pub fn involute_gear_component(
   name : String,
   gear_module~ : Double,
   num_teeth~ : Int32,
   gear_length_mm~ : Double,
-  helix_angle_deg~ : Double = 30.0,
   bore_radius_mm~ : Double = 5.0,
-  num_elbows~ : Int32 = 2,
-  resolution~ : Int32 = 5,
-  direction~ : Double = 1.0,
   density~ : @urdf.Density = @urdf.Density::pla(),
   color~ : @step_cad.Rgb = @step_cad.Rgb::orange(),
   detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
 ) -> @cad.Component {
-  let _ = helix_angle_deg
-  let _ = num_elbows
-  let _ = resolution
-  let _ = direction
   let gear_cost_usd = 6.0
   let (involute_points, arc_points) = match detail {
     @step_common.DetailLevel::Simplified => (4, 4)
@@ -583,11 +575,9 @@ pub fn planetary_gearset_stage(
   face_width_mm~ : Double = 8.0,
   pressure_angle_deg~ : Double = 20.0,
   sun_bore_mm~ : Double = 0.0,
-  planet_bore_mm~ : Double = 0.0,
   smooth~ : Bool = true,
   detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
 ) -> @cad.Component {
-  let _ = planet_bore_mm
   let params : PlanetaryGearboxParams = {
     gear_module: module_mm,
     gear_length_mm: face_width_mm,

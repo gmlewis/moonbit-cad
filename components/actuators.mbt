@@ -7,8 +7,11 @@
 /// real bearings and mounting screws are merged into the stator.
 
 ///|
-/// Builds a NEMA-style stepper motor: a rounded stator body, a front boss, a
-/// keyed rotor shaft, and four faceplate mounting screws.
+/// Builds a NEMA stepper motor from the Tier-1 envelope: a square body with
+/// four mounting holes, a front pilot boss, and a rotor shaft.
+///
+/// `designation` selects a standard frame (NEMA17/NEMA23); the explicit
+/// dimensions build a non-standard envelope under the same interface.
 pub fn nema_stepper(
   name~ : String = "nema17",
   frame_size_mm~ : Double = 42.3,
@@ -24,99 +27,71 @@ pub fn nema_stepper(
   designation~ : String = "",
   mount_plate~ : Bool = false,
 ) -> @cad.Component {
-  // Modern delegation path: use the Tier-1 NEMA motor envelope when a
-  // designation is supplied. The custom frame-size path below is kept for
-  // odd envelopes and for callers that predate `@step_motors`.
-  if designation != "" {
-    let mut comp = nema_motor_by_designation(
-      name~,
-      designation~,
-      body_length_mm~,
-      detail~,
-    )
-    if mount_plate {
-      comp = comp.attach(
-        "mount_plate_merge",
-        parent_mate="face_mount",
-        nema_mount_plate_part(
-          name=name + "_mount_plate",
-          designation~,
-          width_mm=frame_size_mm * 1.6,
-          height_mm=frame_size_mm * 1.6,
-          thickness_mm=5.0,
-          detail~,
-        ),
-        child_mate="origin",
-        spec=@cad.JointSpec::merge_rigid(),
-      )
+  let frame = if designation != "" {
+    expect_step("NEMA frame", @step_motors.nema_frame(designation))
+  } else {
+    {
+      designation: "NEMA-\{frame_size_mm}",
+      frame_mm: frame_size_mm,
+      bolt_spacing_mm: frame_size_mm * 0.73,
+      mounting_hole_diameter_mm: 3.384,
+      pilot_diameter_mm: boss_diam_mm,
+      pilot_length_mm: boss_height_mm,
+      shaft_diameter_mm: shaft_diam_mm,
+      default_shaft_length_mm: shaft_length_mm,
     }
-    return comp
   }
+  let step_comp = expect_step(
+    "NEMA stepper motor",
+    @step_motors.nema_stepper_motor(
+      frame,
+      body_length_mm,
+      shaft_length_mm~,
+      shaft_diameter_mm=shaft_diam_mm,
+      pilot_diameter_mm=boss_diam_mm,
+      pilot_length_mm=boss_height_mm,
+      detail~,
+    ),
+  )
   let stator_name = name + "_stator"
   let rotor_name = name + "_rotor"
-  let policy = @step_common.DetailPolicy::for_level(detail)
-  // `rounded_rect` is anchored at (0, 0); center it so the stator body is
-  // concentric with the front boss and the rotor shaft.
-  let stator_profile = @step_cad.translate_pts(
-    @step_cad.Profile2D::rounded_rect(
-      frame_size_mm,
-      frame_size_mm,
-      2.0,
-      segments=policy.circle_segments,
-    ),
-    -frame_size_mm / 2.0,
-    -frame_size_mm / 2.0,
+  let part = purchased_part(
+    "NEMA-\{frame.designation}",
+    "NEMA stepper \{frame.designation}",
+    "mixed",
+    12.0,
+    supplier_url="https://www.omc-stepperonline.com/",
   )
-  let mount_offset = frame_size_mm * 0.365
-  let mut stator = @cad.Component::new(
-      stator_name,
-      description="NEMA stepper stator",
+  let mut stator = @cad.Component::from_step_layer(
+    stator_name,
+    step_comp,
+    "body",
+    density=@urdf.Density::steel_mild(),
+    part=Some(part),
+  )
+  let pilot = @cad.Component::from_step_layer(
+    stator_name + "_pilot",
+    step_comp,
+    "pilot-boss",
+    density=@urdf.Density::aluminum_6061(),
+  )
+  stator = stator
+    .add_bodies(pilot.bodies)
+    .add_mate_mm_deg("face_mount", z=body_length_mm)
+    .add_mate_mm_deg("rear_mount")
+    .add_mate_mm_deg("shaft_base", z=body_length_mm + boss_height_mm)
+  let half_spacing = frame.bolt_spacing_mm / 2.0
+  for i in 0..<4 {
+    let sx = if i == 0 || i == 3 { half_spacing } else { -half_spacing }
+    let sy = if i == 1 || i == 3 { half_spacing } else { -half_spacing }
+    stator = stator.add_mate_mm_deg(
+      "mount_hole_\{i}",
+      x=sx,
+      y=sy,
+      z=body_length_mm,
     )
-    .with_param("frame_size_mm", frame_size_mm.to_string())
-    .with_param("body_length_mm", body_length_mm.to_string())
-    .add_body(
-      @cad.BodyPart::extruded_profile_mm(
-        stator_name + "_body",
-        stator_profile,
-        body_length_mm,
-        z_mm=-body_length_mm / 2.0,
-        density=@urdf.Density::steel_mild(),
-        color=@step_cad.Rgb::black(),
-      ),
-    )
-    .add_body(
-      @cad.BodyPart::cylinder_mm(
-        stator_name + "_boss",
-        boss_diam_mm,
-        boss_height_mm,
-        z_mm=boss_height_mm / 2.0,
-        density=@urdf.Density::aluminum_6061(),
-        color=@step_cad.Rgb::grey(),
-      ),
-    )
-    .add_mate_mm_deg("face_mount")
-    .add_mate_mm_deg("rear_mount", z=-body_length_mm)
-    .add_mate_mm_deg("shaft_base", z=boss_height_mm)
-  let mount_points : Array[(Double, Double)] = [
-    (mount_offset, mount_offset),
-    (-mount_offset, mount_offset),
-    (-mount_offset, -mount_offset),
-    (mount_offset, -mount_offset),
-  ]
-  for i, (x, y) in mount_points {
-    stator = stator.add_mate_mm_deg("mount_hole_\{i}", x~, y~)
   }
-  let rotor_bodies = if !detail_is_rich(detail) {
-    [
-      @cad.BodyPart::cylinder_mm(
-        rotor_name + "_shaft",
-        shaft_diam_mm,
-        shaft_length_mm,
-        density=@urdf.Density::steel_mild(),
-        color=@step_cad.Rgb::grey(),
-      ),
-    ]
-  } else {
+  let rotor = if detail_is_rich(detail) {
     let keyed = expect_step(
       "keyed shaft",
       @step_motion.keyed_shaft(
@@ -124,23 +99,39 @@ pub fn nema_stepper(
         shaft_length_mm,
         shaft_diam_mm * 0.3,
         shaft_diam_mm * 0.15,
-        segments=policy.circle_segments,
+        segments=@step_common.DetailPolicy::for_level(detail).circle_segments,
       ),
     )
-    @cad.BodyPart::from_step_component(
-      keyed,
-      density=@urdf.Density::steel_mild(),
-      z_mm=-shaft_length_mm / 2.0,
-    )
-  }
-  let rotor = @cad.Component::new(rotor_name, description="NEMA stepper rotor")
+    @cad.Component::new(rotor_name, description="NEMA stepper rotor")
     .with_param("shaft_diam_mm", shaft_diam_mm.to_string())
     .with_param("shaft_length_mm", shaft_length_mm.to_string())
-    .add_bodies(rotor_bodies)
+    .add_bodies(
+      @cad.BodyPart::from_step_component(
+        keyed,
+        density=@urdf.Density::steel_mild(),
+        z_mm=-shaft_length_mm / 2.0,
+      ),
+    )
     .add_mate_mm_deg("base", z=-shaft_length_mm / 2.0)
     .add_mate_mm_deg("shaft_tip", z=shaft_length_mm / 2.0)
+  } else {
+    let shaft = @cad.Component::from_step_layer(
+      rotor_name,
+      step_comp,
+      "shaft",
+      density=@urdf.Density::steel_mild(),
+      apply_placement=false,
+    )
+    let centered = shaft.bodies.map(fn(body) {
+      body.transform_by(
+        @cad.urdf_transform_from_mm_deg(z_mm=-shaft_length_mm / 2.0),
+      )
+    })
+    { ..shaft, bodies: centered, }
+    .add_mate_mm_deg("base", z=-shaft_length_mm / 2.0)
+    .add_mate_mm_deg("shaft_tip", z=shaft_length_mm / 2.0)
+  }
   if detail_is_rich(detail) {
-    let mount_screw_length = 8.0
     for i in 0..<4 {
       stator = stator.attach(
         "mount_screw_\{i}",
@@ -148,7 +139,7 @@ pub fn nema_stepper(
         iso_shcs_screw(
           name="mount_screw_\{i}",
           size=@step_standards.M3,
-          length_mm=mount_screw_length,
+          length_mm=8.0,
           detail~,
           threads?,
         ),
@@ -157,28 +148,39 @@ pub fn nema_stepper(
       )
     }
   }
-  let part = purchased_part(
-    "NEMA-\{frame_size_mm}",
-    "NEMA stepper \{frame_size_mm} mm",
-    "mixed",
-    12.0,
-    supplier_url="https://www.omc-stepperonline.com/",
-  )
-  let nema_small_frame_mm = 25.0
-  let small_rated_current_a = 0.6
-  let large_rated_current_a = 1.5
-  let stall_factor = 1.25
-  let rated_current_a = if frame_size_mm <= nema_small_frame_mm {
-    small_rated_current_a
-  } else {
-    large_rated_current_a
+  if mount_plate {
+    let plate = if designation != "" {
+      nema_mount_plate_part(
+        name=name + "_mount_plate",
+        designation=frame.designation,
+        width_mm=frame.frame_mm * 1.6,
+        height_mm=frame.frame_mm * 1.6,
+        thickness_mm=5.0,
+        detail~,
+      )
+    } else {
+      stock_plate_part(
+        name=name + "_mount_plate",
+        width_mm=frame.frame_mm * 1.6,
+        height_mm=frame.frame_mm * 1.6,
+        thickness_mm=5.0,
+        detail~,
+      )
+    }
+    stator = stator.attach(
+      "mount_plate_merge",
+      parent_mate="face_mount",
+      plate,
+      child_mate="origin",
+      spec=@cad.JointSpec::merge_rigid(),
+    )
   }
   let spec = @cad.ActuatorSpec::new(
     @cad.ActuatorKind::Stepper,
-    model="NEMA " + frame_size_mm.to_string(),
+    model="NEMA " + frame.designation,
     voltage_v=24.0,
-    current_rated_a=rated_current_a,
-    current_stall_a=rated_current_a * stall_factor,
+    current_rated_a=1.5,
+    current_stall_a=1.9,
     torque_rated_nm=max_effort_nm,
     driver="A4988",
     interface="STEP/DIR",
@@ -186,13 +188,7 @@ pub fn nema_stepper(
   )
   stator
   .with_actuator(spec)
-  .add_port(
-    @cad.Port::new(
-      "power",
-      @cad.PortKind::Power,
-      spec="24 V, " + rated_current_a.to_string() + " A",
-    ),
-  )
+  .add_port(@cad.Port::new("power", @cad.PortKind::Power, spec="24 V, 1.5 A"))
   .add_port(
     @cad.Port::new("step_dir", @cad.PortKind::Signal, spec="TTL STEP/DIR"),
   )
@@ -218,7 +214,7 @@ pub fn nema_stepper(
 ///|
 /// Builds a quasi-direct-drive (QDD) robotic joint module with a housing, a
 /// mounting flange, an internal bearing, and a rotating output horn.
-pub fn bldc_actuator_pod(
+pub fn qdd_actuator_pod(
   name~ : String = "actuator_pod",
   housing_diam_mm~ : Double = 96.0,
   housing_length_mm~ : Double = 54.0,
@@ -235,7 +231,6 @@ pub fn bldc_actuator_pod(
 ) -> @cad.Component {
   let rotor_name = name + "_rotor"
   let flange_thickness = 5.0
-  let policy = @step_common.DetailPolicy::for_level(detail)
   let mut stator = @cad.Component::new(name, description="QDD actuator stator")
     .with_param("housing_diam_mm", housing_diam_mm.to_string())
     .with_param("housing_length_mm", housing_length_mm.to_string())
@@ -255,7 +250,6 @@ pub fn bldc_actuator_pod(
         housing_diam_mm * 1.18,
         housing_diam_mm * 0.95,
         flange_thickness,
-        segments=policy.circle_segments,
         z_mm=-housing_length_mm / 2.0 + flange_thickness / 2.0,
         density=@urdf.Density::aluminum_6061(),
         color~,
@@ -374,7 +368,6 @@ pub fn hub_motor_assembly(
 ) -> @cad.Component {
   let wheel_name = name + "_wheel"
   let rim_diam = tire_diam_mm * 0.65
-  let policy = @step_common.DetailPolicy::for_level(detail)
   let mut hub = @cad.Component::new(name, description="Hub motor stator")
     .with_param("stator_diam_mm", stator_diam_mm.to_string())
     .with_param("stator_width_mm", stator_width_mm.to_string())
@@ -438,7 +431,6 @@ pub fn hub_motor_assembly(
         tire_diam_mm,
         rim_diam,
         tire_width_mm,
-        segments=policy.circle_segments,
         density=@urdf.Density::tpu(),
         color=@step_cad.Rgb::black(),
       ),
@@ -653,7 +645,6 @@ pub fn low_kv_bldc_motor(
   detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
 ) -> @cad.Component {
   let p = resolve_bldc_preset(preset)
-  let policy = @step_common.DetailPolicy::for_level(detail)
   let stator_name = name + "_stator"
   let rotor_name = name + "_rotor"
   let rotor_joint = name + "_rotor_joint"
@@ -692,7 +683,6 @@ pub fn low_kv_bldc_motor(
         stack_outer,
         stack_inner,
         p.body_length_mm - 2.0 * endbell_thickness,
-        segments=policy.circle_segments,
         z_mm=-p.body_length_mm / 2.0,
         density=@urdf.Density::kg_per_m3(7600.0),
         color=@step_cad.Rgb::orange(),
@@ -755,7 +745,6 @@ pub fn low_kv_bldc_motor(
       )
     }
     for i in 0..<4 {
-      let theta = 2.0 * @math.PI * i.to_double() / 4.0
       let insert = heat_set_insert(
         name="\{stator_name}_insert_\{i}",
         outer_diam_mm=4.5,
@@ -769,7 +758,6 @@ pub fn low_kv_bldc_motor(
         child_mate="seat",
         spec=@cad.JointSpec::merge_rigid(),
       )
-      let _ = theta
     }
   }
   let rotor_part = purchased_part(
@@ -802,7 +790,6 @@ pub fn low_kv_bldc_motor(
           p.diameter_mm,
           p.diameter_mm - 2.0 * bell_wall,
           p.body_length_mm - 8.0,
-          segments=policy.circle_segments,
           z_mm=-p.body_length_mm / 2.0 - 2.0,
           density=@urdf.Density::aluminum_6061(),
           color=@step_cad.Rgb::black(),
@@ -914,9 +901,7 @@ pub fn planetary_bldc_actuator(
   gear_length_mm~ : Double = 10.0,
   gear_type~ : String = "herringbone",
   detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
-  threads? : @step_common.ThreadRepresentation,
 ) -> @cad.Component {
-  let _ = threads
   let p = resolve_bldc_preset(preset)
   let stage_count = if stages < 1 { 1 } else { stages }
   // Simplified actuators use exact line/arc gears for fast simulation meshes;
@@ -1150,7 +1135,7 @@ pub fn planetary_bldc_actuator(
   let output_torque = bldc_rated_torque(p) * reduction * efficiency
   if detail_is_rich(detail) {
     // A rear magnetic encoder reads the rotor magnet.
-    let encoder = magnetic_encoder(name=name + "_encoder", detail~)
+    let encoder = magnetic_encoder(name=name + "_encoder")
     housing = housing.attach(
       "encoder_merge",
       parent_mate="encoder_mount",
@@ -1165,7 +1150,6 @@ pub fn planetary_bldc_actuator(
       outer_diam_mm=p.shaft_diameter_mm * 2.0,
       width_mm=8.0,
       style="set_screw",
-      detail~,
     )
     housing = housing.attach_to(
       output_carrier,
@@ -1201,65 +1185,4 @@ pub fn planetary_bldc_actuator(
       soft_upper=Some(1000.0),
     ),
   )
-}
-
-///|
-/// Builds a NEMA stepper motor from the Tier-1 `@step_motors` primitive.
-///
-/// This is the modern delegation path for NEMA17/NEMA23; the legacy
-/// `nema_stepper` builder is kept for its custom frame sizes and body lengths.
-pub fn nema_motor_by_designation(
-  name~ : String = "nema_motor",
-  designation~ : String = "NEMA17",
-  body_length_mm~ : Double = 40.0,
-  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
-) -> @cad.Component {
-  let step_comp = expect_step(
-    "NEMA stepper motor",
-    @step_motors.nema_motor_by_designation(designation, body_length_mm, detail~),
-  )
-  let frame = expect_step("NEMA frame", @step_motors.nema_frame(designation))
-  let stator_part = purchased_part(
-    "NEMA-\{frame.designation}",
-    "NEMA stepper \{frame.designation}",
-    "mixed",
-    12.0,
-    supplier_url="https://www.omc-stepperonline.com/",
-  )
-  let stator = @cad.Component::from_step_layer(
-    name + "_stator",
-    step_comp,
-    "body",
-    density=@urdf.Density::steel_mild(),
-    part=Some(stator_part),
-  )
-  let pilot = @cad.Component::from_step_layer(
-    name + "_pilot",
-    step_comp,
-    "pilot-boss",
-    density=@urdf.Density::aluminum_6061(),
-  )
-  let rotor = @cad.Component::from_step_layer(
-    name + "_rotor",
-    step_comp,
-    "shaft",
-    density=@urdf.Density::steel_mild(),
-    apply_placement=false,
-  )
-  stator
-  .add_bodies(pilot.bodies)
-  .add_mate_mm_deg("face_mount", z=body_length_mm)
-  .add_mate_mm_deg("rear_mount")
-  .attach(
-    "\{name}_shaft_joint",
-    parent_mate="face_mount",
-    rotor,
-    child_mate="origin",
-    spec=@cad.JointSpec::continuous(
-      limit=Some(@urdf.JointLimit::new(effort=0.45, velocity=30.0)),
-      transmission_reduction=Some(1.0),
-    ),
-    bom_external=false,
-  )
-  .with_part(stator_part)
 }

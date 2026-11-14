@@ -150,15 +150,16 @@ fn circle_arc_segments(diameter_mm : Double) -> Array[@step_cad.ProfileSegment] 
 
 ///|
 /// Builds a hollow tube whose geometric center is at the origin, axis along Z.
+///
+/// The walls are exact cylindrical surfaces (four-quarter-arc loops), not a
+/// faceted polygon.
 pub fn centered_tube_node(
   outer_diam_mm : Double,
   inner_diam_mm : Double,
   length_mm : Double,
-  segments~ : Int32 = 36,
   name~ : String = "tube",
   color~ : @step_cad.Rgb = @step_cad.Rgb::grey(),
 ) -> @step_cad.SceneNode {
-  let _ = segments
   let outer = circle_arc_segments(outer_diam_mm)
   let shape = if inner_diam_mm > 0.0 {
     @step_cad.ExtrudedArcProfile::new(outer, length_mm, holes=[

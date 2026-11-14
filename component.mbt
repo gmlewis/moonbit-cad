@@ -107,7 +107,6 @@ pub fn BodyPart::tube_mm(
   outer_diam_mm : Double,
   inner_diam_mm : Double,
   length_mm : Double,
-  segments~ : Int32 = 36,
   density~ : @urdf.Density = @urdf.Density::aluminum_6061(),
   color~ : @step_cad.Rgb = @step_cad.Rgb::grey(),
   x_mm~ : Double = 0.0,
@@ -126,14 +125,7 @@ pub fn BodyPart::tube_mm(
     rz_deg~,
   )
   let node = transform_scene_node_urdf(
-    centered_tube_node(
-      outer_diam_mm,
-      inner_diam_mm,
-      length_mm,
-      segments~,
-      name~,
-      color~,
-    ),
+    centered_tube_node(outer_diam_mm, inner_diam_mm, length_mm, name~, color~),
     @urdf.Transform::from_origin(origin),
   )
   let inertial = @urdf.Inertial::from_tube_density(
@@ -252,7 +244,7 @@ pub fn BodyPart::with_part(self : BodyPart, part : PartMeta) -> BodyPart {
 
 ///|
 /// How an attached child component connects to its parent.
-#derive(Debug, Eq)
+#derive(Debug)
 pub(all) enum ConnectionKind {
   MergeRigid
   Fixed
@@ -268,7 +260,7 @@ pub(all) enum ConnectionKind {
 /// The pair owns the parent connector name, child connector name, offset, twist,
 /// flip, and fit. `JointSpec` keeps only what is kinematic: the joint kind,
 /// limits, dynamics, mimic, and transmission reduction.
-#derive(Debug, Eq)
+#derive(Debug)
 pub(all) struct JointSpec {
   kind : ConnectionKind
   pair : @step_common.MatePair
@@ -611,8 +603,9 @@ pub fn Component::attach_to(
       bom_external~,
     )
   }
-  for att in self.attachments {
-    let _ = att.child.attach_to(
+  for i in 0..<self.attachments.length() {
+    let att = self.attachments[i]
+    let updated = att.child.attach_to(
       target_name,
       joint_name,
       parent_mate~,
@@ -621,6 +614,7 @@ pub fn Component::attach_to(
       spec~,
       bom_external~,
     )
+    self.attachments[i] = { ..att, child: updated, }
   }
   self
 }

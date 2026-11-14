@@ -15,9 +15,7 @@ pub fn limit_switch(
   voltage_v~ : Double = 5.0,
   current_ma~ : Double = 10.0,
   color~ : @step_cad.Rgb = @step_cad.Rgb::red(),
-  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
 ) -> @cad.Component {
-  let _ = detail
   let unit_cost_usd = 2.5
   let part = purchased_part(
     "LIMIT-SW-MICRO", "Micro limit switch", "mixed", unit_cost_usd,
@@ -83,9 +81,7 @@ pub fn magnetic_encoder(
   board_len_mm~ : Double = 20.0,
   voltage_v~ : Double = 3.3,
   current_ma~ : Double = 15.0,
-  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
 ) -> @cad.Component {
-  let _ = detail
   let unit_cost_usd = 8.0
   let part = purchased_part(
     "ENC-MAG-14BIT", "Magnetic encoder 14-bit", "mixed", unit_cost_usd,
@@ -146,9 +142,7 @@ pub fn imu_module(
   board_mm~ : Double = 16.0,
   voltage_v~ : Double = 3.3,
   current_ma~ : Double = 5.0,
-  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
 ) -> @cad.Component {
-  let _ = detail
   let unit_cost_usd = 6.0
   let part = purchased_part("IMU-6AXIS", "6-axis IMU", "mixed", unit_cost_usd)
   let sensor = @cad.SensorSpec::new(
@@ -197,9 +191,7 @@ pub fn camera_module(
   lens_diam_mm~ : Double = 12.0,
   voltage_v~ : Double = 5.0,
   current_ma~ : Double = 250.0,
-  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
 ) -> @cad.Component {
-  let _ = detail
   let unit_cost_usd = 35.0
   let part = purchased_part(
     "CAM-1080P", "1080p camera module", "mixed", unit_cost_usd,
@@ -263,9 +255,7 @@ pub fn force_sensor(
   body_h_mm~ : Double = 5.0,
   voltage_v~ : Double = 5.0,
   current_ma~ : Double = 5.0,
-  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
 ) -> @cad.Component {
-  let _ = detail
   let unit_cost_usd = 9.0
   let part = purchased_part(
     "FSR-50N", "Force sensor 0-50 N", "mixed", unit_cost_usd,

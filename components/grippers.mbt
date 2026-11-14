@@ -27,8 +27,6 @@ pub fn parallel_gripper(
   finger_overlap_mm~ : Double = 4.0,
   effort_n~ : Double = 20.0,
   velocity_mps~ : Double = 0.05,
-  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
-  threads? : @step_common.ThreadRepresentation,
   density~ : @urdf.Density = @urdf.Density::aluminum_6061(),
   color~ : @step_cad.Rgb = @step_cad.Rgb::grey(),
 ) -> @cad.Component {
@@ -101,8 +99,6 @@ pub fn parallel_gripper(
         3.0,
       ),
     )
-  let _ = detail
-  let _ = threads
   base.attach(
     jaw_name,
     parent_mate="jaw_slide",
@@ -317,7 +313,7 @@ pub fn lead_screw_gripper(
       ).rev(),
     )
   }
-  let base = @cad.Component::new(name, description="Lead-screw gripper")
+  let mut base = @cad.Component::new(name, description="Lead-screw gripper")
     .with_param("opening_mm", opening_mm.to_string())
     .with_param("travel_mm", travel_mm.to_string())
     .with_param("lead_mm", lead_mm.to_string())
@@ -666,7 +662,7 @@ pub fn lead_screw_gripper(
   let motor_bolt_length_mm = 12.0
   let bearing_bolt_length_mm = 10.0
   let wrist_bolt_length_mm = 12.0
-  let _ = base.add_fastener(
+  base = base.add_fastener(
     @cad.Fastener::new(
       "motor_bolts",
       @cad.FastenerKind::Screw,
@@ -683,7 +679,7 @@ pub fn lead_screw_gripper(
       ),
     ),
   )
-  let _ = base.add_fastener(
+  base = base.add_fastener(
     @cad.Fastener::new(
       "bearing_bolts",
       @cad.FastenerKind::Screw,
@@ -700,7 +696,7 @@ pub fn lead_screw_gripper(
       ),
     ),
   )
-  let _ = base.add_fastener(
+  base = base.add_fastener(
     @cad.Fastener::new(
       "wrist_bolts",
       @cad.FastenerKind::Screw,
@@ -718,13 +714,13 @@ pub fn lead_screw_gripper(
     ),
   )
   // Electrical interfaces and explicit fits (sensors/PCB come later).
-  let _ = base.add_port(
+  base = base.add_port(
     @cad.Port::new("motor_power", @cad.PortKind::Power, spec="24 V DC, 1.5 A"),
   )
-  let _ = base.add_port(
+  base = base.add_port(
     @cad.Port::new("motor_step_dir", @cad.PortKind::Signal, spec="TTL STEP/DIR"),
   )
-  let _ = base.add_fit(
+  base = base.add_fit(
     @cad.Fit::new(
       "screw_nut",
       @cad.FitClass::Clearance,
@@ -733,7 +729,7 @@ pub fn lead_screw_gripper(
       max_mm=screw_diam_mm + nut_fit_mm,
     ),
   )
-  let _ = base.add_fit(
+  base = base.add_fit(
     @cad.Fit::new(
       "rail_bushing",
       @cad.FitClass::Clearance,
@@ -742,7 +738,7 @@ pub fn lead_screw_gripper(
       max_mm=rail_diam_mm + bushing_fit_mm,
     ),
   )
-  let _ = base.add_fit(
+  base = base.add_fit(
     @cad.Fit::new(
       "screw_bearing",
       @cad.FitClass::Clearance,
@@ -752,7 +748,7 @@ pub fn lead_screw_gripper(
     ),
   )
   let controller_name = name + "_controller"
-  let _ = base.add_wire_run(
+  base = base.add_wire_run(
     @cad.WireRun::new(
       "motor_power",
       from_component=controller_name,
@@ -763,7 +759,7 @@ pub fn lead_screw_gripper(
       length_mm=180.0,
     ),
   )
-  let _ = base.add_wire_run(
+  base = base.add_wire_run(
     @cad.WireRun::new(
       "motor_step_dir",
       from_component=controller_name,
@@ -774,7 +770,7 @@ pub fn lead_screw_gripper(
       length_mm=180.0,
     ),
   )
-  let _ = base.add_wire_run(
+  base = base.add_wire_run(
     @cad.WireRun::new(
       "home_signal",
       from_component=name + "_home_switch",
@@ -785,7 +781,7 @@ pub fn lead_screw_gripper(
       length_mm=120.0,
     ),
   )
-  let _ = base.add_wire_run(
+  base = base.add_wire_run(
     @cad.WireRun::new(
       "closed_signal",
       from_component=name + "_closed_switch",
@@ -815,7 +811,6 @@ pub fn lead_screw_gripper(
     bore_in_mm=motor_shaft_diam_mm + motor_shaft_fit_mm,
     bore_out_mm=screw_diam_mm + screw_fit_mm,
     length_mm=coupler_len_mm,
-    detail~,
   )
   // Threaded screw: a smooth journal at each end and crest rings between.
   let mut screw = @cad.Component::new(
@@ -859,8 +854,8 @@ pub fn lead_screw_gripper(
     width_mm=bearing_width_mm,
     detail~,
   )
-  let home_switch = limit_switch(name=name + "_home_switch", detail~)
-  let closed_switch = limit_switch(name=name + "_closed_switch", detail~)
+  let home_switch = limit_switch(name=name + "_home_switch")
+  let closed_switch = limit_switch(name=name + "_closed_switch")
   let controller = if controller_pos_csv == "" {
     pcb_board(
       name=controller_name,

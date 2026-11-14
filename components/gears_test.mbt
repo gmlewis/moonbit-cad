@@ -56,14 +56,14 @@ test "gearbox exports every gear as a printable part" {
 
 ///|
 test "herringbone gear accepts detail levels" {
-  let simple = @components.herringbone_gear_component(
+  let simple = @components.involute_gear_component(
     "gear",
     gear_module=2.0,
     num_teeth=20,
     gear_length_mm=12.0,
     detail=@step_common.DetailLevel::Simplified,
   )
-  let full = @components.herringbone_gear_component(
+  let full = @components.involute_gear_component(
     "gear",
     gear_module=2.0,
     num_teeth=20,

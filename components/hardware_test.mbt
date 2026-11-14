@@ -93,19 +93,9 @@ test "structural brackets are printable and build" {
   check_component(u, ["base_mount", "pivot"])
   let coupler = @components.shaft_coupler()
   check_component(coupler, ["input_shaft", "output_shaft"])
-  let mut printable_count = 0
-  for part in flange.printable_parts() {
-    let _ = part
-    printable_count = printable_count + 1
-  }
-  for part in l.printable_parts() {
-    let _ = part
-    printable_count = printable_count + 1
-  }
-  for part in u.printable_parts() {
-    let _ = part
-    printable_count = printable_count + 1
-  }
+  let printable_count = flange.printable_parts().length() +
+    l.printable_parts().length() +
+    u.printable_parts().length()
   assert_true(printable_count >= 3)
 }
 
@@ -208,9 +198,7 @@ test "Tier-1 stock plates and brackets build" {
 
 ///|
 test "detailed hardware wrappers are printable and glTF safe" {
-  let collar = @components.shaft_collar(
-    detail=@step_common.DetailLevel::Detailed,
-  )
+  let collar = @components.shaft_collar()
   assert_true(collar.part is Some(_))
   let bearing = @components.deep_groove_bearing_part(
     detail=@step_common.DetailLevel::Detailed,

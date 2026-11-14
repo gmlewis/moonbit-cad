@@ -22,15 +22,16 @@ async fn main {
   let output = @common.output_paths(args)
   let detail = output.detail_level()
   let threads = output.thread_rep()
-  let bracket = @components.l_bracket(
-    width_mm=args.double("bracketWidth"),
-    detail~,
-  ).add_mate_mm_deg("strut_mount", x=32.0, y=27.0, z=0.0)
+  let bracket = @components.l_bracket(width_mm=args.double("bracketWidth")).add_mate_mm_deg(
+    "strut_mount",
+    x=32.0,
+    y=27.0,
+    z=0.0,
+  )
   let flange = @components.flange_plate(
     name="mount_flange",
     outer_diam_mm=44.0,
     bolt_circle_mm=32.0,
-    detail~,
   )
   let strut = @components.tslot_extrusion_strut(
     name="frame_rail",
@@ -38,7 +39,7 @@ async fn main {
     detail~,
   )
   let stepper = @components.nema_stepper(detail~, threads?)
-  let coupler = @components.shaft_coupler(detail~)
+  let coupler = @components.shaft_coupler()
   let bearing = @components.ball_bearing(
     name="output_bearing",
     designation="608",

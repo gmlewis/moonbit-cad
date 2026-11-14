@@ -1,6 +1,6 @@
 ///|
 test "cable route length and wire-length checks" {
-  let comp = @cad.Component::new("root").add_wire_run(
+  let mut comp = @cad.Component::new("root").add_wire_run(
     @cad.WireRun::new(
       "motor_power",
       from_component="controller",
@@ -11,7 +11,7 @@ test "cable route length and wire-length checks" {
       length_mm=100.0,
     ),
   )
-  let _ = comp.add_cable_route(
+  comp = comp.add_cable_route(
     @cad.CableRoute::new(
       "harness",
       points=[(0.0, 0.0, 0.0), (30.0, 0.0, 0.0), (30.0, 40.0, 0.0)],

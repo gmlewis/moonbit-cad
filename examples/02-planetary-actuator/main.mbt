@@ -3,8 +3,8 @@
 ///
 /// A showcase for the Tier-1 planetary gearboxes and motors. The default build
 /// is an inexpensive low-KV BLDC outrunner driving a printed herringbone
-/// planetary stage inside a printed housing; `--motor nema` builds the legacy
-/// NEMA stepper variant instead.
+/// planetary stage inside a printed housing; `--motor nema` builds a NEMA
+/// stepper variant instead.
 
 ///|
 async fn main {
@@ -60,7 +60,6 @@ async fn main {
       face_width_mm=gear_length,
       pressure_angle_deg=20.0,
       sun_bore_mm=6.0,
-      planet_bore_mm=4.0,
       smooth=gear_type == "spur",
       detail~,
     )
@@ -71,14 +70,13 @@ async fn main {
       thickness_mm=6.0,
       bolt_count=4,
       bolt_circle_mm=44.0,
-      detail~,
     )
     let designation = if motor_kind.contains("23") {
       "NEMA23"
     } else {
       "NEMA17"
     }
-    let stepper = @components.nema_motor_by_designation(
+    let stepper = @components.nema_stepper(
       name="nema_motor",
       designation~,
       detail~,
@@ -127,7 +125,6 @@ async fn main {
       gear_length_mm=gear_length,
       gear_type~,
       detail~,
-      threads?,
     )
     let controller = @components.pcb_board(
       name="foc_driver",
@@ -154,14 +151,12 @@ async fn main {
           length_mm=6.0,
           across_flats_mm=5.0,
           bore_diam_mm=2.7,
-          detail~,
-          threads?,
         ),
         child_mate="bottom",
         spec=@cad.JointSpec::merge_rigid(),
       )
     }
-    let encoder = @components.magnetic_encoder(name="output_encoder", detail~)
+    let encoder = @components.magnetic_encoder(name="output_encoder")
     assembly = assembly.attach(
       "encoder_merge",
       parent_mate="output_face",
@@ -169,7 +164,7 @@ async fn main {
       child_mate="shaft",
       spec=@cad.JointSpec::merge_rigid(),
     )
-    let _ = assembly.add_wire_run(
+    assembly = assembly.add_wire_run(
       @cad.WireRun::new(
         "motor_can",
         from_component="bldc_actuator",
@@ -180,7 +175,7 @@ async fn main {
         length_mm=180.0,
       ),
     )
-    let _ = assembly.add_cable_route(
+    assembly = assembly.add_cable_route(
       @cad.CableRoute::new(
         "actuator_harness",
         points=[(0.0, 0.0, 0.0), (20.0, 0.0, 0.0), (40.0, 0.0, 4.0)],

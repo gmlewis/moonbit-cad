@@ -193,13 +193,9 @@ pub fn hex_standoff(
   length_mm~ : Double = 20.0,
   across_flats_mm~ : Double = 6.0,
   bore_diam_mm~ : Double = 3.0,
-  thread_size? : @step_standards.MetricSize,
   detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
-  threads? : @step_common.ThreadRepresentation,
   density~ : @urdf.Density = @urdf.Density::kg_per_m3(8500.0),
 ) -> @cad.Component {
-  let _ = thread_size
-  let _ = threads
   let step_comp = match
     @step_motion.standoff(across_flats_mm, length_mm, bore_diam_mm, detail~) {
     Ok(comp) => comp
@@ -229,10 +225,8 @@ pub fn cylindrical_spacer(
   outer_diam_mm~ : Double = 8.0,
   bore_diam_mm~ : Double = 4.2,
   length_mm~ : Double = 10.0,
-  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
   density~ : @urdf.Density = @urdf.Density::aluminum_6061(),
 ) -> @cad.Component {
-  let _ = detail
   let step_comp = match
     @step_motion.spacer(outer_diam_mm, bore_diam_mm, length_mm) {
     Ok(comp) => comp
@@ -262,13 +256,7 @@ pub fn sleeve_bushing(
   bore_diam_mm~ : Double = 8.0,
   outer_diam_mm~ : Double = 12.0,
   length_mm~ : Double = 10.0,
-  flange_outer_mm? : Double,
-  flange_thickness_mm? : Double,
-  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
 ) -> @cad.Component {
-  let _ = detail
-  let _ = flange_outer_mm
-  let _ = flange_thickness_mm
   let step_comp = match
     @step_motion.bushing(outer_diam_mm, bore_diam_mm, length_mm) {
     Ok(comp) => comp
@@ -495,9 +483,7 @@ pub fn compression_spring_part(
   mean_diam_mm~ : Double = 24.0,
   free_length_mm~ : Double = 60.0,
   active_coils~ : Int32 = 6,
-  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
 ) -> @cad.Component {
-  let _ = detail
   let step_comp = match
     @step_motion.compression_spring(
       mean_diam_mm, wire_diam_mm, free_length_mm, active_coils,
@@ -529,27 +515,16 @@ pub fn shaft_coupler(
   bore_in_mm~ : Double = 5.0,
   bore_out_mm~ : Double = 5.0,
   length_mm~ : Double = 25.0,
-  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
   density~ : @urdf.Density = @urdf.Density::aluminum_6061(),
   color~ : @step_cad.Rgb = @step_cad.Rgb::cyan(),
-  style~ : String = "auto",
 ) -> @cad.Component {
   // Equal bores use the Tier-1 rigid coupling. Stepped bores keep the
   // two-bore composite that the lead-screw gripper needs.
-  if style != "stepped" && (style == "rigid" || bore_in_mm == bore_out_mm) {
-    let bore = if style == "rigid" && bore_in_mm != bore_out_mm {
-      if bore_in_mm > bore_out_mm {
-        bore_in_mm
-      } else {
-        bore_out_mm
-      }
-    } else {
-      bore_in_mm
-    }
+  if bore_in_mm == bore_out_mm {
     return rigid_coupling_part(
         name~,
         outer_diam_mm~,
-        bore_diam_mm=bore,
+        bore_diam_mm=bore_in_mm,
         length_mm~,
       )
       .with_param("outer_diam_mm", outer_diam_mm.to_string())
@@ -557,7 +532,6 @@ pub fn shaft_coupler(
       .with_param("bore_out_mm", bore_out_mm.to_string())
       .with_param("length_mm", length_mm.to_string())
   }
-  let segments = @step_common.DetailPolicy::for_level(detail).circle_segments
   let half = length_mm / 2.0
   let part = purchased_part(
     "COUPLER-\{outer_diam_mm}-\{length_mm}",
@@ -577,7 +551,6 @@ pub fn shaft_coupler(
       outer_diam_mm,
       bore_in_mm,
       half,
-      segments~,
       z_mm=-half / 2.0,
       density~,
       color~,
@@ -589,7 +562,6 @@ pub fn shaft_coupler(
       outer_diam_mm,
       bore_out_mm,
       half,
-      segments~,
       z_mm=half / 2.0,
       density~,
       color~,
@@ -689,11 +661,9 @@ pub fn flange_plate(
   bolt_count~ : Int32 = 4,
   bolt_circle_mm~ : Double = 44.0,
   bolt_diam_mm~ : Double = 4.2,
-  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
   density~ : @urdf.Density = @urdf.Density::aluminum_6061(),
   color~ : @step_cad.Rgb = @step_cad.Rgb::grey(),
 ) -> @cad.Component {
-  let _ = detail
   // Exact line/arc loops: the rim and every hole are true cylindrical
   // surfaces, not 48- or 64-sided polygon approximations.
   let outer = @step_gears.arc_circle_segments(outer_diam_mm)
@@ -760,11 +730,9 @@ pub fn l_bracket(
   thickness_mm~ : Double = 5.0,
   hole_diam_mm~ : Double = 5.0,
   wall_hole_diam_mm~ : Double = 22.5,
-  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
   density~ : @urdf.Density = @urdf.Density::aluminum_6061(),
   color~ : @step_cad.Rgb = @step_cad.Rgb::grey(),
 ) -> @cad.Component {
-  let _ = detail
   let wall_z = leg_b_mm * 0.6
   let upright_center_z = (thickness_mm + leg_b_mm) / 2.0
   let wall_hole_y = upright_center_z - wall_z
@@ -852,13 +820,9 @@ pub fn u_bracket(
   arm_length_mm~ : Double = 45.0,
   width_mm~ : Double = 36.0,
   thickness_mm~ : Double = 5.0,
-  bore_mm~ : Double = 8.0,
-  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
   density~ : @urdf.Density = @urdf.Density::aluminum_6061(),
   color~ : @step_cad.Rgb = @step_cad.Rgb::grey(),
 ) -> @cad.Component {
-  let _ = detail
-  let _ = bore_mm
   let half_span = (inner_span_mm + thickness_mm) / 2.0
   let part = fabricated_part(
     "UBRACKET-\{inner_span_mm}x\{arm_length_mm}",
@@ -872,7 +836,6 @@ pub fn u_bracket(
   .with_param("arm_length_mm", arm_length_mm.to_string())
   .with_param("width_mm", width_mm.to_string())
   .with_param("thickness_mm", thickness_mm.to_string())
-  .with_param("bore_mm", bore_mm.to_string())
   .add_body(
     @cad.BodyPart::box_mm(
       name + "_base",
@@ -933,8 +896,8 @@ pub fn heat_set_insert(
     "brass",
     0.08,
   )
-  // The Tier-1 M3 insert models the knurled body; custom sizes fall back to a
-  // plain tube so the public API keeps working for any diameter.
+  // The Tier-1 M3 insert models the knurled body; custom sizes use a plain
+  // tube of the requested dimensions.
   if inner_diam_mm == 3.0 {
     let step_comp = match @step_fasteners.heat_set_insert_m3("short") {
       Ok(comp) => comp
@@ -1091,9 +1054,7 @@ pub fn shaft_collar(
   width_mm~ : Double = 8.0,
   style~ : String = "clamp",
   thread_size~ : @step_standards.MetricSize = @step_standards.M3,
-  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
 ) -> @cad.Component {
-  let _ = detail
   let color = @step_cad.Rgb::grey()
   let step_comp = if style == "set_screw" {
     expect_step(
@@ -1144,9 +1105,7 @@ pub fn flanged_bearing_block(
   bearing_width_mm~ : Double = 7.0,
   flange_diam_mm~ : Double = 0.0,
   bolt_circle_mm~ : Double = 0.0,
-  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
 ) -> @cad.Component {
-  let _ = detail
   let step_comp = expect_step(
     "flanged bearing housing",
     @step_motion.flanged_bearing_housing(
@@ -1215,9 +1174,7 @@ pub fn stepped_shaft_part(
   name~ : String = "stepped_shaft",
   segments~ : Array[(Double, Double)] = [(8.0, 20.0), (10.0, 30.0), (8.0, 20.0)],
   fillet_radius_mm~ : Double = 0.5,
-  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
 ) -> @cad.Component {
-  let _ = detail
   let step_comp = expect_step(
     "stepped shaft",
     @step_motion.filleted_stepped_shaft(segments, fillet_radius_mm~),
@@ -1307,9 +1264,7 @@ pub fn bearing_plate_part(
   thickness_mm~ : Double = 6.0,
   bolt_hole_mm~ : Double = 4.2,
   bolt_spacing_mm~ : Double = 40.0,
-  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
 ) -> @cad.Component {
-  let _ = detail
   let step_comp = expect_step(
     "bearing plate",
     @step_stock.bearing_plate(
@@ -1381,9 +1336,7 @@ pub fn vslot_corner_bracket_part(
   leg_mm~ : Double = 20.0,
   width_mm~ : Double = 20.0,
   thickness_mm~ : Double = 4.0,
-  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
 ) -> @cad.Component {
-  let _ = detail
   let step_comp = expect_step(
     "V-slot corner bracket",
     @step_profiles.vslot_corner_bracket(leg_mm~, width_mm~, thickness_mm~),
@@ -1509,9 +1462,7 @@ pub fn counterbored_plate_part(
   height_mm~ : Double = 40.0,
   thickness_mm~ : Double = 6.0,
   holes~ : Array[@step_stock.CounterboredHole] = [],
-  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
 ) -> @cad.Component {
-  let _ = detail
   let step_comp = expect_step(
     "counterbored plate",
     @step_stock.plate_with_counterbores(

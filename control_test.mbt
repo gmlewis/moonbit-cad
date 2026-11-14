@@ -17,7 +17,7 @@ fn make_joint_limit() -> @urdf.JointLimit {
 
 ///|
 test "ros2 control yaml and pin map map every binding" {
-  let base = @cad.Component::new("base")
+  let mut base = @cad.Component::new("base")
     .add_body(@cad.BodyPart::box_mm("base_body", 20.0, 20.0, 10.0))
     .attach(
       "arm_joint",
@@ -25,7 +25,7 @@ test "ros2 control yaml and pin map map every binding" {
       make_revolute_arm("arm"),
       spec=@cad.JointSpec::revolute(make_joint_limit()),
     )
-  let _ = base.add_control_binding(
+  base = base.add_control_binding(
     @cad.ControlBinding::new(
       "arm_joint",
       actuator="arm",
@@ -49,7 +49,7 @@ test "ros2 control yaml and pin map map every binding" {
 
 ///|
 test "control checks require a binding for every commandable joint" {
-  let base = @cad.Component::new("base")
+  let mut base = @cad.Component::new("base")
     .add_body(@cad.BodyPart::box_mm("base_body", 20.0, 20.0, 10.0))
     .attach(
       "arm_a_joint",
@@ -63,7 +63,7 @@ test "control checks require a binding for every commandable joint" {
       make_revolute_arm("arm_b"),
       spec=@cad.JointSpec::revolute(make_joint_limit()),
     )
-  let _ = base.add_control_binding(
+  base = base.add_control_binding(
     @cad.ControlBinding::new("arm_a_joint", actuator="arm_a", channel="can0:1"),
   )
   let warnings = base.control_checks()
@@ -77,7 +77,7 @@ test "control checks require a binding for every commandable joint" {
 
 ///|
 test "control checks flag invalid bindings" {
-  let base = @cad.Component::new("base")
+  let mut base = @cad.Component::new("base")
     .add_body(@cad.BodyPart::box_mm("base_body", 20.0, 20.0, 10.0))
     .attach(
       "arm_joint",
@@ -85,7 +85,7 @@ test "control checks flag invalid bindings" {
       make_revolute_arm("arm"),
       spec=@cad.JointSpec::revolute(make_joint_limit()),
     )
-  let _ = base.add_control_binding(
+  base = base.add_control_binding(
     @cad.ControlBinding::new(
       "ghost_joint",
       actuator="missing_actuator",

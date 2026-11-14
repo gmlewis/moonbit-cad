@@ -197,9 +197,9 @@ pub fn Bom::new() -> Bom {
 
 ///|
 /// Adds `quantity` of `part`, aggregating by part number.
-pub fn Bom::add(self : Bom, part : PartMeta, quantity : Int32) -> Bom {
+pub fn Bom::add(self : Bom, part : PartMeta, quantity : Int32) -> Unit {
   if quantity <= 0 {
-    return self
+    return
   }
   for i in 0..<self.lines.length() {
     if self.lines[i].part_number == part.part_number {
@@ -210,7 +210,7 @@ pub fn Bom::add(self : Bom, part : PartMeta, quantity : Int32) -> Bom {
         quantity: total_qty,
         total_cost_usd: round2(line.unit_cost_usd * total_qty.to_double()),
       }
-      return self
+      return
     }
   }
   self.lines.push({
@@ -226,14 +226,12 @@ pub fn Bom::add(self : Bom, part : PartMeta, quantity : Int32) -> Bom {
     total_cost_usd: round2(part.unit_cost_usd * quantity.to_double()),
     notes: part.notes,
   })
-  self
 }
 
 ///|
 /// Counts a body or fastener that has no `PartMeta`.
-pub fn Bom::add_unassigned(self : Bom, quantity : Int32) -> Bom {
+pub fn Bom::add_unassigned(self : Bom, quantity : Int32) -> Unit {
   self.unassigned = self.unassigned + quantity
-  self
 }
 
 ///|
@@ -329,31 +327,21 @@ fn Component::collect_bom(
   let is_part = self.part is Some(_)
   if is_part {
     match self.part {
-      Some(part) => {
-        let _ = bom.add(part, 1)
-      }
+      Some(part) => bom.add(part, 1)
       None => ()
     }
   } else if !skip_bodies {
     for body in self.bodies {
       match body.part {
-        Some(part) => {
-          let _ = bom.add(part, 1)
-        }
-        None => {
-          let _ = bom.add_unassigned(1)
-        }
+        Some(part) => bom.add(part, 1)
+        None => bom.add_unassigned(1)
       }
     }
   }
   for fastener in self.fasteners {
     match fastener.part {
-      Some(part) => {
-        let _ = bom.add(part, fastener.quantity)
-      }
-      None => {
-        let _ = bom.add_unassigned(fastener.quantity)
-      }
+      Some(part) => bom.add(part, fastener.quantity)
+      None => bom.add_unassigned(fastener.quantity)
     }
   }
   for att in self.attachments {

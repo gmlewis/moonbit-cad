@@ -30,11 +30,10 @@ async fn main {
       outer_diam_mm=140.0,
       center_bore_mm=30.0,
       bolt_count=6,
-      detail~,
     )
     .add_mate_mm_deg("pcb_mount", x=48.0, z=3.0)
     .add_mate_mm_deg("pan_limit_mount", x=-45.0, z=3.0)
-  let pan_limit = @components.limit_switch(name="pan_limit", detail~)
+  let pan_limit = @components.limit_switch(name="pan_limit")
   let controller = @components.pcb_board(
       name="turret_controller",
       length_mm=30.0,
@@ -52,7 +51,7 @@ async fn main {
       @cad.Port::new("power5v", @cad.PortKind::Power, spec="5 V, 0.5 A"),
     )
     .add_port(@cad.Port::new("i2c", @cad.PortKind::Bus, spec="I2C, 400 kHz"))
-  let imu = @components.imu_module(name="imu", detail~)
+  let imu = @components.imu_module(name="imu")
   let pan_motor = @components.nema_stepper(
     name="pan_motor",
     frame_size_mm=57.0,
@@ -68,9 +67,8 @@ async fn main {
     inner_span_mm=120.0,
     arm_length_mm=50.0,
     width_mm=45.0,
-    detail~,
   )
-  let tilt = @components.bldc_actuator_pod(
+  let tilt = @components.qdd_actuator_pod(
     name="tilt",
     housing_diam_mm=70.0,
     housing_length_mm=40.0,
@@ -127,7 +125,7 @@ async fn main {
     child_mate="mount",
     spec=@cad.JointSpec::fixed(),
   )
-  let comp = base
+  let mut comp = base
     .attach(
       "pan_motor_mount",
       parent_mate="top",
@@ -175,7 +173,7 @@ async fn main {
     )
     .with_robot_name("pan_tilt_turret")
   // Instrumentation wiring and control map.
-  let _ = comp.add_wire_run(
+  comp = comp.add_wire_run(
     @cad.WireRun::new(
       "pan_power",
       from_component="turret_controller",
@@ -186,7 +184,7 @@ async fn main {
       length_mm=400.0,
     ),
   )
-  let _ = comp.add_wire_run(
+  comp = comp.add_wire_run(
     @cad.WireRun::new(
       "pan_step_dir",
       from_component="turret_controller",
@@ -197,7 +195,7 @@ async fn main {
       length_mm=400.0,
     ),
   )
-  let _ = comp.add_wire_run(
+  comp = comp.add_wire_run(
     @cad.WireRun::new(
       "tilt_power",
       from_component="turret_controller",
@@ -208,7 +206,7 @@ async fn main {
       length_mm=600.0,
     ),
   )
-  let _ = comp.add_wire_run(
+  comp = comp.add_wire_run(
     @cad.WireRun::new(
       "tilt_can",
       from_component="turret_controller",
@@ -219,7 +217,7 @@ async fn main {
       length_mm=600.0,
     ),
   )
-  let _ = comp.add_wire_run(
+  comp = comp.add_wire_run(
     @cad.WireRun::new(
       "imu_power",
       from_component="turret_controller",
@@ -230,7 +228,7 @@ async fn main {
       length_mm=250.0,
     ),
   )
-  let _ = comp.add_wire_run(
+  comp = comp.add_wire_run(
     @cad.WireRun::new(
       "imu_i2c",
       from_component="turret_controller",
@@ -241,7 +239,7 @@ async fn main {
       length_mm=250.0,
     ),
   )
-  let _ = comp.add_wire_run(
+  comp = comp.add_wire_run(
     @cad.WireRun::new(
       "limit_power",
       from_component="turret_controller",
@@ -252,7 +250,7 @@ async fn main {
       length_mm=200.0,
     ),
   )
-  let _ = comp.add_wire_run(
+  comp = comp.add_wire_run(
     @cad.WireRun::new(
       "limit_signal",
       from_component="pan_limit",
@@ -263,7 +261,7 @@ async fn main {
       length_mm=200.0,
     ),
   )
-  let _ = comp.add_control_binding(
+  comp = comp.add_control_binding(
     @cad.ControlBinding::new(
       "pan_motor_shaft_joint",
       actuator="pan_motor_stator",
@@ -275,7 +273,7 @@ async fn main {
       homing_input=Some("limit_home"),
     ),
   )
-  let _ = comp.add_control_binding(
+  comp = comp.add_control_binding(
     @cad.ControlBinding::new(
       "tilt_joint",
       actuator="tilt",

@@ -3,7 +3,6 @@ import {
   "gmlewis/cad/components",
   "gmlewis/cad/examples/common",
   "gmlewis/step/cli",
-  "gmlewis/step/components/common" @step_common,
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/core/math",

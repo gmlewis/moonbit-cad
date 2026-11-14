@@ -110,7 +110,6 @@ async fn main {
   }
   let output = @common.output_paths(args)
   let detail = output.detail_level()
-  let threads = output.thread_rep()
   let body_len = args.double("bodyLength")
   let body_width = args.double("bodyWidth")
   let body_height = args.double("bodyHeight")
@@ -254,11 +253,7 @@ async fn main {
     base = base.attach(
       "\{bracket_name}_merge",
       parent_mate="\{bracket_name}_mount",
-      @components.vslot_corner_bracket_part(
-        name=bracket_name,
-        leg_mm=20.0,
-        detail~,
-      ),
+      @components.vslot_corner_bracket_part(name=bracket_name, leg_mm=20.0),
       child_mate="mount_a",
       spec=@cad.JointSpec::merge_rigid(),
     )
@@ -295,7 +290,7 @@ async fn main {
       spec=@cad.JointSpec::merge_rigid(),
     )
   }
-  let imu = @components.imu_module(name="imu", detail~)
+  let imu = @components.imu_module(name="imu")
   base = base.add_mate_mm_deg("imu_mount", z=body_height / 2.0 + 4.0)
   base = base.attach(
     "imu_merge",
@@ -304,7 +299,7 @@ async fn main {
     child_mate="mount",
     spec=@cad.JointSpec::merge_rigid(),
   )
-  let camera = @components.camera_module(name="front_camera", detail~)
+  let camera = @components.camera_module(name="front_camera")
   base = base.add_mate_mm_deg("camera_mount", x=half_len, z=body_height * 0.35)
   base = base.attach(
     "camera_merge",
@@ -374,7 +369,6 @@ async fn main {
           counterbore_depth_mm: 3.0,
         },
       ],
-      detail~,
     ),
     child_mate="bottom",
     spec=@cad.JointSpec::merge_rigid(),
@@ -404,7 +398,6 @@ async fn main {
       max_vel_rad_s=leg_velocity,
       wheeled~,
       detail~,
-      threads?,
     )
     base = base.attach(
       "\{prefix}_hip_joint",
@@ -438,11 +431,11 @@ async fn main {
     to_component="rl_hip_link",
     to_port="",
   )
-  let _ = base.add_cable_route(trunk)
+  base = base.add_cable_route(trunk)
   let can_runs : Array[String] = ["fl", "fr", "rl", "rr"]
   for i in 0..<can_runs.length() {
     let prefix = can_runs[i]
-    let _ = base.add_wire_run(
+    base = base.add_wire_run(
       @cad.WireRun::new(
         "\{prefix}_can",
         from_component="base_link",
@@ -453,7 +446,7 @@ async fn main {
         length_mm=600.0,
       ),
     )
-    let _ = base.add_wire_run(
+    base = base.add_wire_run(
       @cad.WireRun::new(
         "\{prefix}_power",
         from_component="base_link",
@@ -476,7 +469,7 @@ async fn main {
   let dof = if wheeled { 4 } else { 3 }
   for prefix in ["fl", "fr", "rl", "rr"] {
     for i in 0..<dof {
-      let _ = base.add_control_binding(
+      base = base.add_control_binding(
         @cad.ControlBinding::new(
           "\{prefix}_\{joint_names[i]}",
           actuator="\{prefix}\{actuator_suffixes[i]}",

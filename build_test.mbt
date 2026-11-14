@@ -51,7 +51,7 @@ fn build_test_component() -> @cad.Component {
   let arm = @cad.Component::new("arm").add_body(
     @cad.BodyPart::box_mm("arm_body", 10.0, 10.0, 10.0),
   )
-  let root = @cad.Component::new("base")
+  let mut root = @cad.Component::new("base")
     .add_body(
       @cad.BodyPart::box_mm("motor_body", 20.0, 20.0, 10.0).with_part(
         motor_part,
@@ -89,7 +89,7 @@ fn build_test_component() -> @cad.Component {
         ),
       ),
     )
-  let _ = root.add_control_binding(
+  root = root.add_control_binding(
     @cad.ControlBinding::new("arm_joint", actuator="arm", channel="can0:1"),
   )
   root
