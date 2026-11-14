@@ -7,28 +7,27 @@ run-example.sh — run one of the gmlewis/cad showcase examples.
 
 Usage:
   ./run-example.sh <example> [options...]
-  ./run-example.sh <number>  [options...]     e.g. 01, 1, 05
+  ./run-example.sh <number>  [options...]     e.g. 02, 5, 06
 
 Wrapper options (before or after the example):
   --view[=<path>]        Write STEP to _build/solidcraft-view/<example>.step
                         (or <path>) and open it in SolidCraft with --up z.
                         With -o, opens that path instead.
-  --headless, --no-open  Generate only; never open SolidCraft. Writes to
-                        /tmp/<example>.step (or the -o path) and prints it.
-                        Agents should always pass this instead of --view.
+  --headless, --no-open  Generate only; never open or raise SolidCraft. Writes
+                        to /tmp/<example>.step (or the -o path) and prints it.
+                        Agents must always use this instead of --view.
   -h, --help             Show this help and exit.
 
 Every other option is forwarded to the example. Run
 `./run-example.sh <number> -- --help` to see the example-specific options.
 
 Examples:
-  ./run-example.sh 01 --out bracket.step
-  ./run-example.sh 01 --view
-  ./run-example.sh --view 4
-  ./run-example.sh --view 01
-  ./run-example.sh --headless 01              # generate only (agents)
+  ./run-example.sh 02 --out actuator.step
+  ./run-example.sh 02 --view
+  ./run-example.sh --headless 02              # generate only (agents)
   ./run-example.sh 05-galileo-quadruped --bundle /tmp/galileo_bundle
   ./run-example.sh 05 -- --urdf /tmp/galileo.urdf
+  ./run-example.sh 06 -- --bundle /tmp/wheelchair_bundle
 EOF
 }
 
@@ -247,9 +246,9 @@ if (( HEADLESS_REQUESTED )) && (( ! VIEW_REQUESTED )) && [[ -z "$OUT_PATH" ]]; t
 fi
 
 if (( ${#FORWARD_ARGS[@]} )); then
-  moon run --quiet --target native "$ROOT_DIR/$EXAMPLE_PATH" -- "${FORWARD_ARGS[@]}"
+  moon run --quiet "$ROOT_DIR/$EXAMPLE_PATH" -- "${FORWARD_ARGS[@]}"
 else
-  moon run --quiet --target native "$ROOT_DIR/$EXAMPLE_PATH"
+  moon run --quiet "$ROOT_DIR/$EXAMPLE_PATH"
 fi
 
 if (( HEADLESS_REQUESTED )); then

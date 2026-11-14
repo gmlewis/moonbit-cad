@@ -169,15 +169,12 @@ Every example supports the shared output flags:
 
 | Example | Description |
 | --- | --- |
-| `01-bracket-assembly` | L bracket with a rigidly merged flange, NEMA stepper, coupler, and bearing. |
-| `02-planetary-actuator` | NEMA stepper driving a herringbone planetary gearbox. |
-| `03-serial-robot-arm` | Six-axis modular arm: waist yaw, shoulder/elbow pitch, and a pitch-roll-pitch wrist with a motorized lead-screw gripper, two limit switches, and a controller PCB. |
-| `04-pan-tilt-turret` | Two-axis gimbal: merged NEMA pan joint, QDD tilt joint, camera payload with IMU, pan-home limit switch, controller PCB, wiring, and a two-joint control map. |
-| `05-galileo-quadruped` | Flagship 17-link wheeled quadruped; STEP, glTF, URDF, or full ROS 2 bundle. |
-| `06-assistive-scooter` | Rider-parameterized mobility scooter with a steerable front column. |
+| `02-planetary-actuator` | Low-KV BLDC outrunner (or NEMA stepper) driving a Tier-1 planetary gearbox, with a controller PCB and output encoder. |
+| `05-galileo-quadruped` | Flagship 17-link wheeled quadruped with V-slot chassis and four low-KV BLDC planetary actuator pods per leg; STEP, glTF, URDF, or full ROS 2 bundle. |
+| `06-assistive-scooter` | Motorized wheelchair with two-stage planetary rear drives, a V-slot frame, seat, armrests, and front casters (or a steerable fork). |
 
-The Galileo bundle contains `urdf/galileo_quadruped.urdf`, `package.xml`, 17
-glTF meshes, and 17 printable STEP parts:
+The Galileo bundle contains `urdf/galileo_quadruped.urdf`, `package.xml`, glTF
+meshes, and the printable STEP parts:
 
 ```bash
 ./run-example.sh 05 -- --bundle /tmp/galileo_bundle
@@ -201,10 +198,10 @@ tree: each child subassembly is built before it is attached, fasteners are
 installed at the step that joins the components they reference, and every step
 names its tool (e.g. `2.5 mm hex key`) and torque. `--check` prints warnings
 for inconsistent hardware data (engagement longer than the screw, invalid fits,
-duplicate names, missing part metadata); example 03 reports zero warnings.
+duplicate names, missing part metadata); example 05 reports zero warnings.
 
 ```bash
-./run-example.sh 03 --bom 03-bom.csv --plan 03-plan.txt
+./run-example.sh 05 --bom 05-bom.csv --plan 05-plan.txt
 ```
 
 ### Power and IO budget
@@ -219,14 +216,14 @@ resolves to a declared component and port, that no wire connects a component to
 itself, and that each carried wire matches its route's components.
 
 ```bash
-./run-example.sh 03 --report 03-report.txt
+./run-example.sh 05 --report 05-report.txt
 ```
 
-Example 03 declares six 48 V QDD joints on CAN, a 24 V NEMA stepper on
-STEP/DIR, two 5 V limit switches on GPIO, and a 24 V controller PCB with four
-wire runs. Example 04 declares a 24 V NEMA pan joint on STEP/DIR, a 48 V QDD
-tilt joint on CAN, a 3.3 V IMU on I2C, a 5 V limit switch, and a controller
-PCB. `Component::power_budget()` returns the same data programmatically.
+Example 05 declares sixteen low-KV BLDC planetary leg joints on CAN, plus the
+chassis bus, battery, IMU, and depth camera. Example 06
+declares left and right wheelchair drives, two caster swivels and wheels (or a
+steering fork), a joystick, IMU, camera, and controller PCB.
+`Component::power_budget()` returns the same data programmatically.
 
 ### Control export
 
@@ -241,7 +238,7 @@ verifies that every commandable joint is bound and that every referenced joint,
 actuator, and input resolves.
 
 ```bash
-./run-example.sh 03 --control 03-control.yaml --pins 03-pins.csv
+./run-example.sh 05 --control 05-control.yaml --pins 05-pins.csv
 ```
 
 ### Build package
@@ -266,9 +263,9 @@ test one example:
 | `bundle/` | URDF, `package.xml`, glTF meshes, and per-link STEP parts. |
 
 ```bash
-./run-example.sh 03 --package build/03 --check
-python3 scripts/validate_step.py --no-mesh build/03/assembly.step
-python3 scripts/validate_urdf.py --check-meshes build/03/bundle/urdf/*.urdf
+./run-example.sh 05 --package build/05 --check
+python3 scripts/validate_step.py --no-mesh build/05/assembly.step
+python3 scripts/validate_urdf.py --check-meshes build/05/bundle/urdf/*.urdf
 ```
 
 ### Drawings
@@ -280,7 +277,7 @@ block and print settings, converts it to PDF when Inkscape is available, and
 writes `drawings/index.md`. The raw DXF views are kept in `drawings/dxf/`.
 
 ```bash
-python3 scripts/make_drawings.py build/03
+python3 scripts/make_drawings.py build/05
 # drawings/index.md, <link>.svg, <link>.pdf,
 # drawings/dxf/<link>-{front,top,right,iso}.dxf
 ```
@@ -291,16 +288,8 @@ python3 scripts/make_drawings.py build/03
 builds a board envelope with mounting holes, connector placements, ports, and
 mounting hardware. The build package then includes `pcb-connectors.csv` with
 each connector's reference, value, footprint, position, rotation, and side.
-Example 03 ships a fixture:
-
-```bash
-./run-example.sh 03 \
-  --kicadPos examples/03-serial-robot-arm/kicad/gripper.pos \
-  --package build/03-kicad --check
-```
-
-This imports the placement layer; full STEP B-Rep geometry import remains
-future work.
+The import is a library API used by a component builder; the placement layer is
+imported, and full STEP B-Rep geometry import remains future work.
 
 ## Development
 
@@ -324,17 +313,21 @@ Validation and rendering helpers live in `scripts/` (they run from a clone of
 this repository alone; only the external tools named below are required):
 
 ```bash
-./run-example.sh 05 --validate                                  # STEP + URDF checks
-./run-example.sh 05 --bundle build/05 --validate --validate-meshes  # + meshes
+./run-example.sh 05 --headless --validate                       # STEP + URDF checks
+./run-example.sh 05 --headless --bundle build/05 --validate --validate-meshes
 python3 scripts/validate_step.py --no-mesh model.step
 python3 scripts/validate_urdf.py --check-meshes model.urdf
 python3 scripts/check_interferences.py --parts-dir posed/       # exact OCCT link interference
-./run-example.sh 05 --detail detailed --posed-parts posed/05    # world-posed links for the check
+./run-example.sh 05 --headless --detail detailed --posed-parts posed/05
 python3 scripts/render_step.py model.step preview.png          # OCCT + Inkscape
 python3 scripts/render_solidcraft.py model.step preview-shaded.png  # SolidCraft + Inkscape
-python3 scripts/make_drawings.py build/03                            # SolidCraft (+ Inkscape for PDF)
+python3 scripts/make_drawings.py build/05                      # SolidCraft (+ Inkscape for PDF)
 python3 scripts/validate_control.py control.yaml robot.urdf --pins pins.csv  # PyYAML
 ```
+
+Agents must always pass `--headless` (or call `solidcraft-cli` directly) and
+must never use `--view`, `open -a SolidCraft`, or raise the SolidCraft window
+while validating.
 
 `render_step.py` uses OCCT `DRAWEXE` (plus `sips` or ImageMagick for PPM
 conversion). `render_solidcraft.py` uses `solidcraft-cli snapshot` for shaded

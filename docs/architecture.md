@@ -119,7 +119,7 @@ Run these in order; each layer has a check:
 
 - **L0 — kinematic mock-up:** joints and poses only (many current examples).
 - **L1 — mechanism-realistic:** real actuator, screw/rack/linkage, guides,
-  bearings, fasteners, fits, BOM. *Target for example 3's gripper.*
+  bearings, fasteners, fits, BOM. *Target for the lead-screw gripper.*
 - **L2 — sensored/electronic:** limit switches, encoder, PCB envelope,
   connectors, power budget.
 - **L3 — control-ready:** `ros2_control`/firmware mapping, simulation

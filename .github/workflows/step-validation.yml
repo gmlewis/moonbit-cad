@@ -45,9 +45,9 @@ jobs:
       - name: generate example STEP and URDF files
         run: |
           mkdir -p /tmp/cad-fixtures
-          for n in 01 02 03 04 05 06; do
-            ./examples/run-example.sh "$n" -o "/tmp/cad-fixtures/$n.step"
-            ./examples/run-example.sh "$n" --urdf "/tmp/cad-fixtures/$n.urdf"
+          for n in 02 05 06; do
+            ./examples/run-example.sh "$n" --headless -o "/tmp/cad-fixtures/$n.step"
+            ./examples/run-example.sh "$n" --headless --urdf "/tmp/cad-fixtures/$n.urdf"
           done
 
       - name: validate generated STEP files (syntax and topology)
@@ -94,9 +94,9 @@ jobs:
       - name: generate example STEP and URDF files
         run: |
           mkdir -p /tmp/cad-fixtures
-          for n in 01 02 03 04 05 06; do
-            ./examples/run-example.sh "$n" -o "/tmp/cad-fixtures/$n.step"
-            ./examples/run-example.sh "$n" --urdf "/tmp/cad-fixtures/$n.urdf"
+          for n in 02 05 06; do
+            ./examples/run-example.sh "$n" --headless -o "/tmp/cad-fixtures/$n.step"
+            ./examples/run-example.sh "$n" --headless --urdf "/tmp/cad-fixtures/$n.urdf"
           done
 
       - name: validate generated STEP files (including tessellation)
@@ -104,10 +104,10 @@ jobs:
 
       - name: generate ROS bundles and validate mesh references
         run: |
-          for n in 01 02 03 04 05 06; do
+          for n in 02 05 06; do
             bundle="/tmp/cad-bundle-$n"
             rm -rf "$bundle"
-            ./examples/run-example.sh "$n" --bundle "$bundle"
+            ./examples/run-example.sh "$n" --headless --bundle "$bundle"
             urdf="$(find "$bundle" -name '*.urdf' -print -quit)"
             test -n "$urdf"
             package_root="$(dirname "$(dirname "$urdf")")"
