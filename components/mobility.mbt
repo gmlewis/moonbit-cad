@@ -1017,25 +1017,7 @@ pub fn planetary_wheel_drive_unit(
         transmission_reduction=Some(1.0),
       ),
     )
-  if detail_is_rich(detail) {
-    let collar = shaft_collar(
-      name=name + "_output_collar",
-      bore_diam_mm=16.0,
-      outer_diam_mm=28.0,
-      width_mm=10.0,
-      style="set_screw",
-      detail~,
-    )
-    output.attach(
-      "output_collar_merge",
-      parent_mate="axle_output",
-      collar,
-      child_mate="bore",
-      spec=@cad.JointSpec::merge_rigid(),
-    )
-  } else {
-    output
-  }
+  output
 }
 
 ///|

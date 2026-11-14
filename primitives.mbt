@@ -132,6 +132,23 @@ pub fn centered_cylinder_node(
 }
 
 ///|
+/// Four exact quarter arcs forming a counter-clockwise circle.
+///
+/// Unlike `@step_cad.tube` (a faceted `ExtrudedProfile`), this keeps the tube's
+/// outer and inner walls as true cylindrical surfaces, and it stays in the
+/// glTF-safe line/arc extrusion family.
+fn circle_arc_segments(diameter_mm : Double) -> Array[@step_cad.ProfileSegment] {
+  let r = diameter_mm / 2.0
+  let center : (Double, Double) = (0.0, 0.0)
+  [
+    @step_cad.SegmentArc((r, 0.0), (0.0, r), center),
+    @step_cad.SegmentArc((0.0, r), (-r, 0.0), center),
+    @step_cad.SegmentArc((-r, 0.0), (0.0, -r), center),
+    @step_cad.SegmentArc((0.0, -r), (r, 0.0), center),
+  ]
+}
+
+///|
 /// Builds a hollow tube whose geometric center is at the origin, axis along Z.
 pub fn centered_tube_node(
   outer_diam_mm : Double,
@@ -141,10 +158,16 @@ pub fn centered_tube_node(
   name~ : String = "tube",
   color~ : @step_cad.Rgb = @step_cad.Rgb::grey(),
 ) -> @step_cad.SceneNode {
-  @step_cad.tube(outer_diam_mm, inner_diam_mm, length_mm, segments~)
-  .with_name(name)
-  .with_color(color)
-  .translate(z=-length_mm / 2.0)
+  let _ = segments
+  let outer = circle_arc_segments(outer_diam_mm)
+  let shape = if inner_diam_mm > 0.0 {
+    @step_cad.ExtrudedArcProfile::new(outer, length_mm, holes=[
+      circle_arc_segments(inner_diam_mm),
+    ]).as_shape()
+  } else {
+    @step_cad.ExtrudedArcProfile::new(outer, length_mm).as_shape()
+  }
+  shape.with_name(name).with_color(color).translate(z=-length_mm / 2.0)
 }
 
 ///|

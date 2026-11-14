@@ -166,7 +166,7 @@ async fn main {
       "encoder_merge",
       parent_mate="output_face",
       encoder,
-      child_mate="mount",
+      child_mate="shaft",
       spec=@cad.JointSpec::merge_rigid(),
     )
     let _ = assembly.add_wire_run(

@@ -952,6 +952,15 @@ pub fn planetary_bldc_actuator(
     2.0 +
     module_mm +
     6.0
+  let bearing_outer = match @step_motion.bearing_size(p.bearing_designation) {
+    Ok(size) => size.outer_mm
+    Err(_) => p.shaft_diameter_mm * 3.0
+  }
+  let plate_bore = if p.shaft_diameter_mm * 1.8 > bearing_outer + 2.0 {
+    p.shaft_diameter_mm * 1.8
+  } else {
+    bearing_outer + 2.0
+  }
   let housing_part = fabricated_part(
     "ACT-HOUSING", "Printed planetary actuator housing", "carbon fiber nylon", "3D print",
     18.0,
@@ -972,11 +981,7 @@ pub fn planetary_bldc_actuator(
       @cad.BodyPart::tube_mm(
         name + "_motor_plate",
         p.diameter_mm * 1.18,
-        if p.shaft_diameter_mm * 1.8 > 8.0 {
-          p.shaft_diameter_mm * 1.8
-        } else {
-          8.0
-        },
+        plate_bore,
         motor_plate_mm,
         z_mm=-motor_plate_mm / 2.0,
         density=@urdf.Density::carbon_fiber(),
@@ -997,6 +1002,11 @@ pub fn planetary_bldc_actuator(
     .add_mate_mm_deg(
       "motor_mount",
       z=-motor_plate_mm - 4.0,
+      axis=(0.0, 0.0, -1.0),
+    )
+    .add_mate_mm_deg(
+      "encoder_mount",
+      z=-(motor_plate_mm + 4.0) - p.body_length_mm - 4.0,
       axis=(0.0, 0.0, -1.0),
     )
     .add_mate_mm_deg("gearbox_mount")
@@ -1143,10 +1153,10 @@ pub fn planetary_bldc_actuator(
     let encoder = magnetic_encoder(name=name + "_encoder", detail~)
     housing = housing.attach(
       "encoder_merge",
-      parent_mate="rear",
+      parent_mate="encoder_mount",
       encoder,
       child_mate="mount",
-      spec=@cad.JointSpec::merge_rigid(offset_mm=-(motor_plate_mm + 14.0)),
+      spec=@cad.JointSpec::merge_rigid(),
     )
     // A set-screw collar retains the output carrier's shaft.
     let collar = shaft_collar(

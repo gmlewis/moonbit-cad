@@ -601,6 +601,85 @@ pub fn shaft_coupler(
 }
 
 ///|
+/// Translates a closed line/arc profile by `(dx, dy)` millimeters.
+fn arc_segments_at(
+  segments : Array[@step_cad.ProfileSegment],
+  dx : Double,
+  dy : Double,
+) -> Array[@step_cad.ProfileSegment] {
+  let shift = fn(point : (Double, Double)) { (point.0 + dx, point.1 + dy) }
+  segments.map(fn(segment) {
+    match segment {
+      @step_cad.SegmentLine(a, b) => @step_cad.SegmentLine(shift(a), shift(b))
+      @step_cad.SegmentArc(a, b, center) =>
+        @step_cad.SegmentArc(shift(a), shift(b), shift(center))
+    }
+  })
+}
+
+///|
+/// A centered rectangle as a counter-clockwise line loop.
+fn rect_arc_segments(
+  width_mm : Double,
+  height_mm : Double,
+) -> Array[@step_cad.ProfileSegment] {
+  let hx = width_mm / 2.0
+  let hy = height_mm / 2.0
+  let p0 : (Double, Double) = (-hx, -hy)
+  let p1 : (Double, Double) = (hx, -hy)
+  let p2 : (Double, Double) = (hx, hy)
+  let p3 : (Double, Double) = (-hx, hy)
+  [
+    @step_cad.SegmentLine(p0, p1),
+    @step_cad.SegmentLine(p1, p2),
+    @step_cad.SegmentLine(p2, p3),
+    @step_cad.SegmentLine(p3, p0),
+  ]
+}
+
+///|
+/// Builds a body from a closed line/arc profile with exact circular edges.
+fn arc_profile_body(
+  name : String,
+  outer : Array[@step_cad.ProfileSegment],
+  height_mm : Double,
+  holes : Array[Array[@step_cad.ProfileSegment]],
+  density : @urdf.Density,
+  color : @step_cad.Rgb,
+  z_mm : Double,
+) -> @cad.BodyPart {
+  let profile = @step_cad.ExtrudedArcProfile::new(outer, height_mm, holes~)
+  let node = profile
+    .as_shape()
+    .with_name(name)
+    .with_color(color)
+    .translate(z=z_mm)
+  let (x0, x1, y0, y1, z0, z1) = node.bounding_box()
+  let sx = if x1 - x0 > 1.0e-3 { x1 - x0 } else { 1.0 }
+  let sy = if y1 - y0 > 1.0e-3 { y1 - y0 } else { 1.0 }
+  let sz = if z1 - z0 > 1.0e-3 { z1 - z0 } else { 1.0 }
+  let origin = @urdf.Origin::from_mm_deg(
+    x=(x0 + x1) / 2.0,
+    y=(y0 + y1) / 2.0,
+    z=(z0 + z1) / 2.0,
+  )
+  let mass = profile.volume() / 1.0e9 * density.to_kg_per_m3()
+  let inertial = @urdf.Inertial::from_box(
+    sx / 1000.0,
+    sy / 1000.0,
+    sz / 1000.0,
+    mass~,
+    origin~,
+  )
+  let collision = @urdf.Collision::new(
+    @urdf.Geometry::cylinder_mm(sx / 2.0, height_mm),
+    name=Some(name),
+    origin=@urdf.Origin::from_mm_deg(z=(z0 + z1) / 2.0),
+  )
+  @cad.BodyPart::custom(name, node, inertial, collisions=[collision], density~)
+}
+
+///|
 /// A circular flange plate with a center bore and a bolt circle.
 pub fn flange_plate(
   name~ : String = "flange_plate",
@@ -614,25 +693,39 @@ pub fn flange_plate(
   density~ : @urdf.Density = @urdf.Density::aluminum_6061(),
   color~ : @step_cad.Rgb = @step_cad.Rgb::grey(),
 ) -> @cad.Component {
-  let segments = @step_common.DetailPolicy::for_level(detail).circle_segments
-  let profile = @step_cad.Profile2D::new(
-      @step_cad.Profile2D::centered_circle(outer_diam_mm, segments~),
+  let _ = detail
+  // Exact line/arc loops: the rim and every hole are true cylindrical
+  // surfaces, not 48- or 64-sided polygon approximations.
+  let outer = @step_gears.arc_circle_segments(outer_diam_mm)
+  let hole_loops : Array[Array[@step_cad.ProfileSegment]] = []
+  if center_bore_mm > 0.0 {
+    hole_loops.push(@step_gears.arc_circle_segments(center_bore_mm))
+  }
+  let radius = bolt_circle_mm / 2.0
+  for i in 0..<bolt_count {
+    let theta = 2.0 * @math.PI * i.to_double() / bolt_count.to_double()
+    hole_loops.push(
+      arc_segments_at(
+        @step_gears.arc_circle_segments(bolt_diam_mm),
+        radius * @math.cos(theta),
+        radius * @math.sin(theta),
+      ),
     )
-    .with_hole_at(0.0, 0.0, center_bore_mm, segments~)
-    .with_bolt_circle(bolt_count, bolt_circle_mm / 2.0, bolt_diam_mm, segments~)
+  }
   let mut comp = @cad.Component::new(name, description="Flange plate")
     .with_param("outer_diam_mm", outer_diam_mm.to_string())
     .with_param("center_bore_mm", center_bore_mm.to_string())
     .with_param("thickness_mm", thickness_mm.to_string())
     .with_param("bolt_count", bolt_count.to_string())
     .add_body(
-      @cad.BodyPart::extruded_profile_mm(
+      arc_profile_body(
         name + "_body",
-        profile.outer,
+        outer,
         thickness_mm,
-        holes=profile.holes,
-        density~,
-        color~,
+        hole_loops,
+        density,
+        color,
+        -thickness_mm / 2.0,
       ),
     )
     .add_mate_mm_deg("bottom", z=-thickness_mm / 2.0)
@@ -671,10 +764,7 @@ pub fn l_bracket(
   density~ : @urdf.Density = @urdf.Density::aluminum_6061(),
   color~ : @step_cad.Rgb = @step_cad.Rgb::grey(),
 ) -> @cad.Component {
-  let segments = @step_common.DetailPolicy::for_level(detail).circle_segments
-  let base_outer = @step_cad.Profile2D::centered_rect(width_mm, leg_a_mm)
-  let hole = @step_cad.Profile2D::centered_circle(hole_diam_mm, segments~)
-  let hole_at = @step_cad.translate_pts(hole, 0.0, leg_a_mm * 0.3)
+  let _ = detail
   let wall_z = leg_b_mm * 0.6
   let upright_center_z = (thickness_mm + leg_b_mm) / 2.0
   let wall_hole_y = upright_center_z - wall_z
@@ -685,13 +775,26 @@ pub fn l_bracket(
     "3D print / CNC",
     18.0,
   )
-  let wall_holes : Array[Array[(Double, Double)]] = if wall_hole_diam_mm > 0.0 {
+  let base_holes : Array[Array[@step_cad.ProfileSegment]] = if hole_diam_mm >
+    0.0 {
     [
-      @step_cad.translate_pts(
-        @step_cad.Profile2D::circle(wall_hole_diam_mm, segments~),
+      arc_segments_at(
+        @step_gears.arc_circle_segments(hole_diam_mm),
+        0.0,
+        leg_a_mm * 0.3,
+      ),
+    ]
+  } else {
+    []
+  }
+  let wall_holes : Array[Array[@step_cad.ProfileSegment]] = if wall_hole_diam_mm >
+    0.0 {
+    [
+      arc_segments_at(
+        @step_gears.arc_circle_segments(wall_hole_diam_mm),
         0.0,
         wall_hole_y,
-      ).rev(),
+      ),
     ]
   } else {
     []
@@ -703,28 +806,36 @@ pub fn l_bracket(
   .with_param("thickness_mm", thickness_mm.to_string())
   .with_param("wall_hole_diam_mm", wall_hole_diam_mm.to_string())
   .add_body(
-    @cad.BodyPart::extruded_profile_mm(
+    arc_profile_body(
       name + "_base",
-      base_outer,
+      rect_arc_segments(width_mm, leg_a_mm),
       thickness_mm,
-      holes=[hole_at],
-      y_mm=leg_a_mm / 2.0,
-      z_mm=thickness_mm / 2.0,
-      density~,
-      color~,
+      base_holes,
+      density,
+      color,
+      0.0,
+    ).transform_by(
+      @cad.urdf_transform_from_mm_deg(
+        y_mm=leg_a_mm / 2.0,
+        z_mm=thickness_mm / 2.0,
+      ),
     ),
   )
   .add_body(
-    @cad.BodyPart::extruded_profile_mm(
+    arc_profile_body(
       name + "_upright",
-      @step_cad.Profile2D::centered_rect(width_mm, leg_b_mm - thickness_mm),
+      rect_arc_segments(width_mm, leg_b_mm - thickness_mm),
       thickness_mm,
-      holes=wall_holes,
-      y_mm=thickness_mm / 2.0,
-      z_mm=upright_center_z,
-      rx_deg=-90.0,
-      density~,
-      color~,
+      wall_holes,
+      density,
+      color,
+      0.0,
+    ).transform_by(
+      @cad.urdf_transform_from_mm_deg(
+        y_mm=thickness_mm / 2.0,
+        z_mm=upright_center_z,
+        rx_deg=-90.0,
+      ),
     ),
   )
   .add_mate_mm_deg("base_mount", y=leg_a_mm * 0.6)

@@ -10,8 +10,9 @@ Usage:
   ./run-example.sh <number>  [options...]     e.g. 01, 1, 05
 
 Wrapper options (before or after the example):
-  --view[=<path>]        Write STEP to /tmp/<example>.step (or <path>) and open
-                        it in SolidCraft. With -o, opens that path instead.
+  --view[=<path>]        Write STEP to _build/solidcraft-view/<example>.step
+                        (or <path>) and open it in SolidCraft with --up z.
+                        With -o, opens that path instead.
   --headless, --no-open  Generate only; never open SolidCraft. Writes to
                         /tmp/<example>.step (or the -o path) and prints it.
                         Agents should always pass this instead of --view.
@@ -23,6 +24,7 @@ Every other option is forwarded to the example. Run
 Examples:
   ./run-example.sh 01 --out bracket.step
   ./run-example.sh 01 --view
+  ./run-example.sh --view 4
   ./run-example.sh --view 01
   ./run-example.sh --headless 01              # generate only (agents)
   ./run-example.sh 05-galileo-quadruped --bundle /tmp/galileo_bundle
@@ -125,11 +127,35 @@ activate_solidcraft() {
   fi
 }
 
+# open_in_solidcraft prefers SolidCraft's control-port MCP `open` with
+# `--up z`. That suppresses the "Stand this part up?" dialog and reliably
+# brings the new tab to the front. `open -a` is only the fallback: it opens the
+# file as a tab but leaves the app on its Start screen (and may show the
+# up-axis dialog), which is why --view previously appeared to do nothing.
 open_in_solidcraft() {
   local step_path="$1"
   if [[ ! -s "$step_path" ]]; then
     echo "Error: no STEP was written at $step_path; cannot open it in SolidCraft." >&2
     exit 1
+  fi
+  local sc_helper="${SOLIDCRAFT_MCP_HELPER:-$HOME/.claude/skills/solidcraft-app/scripts/sc_mcp.py}"
+  local output=""
+  if [[ -f "$sc_helper" ]] && command -v python3 >/dev/null 2>&1 &&
+    python3 -I "$sc_helper" port >/dev/null 2>&1; then
+    echo "Opening $step_path in SolidCraft" >&2
+    if output="$(python3 -I "$sc_helper" open "$step_path" --up z 2>&1)"; then
+      activate_solidcraft
+      return 0
+    fi
+    # A path outside the app's allow-list can still be opened with `open -a`;
+    # every other failure (notably the 32-open-design cap) should be reported.
+    if [[ "$output" != *"outside the folders"* ]]; then
+      echo "Error: SolidCraft could not open $step_path:" >&2
+      echo "$output" >&2
+      echo "Close a SolidCraft tab and retry, or pass --headless to skip the app." >&2
+      exit 1
+    fi
+    echo "Warning: $step_path is outside SolidCraft's allowed folders; falling back to 'open -a'." >&2
   fi
   if ! command -v open >/dev/null 2>&1; then
     echo "Error: the macOS 'open' command is unavailable." >&2
@@ -196,15 +222,20 @@ if (( VIEW_REQUESTED )); then
   elif [[ -n "$OUT_PATH" ]]; then
     VIEW_STEP="$OUT_PATH"
   else
-    VIEW_STEP="/tmp/$EXAMPLE_NAME.step"
+    # Keep the STEP under the repository (an allow-listed root for SolidCraft's
+    # control port) and out of /tmp.
+    mkdir -p "$ROOT_DIR/_build/solidcraft-view"
+    VIEW_STEP="$ROOT_DIR/_build/solidcraft-view/$EXAMPLE_NAME.step"
     OUT_PATH="$VIEW_STEP"
     FORWARD_ARGS+=(-o "$VIEW_STEP")
   fi
-  if [[ -z "$VIEW_STEP" || "$VIEW_STEP" == "-" ||
-    ! -d "$(dirname "$VIEW_STEP")" ]]; then
+  if [[ -z "$VIEW_STEP" || "$VIEW_STEP" == "-" ]]; then
     echo "Error: invalid view output path: $VIEW_STEP" >&2
     exit 1
   fi
+  mkdir -p "$(dirname "$VIEW_STEP")"
+  # `-o` uses CreateNew; remove a previous view file first.
+  rm -f "$VIEW_STEP"
 fi
 
 # --- Headless ---------------------------------------------------------------
