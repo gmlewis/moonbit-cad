@@ -6,8 +6,11 @@ import {
   "gmlewis/step/components/fasteners" @step_fasteners,
   "gmlewis/step/components/gears" @step_gears,
   "gmlewis/step/components/motion" @step_motion,
+  "gmlewis/step/components/motors" @step_motors,
+  "gmlewis/step/components/planetary" @step_planetary,
   "gmlewis/step/components/profiles" @step_profiles,
   "gmlewis/step/components/standards" @step_standards,
+  "gmlewis/step/components/stock" @step_stock,
   "gmlewis/urdf",
   "moonbitlang/core/math",
 }

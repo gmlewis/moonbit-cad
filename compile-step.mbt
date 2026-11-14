@@ -24,15 +24,48 @@ fn gltf_safe_revolved(node : @step_cad.SceneNode) -> @step_cad.SceneNode {
 }
 
 ///|
+/// Replaces a swept solid with an axis-aligned bounding box for glTF
+/// visualization.
+///
+/// Herringbone gear flanks are swept B-spline surfaces; the glTF tessellator
+/// only handles planes, cylinders, and linear extrusions. The STEP exporter
+/// keeps the exact swept B-Rep, while the glTF proxy is a box spanning the same
+/// extents.
+fn gltf_safe_swept(node : @step_cad.SceneNode) -> @step_cad.SceneNode {
+  let (x0, x1, y0, y1, z0, z1) = node.shape.bounding_box()
+  let sx = if x1 - x0 > 1.0e-6 { x1 - x0 } else { 1.0 }
+  let sy = if y1 - y0 > 1.0e-6 { y1 - y0 } else { 1.0 }
+  let sz = if z1 - z0 > 1.0e-6 { z1 - z0 } else { 1.0 }
+  let box_node = @step_cad.Cuboid::new(sx, sy, sz)
+    .with_name(node.name)
+    .with_color(node.color)
+    .translate(x=(x0 + x1) / 2.0, y=(y0 + y1) / 2.0, z=(z0 + z1) / 2.0)
+  transform_scene_node(box_node, @step_cad.Transform::from_node(node))
+}
+
+///|
+/// Replaces any shape the glTF tessellator cannot handle with a bounding box.
+fn gltf_safe_bounding_box(node : @step_cad.SceneNode) -> @step_cad.SceneNode {
+  gltf_safe_swept(node)
+}
+
+///|
 /// Makes a scene node safe for the glTF tessellator.
 ///
 /// Revolved profiles (bearing balls, button and countersunk heads, chamfered
-/// shafts) become bounding cylinders, and booleans are rebuilt from their
-/// converted children. All other shapes pass through unchanged, so the STEP
-/// output keeps its exact analytic B-Rep.
+/// shafts) become bounding cylinders, swept profiles (herringbone gear flanks)
+/// and any remaining analytic shape the tessellator cannot handle become
+/// bounding boxes, and booleans are rebuilt from their converted children.
+/// Shapes that compile to planes, cylinders, and linear extrusions pass through
+/// unchanged, so the STEP output always keeps its exact analytic B-Rep.
 pub fn gltf_safe_node(node : @step_cad.SceneNode) -> @step_cad.SceneNode {
   match node.shape {
     @step_cad.Shape::RevolvedProfile(_) => gltf_safe_revolved(node)
+    @step_cad.Shape::SweptProfile(_) => gltf_safe_swept(node)
+    @step_cad.Shape::Cuboid(_)
+    | @step_cad.Shape::Cylinder(_)
+    | @step_cad.Shape::ExtrudedProfile(_) => node
+    @step_cad.Shape::ExtrudedArcProfile(_) => gltf_safe_revolved(node)
     @step_cad.Shape::Union(union) => {
       let children = union.nodes.map(gltf_safe_node)
       let rebuilt = @step_cad.union_all(children, name=node.name).with_color(
@@ -48,7 +81,7 @@ pub fn gltf_safe_node(node : @step_cad.SceneNode) -> @step_cad.SceneNode {
       )
       transform_scene_node(rebuilt, @step_cad.Transform::from_node(node))
     }
-    _ => node
+    _ => gltf_safe_bounding_box(node)
   }
 }
 

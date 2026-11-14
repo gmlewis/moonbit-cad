@@ -8,4 +8,6 @@ target
 __pycache__
 moon.work
 *.blend*
+*.step
+*.stp
 /*.md

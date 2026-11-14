@@ -120,3 +120,51 @@ test "planetary stage wraps the Tier-1 planetary assembly" {
   assert_true(has_planet)
   assert_true(stage.total_mass_kg() > 0.0)
 }
+
+///|
+test "Tier-1 planetary layers split with connectors and export glTF" {
+  for num_elbows in [0, 4] {
+    let params = @step_planetary.HerringbonePlanetaryParams::new(
+      module_mm=1.5,
+      gear_length_mm=8.0,
+      num_elbows~,
+      hole_type="Circular",
+      hole_radius_mm=3.0,
+      sun_teeth=12,
+      planet_teeth=12,
+      planet_count=3,
+    ).unwrap()
+    let gearbox = @step_planetary.herringbone_planetary_gearbox(params).unwrap()
+    for layer in ["sun", "planet-1", "planet-2", "planet-3", "ring"] {
+      let link = @cad.Component::from_step_layer(layer, gearbox, layer)
+      assert_eq(link.bodies.length(), 1)
+      assert_true(link.get_mate("origin") is Some(_))
+      assert_true(link.to_step_file().contains("ISO-10303-21;"))
+    }
+    let sun = @cad.Component::from_step_layer("sun", gearbox, "sun")
+    assert_true(sun.get_mate("sun-bore") is Some(_))
+    assert_true(sun.get_mate("sun-pitch") is Some(_))
+    let gltf = @cad.gltf_safe_design(sun.to_design()).to_gltf()
+    assert_true(gltf.contains("\"2.0\""))
+    // The exact STEP keeps the swept or arc extrusion geometry.
+    assert_true(sun.to_step_file().contains("ADVANCED_FACE"))
+  }
+}
+
+///|
+test "planetary gearbox and smooth spur gear export glTF" {
+  let gearbox = @components.planetary_gearbox(
+    detail=@step_common.DetailLevel::FullyModeled,
+  )
+  let design = gearbox.to_design()
+  let gltf = @cad.gltf_safe_design(design).to_gltf()
+  assert_true(gltf.contains("\"2.0\""))
+  let spur = @components.spur_gear_part(
+    module_mm=1.5,
+    teeth=24,
+    smooth=true,
+    detail=@step_common.DetailLevel::Detailed,
+  )
+  let spur_gltf = @cad.gltf_safe_design(spur.to_design()).to_gltf()
+  assert_true(spur_gltf.contains("\"2.0\""))
+}

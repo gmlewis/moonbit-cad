@@ -1,12 +1,14 @@
 ///|
 /// 06-assistive-scooter
 ///
-/// A rider-parameterized assistive mobility scooter: a T-slot chassis with a
-/// printable deck, battery bay, and seat mounts; a steerable suspension front
-/// fork; and two driven rear hub motors.
+/// A motorized wheelchair / assistive mobility vehicle. Two inexpensive heavy
+/// low-KV BLDC outrunners drive two-stage printed planetary gearboxes; the
+/// printed frame, seat, backrest, and armrests are built from V-slot extrusion
+/// and printable plates. `--layout scooter` builds the lighter single-front-fork
+/// variant on the same drivetrain.
 
 ///|
-fn scooter_fab(
+fn mobility_fab(
   part_number : String,
   description : String,
   material : String,
@@ -25,11 +27,17 @@ fn scooter_fab(
 ///|
 async fn main {
   let base_spec = {
+    "layout": @cli.opt_string(help="Layout: wheelchair (default) or scooter"),
     "wheelbase": @cli.opt_double(680.0, help="Wheelbase in mm"),
     "trackWidth": @cli.opt_double(480.0, help="Track width in mm"),
     "seatHeight": @cli.opt_double(420.0, help="Seat height in mm"),
     "rearWheelDiam": @cli.opt_double(250.0, help="Rear wheel diameter in mm"),
-    "frontWheelDiam": @cli.opt_double(180.0, help="Front wheel diameter in mm"),
+    "frontWheelDiam": @cli.opt_double(150.0, help="Front wheel diameter in mm"),
+    "gearRatio": @cli.opt_double(
+      25.0,
+      help="Requested total reduction (informational)",
+    ),
+    "stage1Module": @cli.opt_double(2.0, help="Planetary gear module in mm"),
     "steerDeg": @cli.opt_double(0.0, help="Steering angle in degrees"),
     "leftWheelDeg": @cli.opt_double(0.0, help="Left wheel angle in degrees"),
     "rightWheelDeg": @cli.opt_double(0.0, help="Right wheel angle in degrees"),
@@ -38,7 +46,7 @@ async fn main {
   guard @cli.parse(
       spec,
       prog="06-assistive-scooter",
-      description="Lightweight rider-parameterized assistive mobility scooter.",
+      description="Motorized wheelchair / assistive mobility vehicle.",
     )
     is Some(args) else {
     return
@@ -46,367 +54,459 @@ async fn main {
   let output = @common.output_paths(args)
   let detail = output.detail_level()
   let threads = output.thread_rep()
+  let layout = args.string_opt("layout").unwrap_or("wheelchair")
   let wheelbase = args.double("wheelbase")
   let track_width = args.double("trackWidth")
   let seat_height = args.double("seatHeight")
   let rear_wheel_diam = args.double("rearWheelDiam")
   let front_wheel_diam = args.double("frontWheelDiam")
+  let module_mm = args.double("stage1Module")
   let rear_wheel_r = rear_wheel_diam / 2.0
-  let deck_top = 90.0
+  let front_wheel_r = front_wheel_diam / 2.0
   let half_track = track_width / 2.0
+  let frame_z = rear_wheel_r + 60.0
+  let deg = @math.PI / 180.0
+  // Two-stage 12/18/48 planetary drive: 25:1.
+  let reduction = @components.planetary_reduction(12, 18, 2)
+  let stage_length = 14.0
+  let drive_length = stage_length * 2.0 + 74.0
   let mut chassis = @cad.Component::new(
       "chassis_link",
-      description="Assistive scooter chassis",
+      description="Motorized wheelchair chassis",
     )
-    .with_robot_name("assistive_scooter")
+    .with_robot_name("assistive_wheelchair")
+    .with_param("layout", layout)
     .with_param("wheelbase_mm", wheelbase.to_string())
     .with_param("track_width_mm", track_width.to_string())
     .with_param("seat_height_mm", seat_height.to_string())
-    .add_port(@cad.Port::new("power", @cad.PortKind::Power, spec="36 V, 25 A"))
+    .with_param("reduction", reduction.to_string())
+    .add_port(@cad.Port::new("power", @cad.PortKind::Power, spec="36 V, 30 A"))
     .add_port(@cad.Port::new("can", @cad.PortKind::Bus, spec="CAN 2.0B"))
     .add_port(@cad.Port::new("ground", @cad.PortKind::Ground, spec="0 V"))
-  // Printable deck, battery bay, fenders, and seat/armrest mounts.
+  // Structural lower frame: two 2040 V-slot side rails and 2020 cross rails.
+  for
+    rail in [
+      ("left_rail", track_width * 0.22),
+      ("right_rail", -track_width * 0.22),
+    ] {
+    chassis = chassis
+      .add_mate_mm_deg("\{rail.0}_mount", y=rail.1, z=frame_z, ry_deg=90.0)
+      .attach(
+        "\{rail.0}_merge",
+        parent_mate="\{rail.0}_mount",
+        @components.vslot_extrusion_strut(
+          name=rail.0,
+          profile=@step_profiles.VSlotProfile::vslot_2040(),
+          length_mm=wheelbase,
+          detail~,
+        ),
+        child_mate="start",
+        spec=@cad.JointSpec::merge_rigid(offset_mm=-wheelbase / 2.0),
+      )
+  }
+  for
+    cross in [
+      ("front_cross", wheelbase * 0.35),
+      ("rear_cross", -wheelbase * 0.35),
+    ] {
+    chassis = chassis
+      .add_mate_mm_deg(
+        "\{cross.0}_mount",
+        x=cross.1,
+        z=frame_z - 20.0,
+        rx_deg=-90.0,
+      )
+      .attach(
+        "\{cross.0}_merge",
+        parent_mate="\{cross.0}_mount",
+        @components.vslot_extrusion_strut(
+          name=cross.0,
+          profile=@step_profiles.VSlotProfile::vslot_2020(),
+          length_mm=track_width * 0.45,
+          detail~,
+        ),
+        child_mate="start",
+        spec=@cad.JointSpec::merge_rigid(offset_mm=-track_width * 0.225),
+      )
+  }
+  // Corner brackets and joining plates tie the frame together.
+  for
+    corner in [
+      ("frame_fl", wheelbase * 0.45, track_width * 0.22),
+      ("frame_fr", wheelbase * 0.45, -track_width * 0.22),
+      ("frame_rl", -wheelbase * 0.45, track_width * 0.22),
+      ("frame_rr", -wheelbase * 0.45, -track_width * 0.22),
+    ] {
+    let (corner_name, cx, cy) = corner
+    chassis = chassis
+      .add_mate_mm_deg("\{corner_name}_mount", x=cx, y=cy, z=frame_z)
+      .attach(
+        "\{corner_name}_merge",
+        parent_mate="\{corner_name}_mount",
+        @components.vslot_corner_bracket_part(
+          name=corner_name,
+          leg_mm=20.0,
+          detail~,
+        ),
+        child_mate="mount_a",
+        spec=@cad.JointSpec::merge_rigid(),
+      )
+  }
+  // Printable deck, battery bay, seat pan, backrest, and armrests.
   chassis = chassis.add_body(
     @cad.BodyPart::box_mm(
       "deck",
-      wheelbase * 0.6,
-      track_width * 0.55,
-      deck_top,
-      z_mm=deck_top / 2.0,
-      density=@urdf.Density::aluminum_6061(),
+      wheelbase * 0.55,
+      track_width * 0.62,
+      10.0,
+      z_mm=frame_z + 25.0,
+      density=@urdf.Density::petg(),
       color=@step_cad.Rgb::grey(),
-    ).with_part(scooter_fab("SCOOTER-DECK", "Scooter foot deck", "PETG", 20.0)),
+    ).with_part(mobility_fab("WC-DECK", "Foot deck", "PETG", 18.0)),
   )
   chassis = chassis.add_body(
     @cad.BodyPart::box_mm(
       "battery_bay",
-      wheelbase * 0.35,
-      track_width * 0.45,
+      wheelbase * 0.32,
+      track_width * 0.4,
       120.0,
-      x_mm=-wheelbase * 0.1,
-      z_mm=deck_top + 60.0,
+      x_mm=-wheelbase * 0.12,
+      z_mm=frame_z - 20.0,
       density=@urdf.Density::petg(),
       color=@step_cad.Rgb::black(),
-    ).with_part(
-      scooter_fab("SCOOTER-BATTERY-BAY", "Battery bay enclosure", "PETG", 18.0),
-    ),
+    ).with_part(mobility_fab("WC-BATTERY-BAY", "Battery bay", "PETG", 20.0)),
   )
   chassis = chassis.add_body(
     @cad.BodyPart::box_mm(
-      "left_fender",
-      rear_wheel_diam * 1.1,
-      track_width * 0.12,
-      6.0,
-      x_mm=-wheelbase / 2.0,
-      y_mm=half_track,
-      z_mm=rear_wheel_r * 2.0 + 5.0,
+      "seat_pan",
+      track_width * 0.78,
+      track_width * 0.66,
+      14.0,
+      x_mm=-wheelbase * 0.10,
+      z_mm=seat_height - 7.0,
       density=@urdf.Density::petg(),
       color=@step_cad.Rgb::black(),
-    ).with_part(
-      scooter_fab("SCOOTER-LEFT-FENDER", "Left rear fender", "PETG", 4.0),
-    ),
+    ).with_part(mobility_fab("WC-SEAT-PAN", "Seat pan", "PETG", 26.0)),
   )
   chassis = chassis.add_body(
     @cad.BodyPart::box_mm(
-      "right_fender",
-      rear_wheel_diam * 1.1,
-      track_width * 0.12,
-      6.0,
-      x_mm=-wheelbase / 2.0,
-      y_mm=-half_track,
-      z_mm=rear_wheel_r * 2.0 + 5.0,
+      "backrest",
+      16.0,
+      track_width * 0.72,
+      460.0,
+      x_mm=-wheelbase * 0.10 - 210.0,
+      z_mm=seat_height + 220.0,
       density=@urdf.Density::petg(),
       color=@step_cad.Rgb::black(),
-    ).with_part(
-      scooter_fab("SCOOTER-RIGHT-FENDER", "Right rear fender", "PETG", 4.0),
-    ),
+    ).with_part(mobility_fab("WC-BACKREST", "Backrest", "PETG", 24.0)),
   )
-  let drop_mounts : Array[(String, Double, String)] = [
-    ("left_drop_mount", half_track + 30.0, "SCOOTER-LEFT-DROP-MOUNT"),
-    ("right_drop_mount", -(half_track + 30.0), "SCOOTER-RIGHT-DROP-MOUNT"),
-  ]
-  for drop in drop_mounts {
-    let (drop_name, y, drop_part) = drop
+  for armrest in [("left_armrest", 150.0), ("right_armrest", -150.0)] {
     chassis = chassis.add_body(
       @cad.BodyPart::box_mm(
-        drop_name,
-        70.0,
-        14.0,
-        rear_wheel_r * 0.75,
-        x_mm=-wheelbase / 2.0,
-        y_mm=y,
-        z_mm=rear_wheel_r * 0.5,
-        density=@urdf.Density::aluminum_6061(),
-        color=@step_cad.Rgb::grey(),
-      ).with_part(
-        scooter_fab(drop_part, "Rear axle drop plate", "6061-T6", 5.0),
-      ),
+        armrest.0,
+        380.0,
+        50.0,
+        40.0,
+        x_mm=-wheelbase * 0.05,
+        y_mm=armrest.1,
+        z_mm=seat_height + 120.0,
+        density=@urdf.Density::petg(),
+        color=@step_cad.Rgb::black(),
+      ).with_part(mobility_fab("WC-ARMREST", "Folding armrest", "PETG", 14.0)),
     )
   }
-  chassis = chassis.add_body(
-    @cad.BodyPart::box_mm(
-      "seat_mount",
-      track_width * 0.5,
-      track_width * 0.5,
-      10.0,
-      x_mm=-wheelbase * 0.15,
-      z_mm=seat_height - 5.0,
-      density=@urdf.Density::aluminum_6061(),
-      color=@step_cad.Rgb::grey(),
-    ).with_part(
-      scooter_fab("SCOOTER-SEAT-MOUNT", "Seat mount plate", "PETG", 8.0),
-    ),
-  )
+  // Joystick / throttle pod with ports.
   chassis = chassis.add_body(
     @cad.BodyPart::box_mm(
       "joystick_pod",
       70.0,
       60.0,
       40.0,
-      x_mm=wheelbase * 0.28,
-      z_mm=seat_height * 0.8,
+      x_mm=wheelbase * 0.20,
+      y_mm=-150.0,
+      z_mm=seat_height + 160.0,
       density=@urdf.Density::petg(),
       color=@step_cad.Rgb::black(),
-    ).with_part(
-      scooter_fab(
-        "SCOOTER-JOYSTICK-POD", "Joystick controller pod", "PETG", 6.0,
-      ),
-    ),
+    ).with_part(mobility_fab("WC-JOYSTICK-POD", "Joystick pod", "PETG", 12.0)),
   )
-  // 2040 side rails and 2020 cross rails.
-  chassis = chassis.add_mate_mm_deg(
-    "left_rail_mount",
-    y=half_track,
-    z=deck_top * 0.5,
-    ry_deg=90.0,
-  )
-  chassis = chassis.add_mate_mm_deg(
-    "right_rail_mount",
-    y=-half_track,
-    z=deck_top * 0.5,
-    ry_deg=90.0,
-  )
-  for
-    rail in [
-      ("left_rail", "left_rail_mount"),
-      ("right_rail", "right_rail_mount"),
-    ] {
-    let strut = @components.tslot_extrusion_strut(
-      name=rail.0,
-      profile=@step_profiles.TSlotProfile::generic_2040(),
-      length_mm=wheelbase,
-      detail~,
+  chassis = chassis
+    .add_mate_mm_deg(
+      "joystick_stick",
+      x=wheelbase * 0.20,
+      y=-190.0,
+      z=seat_height + 185.0,
     )
-    chassis = chassis.attach(
-      "\{rail.0}_merge",
-      parent_mate=rail.1,
-      strut,
-      child_mate="start",
-      spec=@cad.JointSpec::merge_rigid(offset_mm=-wheelbase / 2.0),
+    .add_port(
+      @cad.Port::new("signal", @cad.PortKind::Signal, spec="2-axis Hall"),
     )
+    .add_port(
+      @cad.Port::new("estop", @cad.PortKind::Signal, spec="NC to ground"),
+    )
+  // Differential rear planetary drives.
+  for drive in [("left_drive", 1.0), ("right_drive", -1.0)] {
+    let (drive_name, side) = drive
+    let mount_y = if side > 0.0 {
+      half_track - drive_length
+    } else {
+      -half_track + drive_length
+    }
+    let drive_rx = if side > 0.0 { -90.0 } else { 90.0 }
+    chassis = chassis
+      .add_mate_mm_deg(
+        "\{drive_name}_mount",
+        x=-wheelbase / 2.0,
+        y=mount_y,
+        z=rear_wheel_r,
+        rx_deg=drive_rx,
+      )
+      .attach(
+        "\{drive_name}_mount_joint",
+        parent_mate="\{drive_name}_mount",
+        @components.planetary_wheel_drive_unit(
+          name=drive_name,
+          preset="6354_190kv",
+          stages=2,
+          module_mm~,
+          sun_teeth=12,
+          planet_teeth=18,
+          planet_count=3,
+          gear_length_mm=stage_length,
+          wheel_diam_mm=rear_wheel_diam,
+          wheel_width_mm=52.0,
+          detail~,
+          threads?,
+        ),
+        child_mate="motor_mount",
+        spec=@cad.JointSpec::fixed(),
+      )
   }
-  // Front suspension fork and its steering column. The fork's local frame
-  // puts the axle at z = 0 and the mount at fork_length + 18, so the mount
-  // sits high enough that the axle lands at the front-wheel radius.
-  let fork_length = front_wheel_diam * 1.2
-  let fork_mount_z = front_wheel_diam / 2.0 + fork_length + 18.0
-  chassis = chassis.add_body(
-    @cad.BodyPart::cylinder_mm(
-      "steering_column",
-      30.0,
-      fork_mount_z - 30.0 - deck_top,
-      x_mm=wheelbase * 0.55,
-      y_mm=45.0,
-      z_mm=(deck_top + fork_mount_z - 30.0) / 2.0,
-      density=@urdf.Density::aluminum_6061(),
-      color=@step_cad.Rgb::grey(),
-    ).with_part(
-      scooter_fab("SCOOTER-STEERING-COLUMN", "Steering column", "6061-T6", 8.0),
-    ),
-  )
-  chassis = chassis.add_mate_mm_deg(
-    "steering_mount",
-    x=wheelbase * 0.55,
-    z=fork_mount_z,
-    axis=(0.0, 0.0, 1.0),
-  )
-  let fork = @components.suspension_fork_module(
-    name="front_fork",
-    fork_span_mm=track_width * 0.28,
-    fork_length_mm=fork_length,
-    wheel_diam_mm=front_wheel_diam,
-    detail~,
-    threads?,
-  )
-  chassis = chassis.attach(
-    "steering_joint",
-    parent_mate="steering_mount",
-    fork,
-    child_mate="mount",
-    spec=@cad.JointSpec::revolute(
-      @urdf.JointLimit::new(
-        lower=Some(-0.75),
-        upper=Some(0.75),
-        effort=15.0,
-        velocity=3.0,
-      ),
-      transmission_reduction=Some(5.0),
-    ),
-  )
-  // Rear hub drives.
-  let hub_members : Array[(String, Double)] = [
-    ("rear_left_hub", half_track),
-    ("rear_right_hub", -half_track),
-  ]
-  for hub_spec in hub_members {
-    let (hub_name, y) = hub_spec
-    chassis = chassis.add_mate_mm_deg(
-      "\{hub_name}_axle",
-      x=-wheelbase / 2.0,
-      y~,
-      z=rear_wheel_r,
-      rx_deg=-90.0,
-      axis=(0.0, 1.0, 0.0),
-    )
-    let hub = @components.hub_motor_assembly(
-      name=hub_name,
-      tire_diam_mm=rear_wheel_diam,
-      tire_width_mm=track_width * 0.12,
-      detail~,
-    )
-    chassis = chassis.attach(
-      "\{hub_name}_mount_joint",
-      parent_mate="\{hub_name}_axle",
-      hub,
-      child_mate="axle",
-      spec=@cad.JointSpec::fixed(),
-    )
+  // Front casters (wheelchair) or one steerable suspension fork (scooter).
+  let caster_mount_z = frame_z - 30.0
+  let fork_length = if caster_mount_z > front_wheel_r + 30.0 {
+    caster_mount_z - front_wheel_r - 16.0
+  } else {
+    60.0
   }
-  // Electronics, sensors, and harness.
+  if layout == "scooter" {
+    let mount_z = caster_mount_z
+    chassis = chassis
+      .add_mate_mm_deg(
+        "steering_mount",
+        x=wheelbase * 0.48,
+        z=mount_z,
+        axis=(0.0, 0.0, 1.0),
+      )
+      .attach(
+        "steering_joint",
+        parent_mate="steering_mount",
+        @components.suspension_fork_module(
+          name="front_fork",
+          fork_span_mm=track_width * 0.25,
+          fork_length_mm=fork_length,
+          wheel_diam_mm=front_wheel_diam,
+          detail~,
+          threads?,
+        ),
+        child_mate="mount",
+        spec=@cad.JointSpec::revolute(
+          @urdf.JointLimit::new(
+            lower=Some(-0.75),
+            upper=Some(0.75),
+            effort=15.0,
+            velocity=3.0,
+          ),
+          transmission_reduction=Some(5.0),
+        ),
+      )
+  } else {
+    for caster in [("caster_left", 1.0), ("caster_right", -1.0)] {
+      let (caster_name, side) = caster
+      chassis = chassis
+        .add_mate_mm_deg(
+          "\{caster_name}_mount",
+          x=wheelbase * 0.45,
+          y=side * track_width * 0.36,
+          z=caster_mount_z,
+          axis=(0.0, 0.0, 1.0),
+        )
+        .attach(
+          "\{caster_name}_swivel_joint",
+          parent_mate="\{caster_name}_mount",
+          @components.caster_fork_assembly(
+            name=caster_name,
+            wheel_diam_mm=front_wheel_diam,
+            wheel_width_mm=32.0,
+            fork_span_mm=90.0,
+            fork_length_mm=fork_length,
+            detail~,
+            threads?,
+          ),
+          child_mate="steering_axis",
+          spec=@cad.JointSpec::revolute(
+            @urdf.JointLimit::new(
+              lower=Some(-1.4),
+              upper=Some(1.4),
+              effort=4.0,
+              velocity=4.0,
+            ),
+            dynamics=Some(@urdf.JointDynamics::new(damping=0.2, friction=0.1)),
+          ),
+        )
+    }
+  }
+  // Electronics and sensors.
   let controller = @components.pcb_board(
     name="drive_controller",
-    length_mm=70.0,
-    width_mm=50.0,
-    connectors=["power", "can", "left_motor", "right_motor", "steer"],
+    length_mm=90.0,
+    width_mm=60.0,
+    connectors=["power", "can", "left_motor", "right_motor", "joystick"],
     detail~,
   )
-  chassis = chassis.add_mate_mm_deg("pcb_mount", z=deck_top + 4.0)
-  chassis = chassis.attach(
-    "pcb_merge",
-    parent_mate="pcb_mount",
-    controller,
-    child_mate="mount",
-    spec=@cad.JointSpec::merge_rigid(),
-  )
+  chassis = chassis
+    .add_mate_mm_deg("pcb_mount", x=-wheelbase * 0.10, z=seat_height - 20.0)
+    .attach(
+      "pcb_merge",
+      parent_mate="pcb_mount",
+      controller,
+      child_mate="mount",
+      spec=@cad.JointSpec::merge_rigid(),
+    )
   let imu = @components.imu_module(name="imu", detail~)
-  chassis = chassis.add_mate_mm_deg(
-    "imu_mount",
-    x=-wheelbase * 0.15,
-    z=deck_top + 4.0,
-  )
-  chassis = chassis.attach(
-    "imu_merge",
-    parent_mate="imu_mount",
-    imu,
-    child_mate="mount",
-    spec=@cad.JointSpec::merge_rigid(),
-  )
-  let steering_home = @components.limit_switch(name="steering_home", detail~)
-  chassis = chassis.add_mate_mm_deg(
-    "steering_home_mount",
-    x=wheelbase * 0.55,
-    y=45.0,
-    z=deck_top + 110.0,
-  )
-  chassis = chassis.attach(
-    "steering_home_merge",
-    parent_mate="steering_home_mount",
-    steering_home,
-    child_mate="mount",
-    spec=@cad.JointSpec::merge_rigid(),
-  )
+  chassis = chassis
+    .add_mate_mm_deg("imu_mount", x=-wheelbase * 0.10, z=frame_z + 30.0)
+    .attach(
+      "imu_merge",
+      parent_mate="imu_mount",
+      imu,
+      child_mate="mount",
+      spec=@cad.JointSpec::merge_rigid(),
+    )
   let camera = @components.camera_module(name="front_camera", detail~)
-  chassis = chassis.add_mate_mm_deg(
-    "camera_mount",
-    x=wheelbase * 0.55,
-    z=front_wheel_diam + 20.0,
-  )
-  chassis = chassis.attach(
-    "camera_merge",
-    parent_mate="camera_mount",
-    camera,
-    child_mate="mount",
-    spec=@cad.JointSpec::merge_rigid(),
-  )
-  let _ = chassis.add_cable_route(
-    @cad.CableRoute::new(
-      "deck_harness",
-      points=[(0.0, 0.0, deck_top), (wheelbase * 0.3, 0.0, deck_top)],
-      jacket_diameter_mm=10.0,
-      wire_names=["drive_can"],
-      material="PVC",
-      from_component="chassis_link",
-      from_port="can",
-      to_component="front_fork",
-      to_port="can",
-    ),
-  )
+  chassis = chassis
+    .add_mate_mm_deg("camera_mount", x=wheelbase * 0.45, z=frame_z + 200.0)
+    .attach(
+      "camera_merge",
+      parent_mate="camera_mount",
+      camera,
+      child_mate="mount",
+      spec=@cad.JointSpec::merge_rigid(),
+    )
+  // Wiring and control.
   let _ = chassis.add_wire_run(
     @cad.WireRun::new(
-      "drive_can",
+      "left_drive_can",
       from_component="chassis_link",
       from_port="can",
-      to_component="front_fork",
+      to_component="left_drive_drive",
       to_port="can",
       gauge_awg=24,
       length_mm=900.0,
     ),
   )
+  let _ = chassis.add_wire_run(
+    @cad.WireRun::new(
+      "right_drive_can",
+      from_component="chassis_link",
+      from_port="can",
+      to_component="right_drive_drive",
+      to_port="can",
+      gauge_awg=24,
+      length_mm=900.0,
+    ),
+  )
+  let _ = chassis.add_cable_route(
+    @cad.CableRoute::new(
+      "drive_harness",
+      points=[
+        (-wheelbase * 0.1, 0.0, seat_height - 20.0),
+        (-wheelbase * 0.3, 0.0, frame_z),
+        (-wheelbase / 2.0, half_track * 0.5, rear_wheel_r),
+      ],
+      jacket_diameter_mm=10.0,
+      wire_names=["left_drive_can"],
+      material="PVC",
+      from_component="chassis_link",
+      from_port="can",
+      to_component="left_drive_drive",
+      to_port="can",
+    ),
+  )
+  if layout == "scooter" {
+    let _ = chassis.add_control_binding(
+      @cad.ControlBinding::new(
+        "steering_joint",
+        actuator="front_fork",
+        channel="can0:3",
+        gear_ratio=5.0,
+        soft_lower=Some(-0.75),
+        soft_upper=Some(0.75),
+      ),
+    )
+    let _ = chassis.add_control_binding(
+      @cad.ControlBinding::new(
+        "front_fork_wheel_joint",
+        actuator="front_fork",
+        channel="can0:4",
+        gear_ratio=1.0,
+        soft_lower=Some(-1000.0),
+        soft_upper=Some(1000.0),
+      ),
+    )
+  } else {
+    for
+      caster in [
+        ("caster_left", "can0:3", "can0:4"),
+        ("caster_right", "can0:5", "can0:6"),
+      ] {
+      let _ = chassis.add_control_binding(
+        @cad.ControlBinding::new(
+          "\{caster.0}_swivel_joint",
+          actuator=caster.0,
+          channel=caster.1,
+          gear_ratio=1.0,
+          soft_lower=Some(-1.4),
+          soft_upper=Some(1.4),
+        ),
+      )
+      let _ = chassis.add_control_binding(
+        @cad.ControlBinding::new(
+          "\{caster.0}_wheel_joint",
+          actuator=caster.0,
+          channel=caster.2,
+          gear_ratio=1.0,
+          soft_lower=Some(-1000.0),
+          soft_upper=Some(1000.0),
+        ),
+      )
+    }
+  }
   let _ = chassis.add_control_binding(
     @cad.ControlBinding::new(
-      "steering_joint",
-      actuator="front_fork",
+      "left_drive_wheel_joint",
+      actuator="left_drive_drive",
       channel="can0:1",
-      gear_ratio=5.0,
-      soft_lower=Some(-0.75),
-      soft_upper=Some(0.75),
-      homing_input=Some("signal"),
+      gear_ratio=reduction,
+      soft_lower=Some(-1000.0),
+      soft_upper=Some(1000.0),
     ),
   )
   let _ = chassis.add_control_binding(
     @cad.ControlBinding::new(
-      "rear_left_hub_spin_joint",
-      actuator="rear_left_hub_wheel",
+      "right_drive_wheel_joint",
+      actuator="right_drive_drive",
       channel="can0:2",
-      gear_ratio=1.0,
-      soft_lower=Some(-100.0),
-      soft_upper=Some(100.0),
+      gear_ratio=reduction,
+      soft_lower=Some(-1000.0),
+      soft_upper=Some(1000.0),
     ),
   )
-  let _ = chassis.add_control_binding(
-    @cad.ControlBinding::new(
-      "rear_right_hub_spin_joint",
-      actuator="rear_right_hub_wheel",
-      channel="can0:3",
-      gear_ratio=1.0,
-      soft_lower=Some(-100.0),
-      soft_upper=Some(100.0),
-    ),
-  )
-  let _ = chassis.add_control_binding(
-    @cad.ControlBinding::new(
-      "front_fork_wheel_joint",
-      actuator="front_fork_wheel",
-      channel="can0:4",
-      gear_ratio=1.0,
-      soft_lower=Some(-100.0),
-      soft_upper=Some(100.0),
-    ),
-  )
-  let deg = @math.PI / 180.0
   let positions : Map[String, Double] = Map([])
-  positions.set("steering_joint", args.double("steerDeg") * deg)
-  positions.set("rear_left_hub_spin_joint", args.double("leftWheelDeg") * deg)
-  positions.set("rear_right_hub_spin_joint", args.double("rightWheelDeg") * deg)
+  positions.set("left_drive_wheel_joint", args.double("leftWheelDeg") * deg)
+  positions.set("right_drive_wheel_joint", args.double("rightWheelDeg") * deg)
+  if layout == "scooter" {
+    positions.set("steering_joint", args.double("steerDeg") * deg)
+  } else {
+    positions.set("caster_left_swivel_joint", args.double("steerDeg") * deg)
+  }
   @common.write_output(chassis, output, joint_positions=positions)
 }

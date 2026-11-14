@@ -24,6 +24,67 @@ fn printable_fab(
 }
 
 ///|
+/// The four V-slot corner bracket poses for a rectangular torso.
+fn corners_for_brackets(
+  half_len : Double,
+  half_width : Double,
+  body_height : Double,
+) -> Array[(String, Double, Double, Double, Double, Double, Double)] {
+  [
+    ("corner_fl", half_len * 0.8, half_width, body_height / 2.0, 0.0, 0.0, 0.0),
+    (
+      "corner_fr",
+      half_len * 0.8,
+      -half_width,
+      body_height / 2.0,
+      0.0,
+      0.0,
+      90.0,
+    ),
+    (
+      "corner_rl",
+      -half_len * 0.8,
+      half_width,
+      body_height / 2.0,
+      0.0,
+      0.0,
+      180.0,
+    ),
+    (
+      "corner_rr",
+      -half_len * 0.8,
+      -half_width,
+      body_height / 2.0,
+      0.0,
+      0.0,
+      270.0,
+    ),
+  ]
+}
+
+///|
+/// Soft lower limit matching the leg's URDF joint limit.
+fn joint_soft_lower(index : Int32) -> Double {
+  match index {
+    0 => -0.8
+    1 => -1.57
+    2 => -2.7
+    _ => -1000.0
+  }
+}
+
+///|
+/// Soft upper limit matching the leg's URDF joint limit.
+fn joint_soft_upper(index : Int32) -> Double {
+  match index {
+    0 => 0.8
+    1 => 3.14
+    2 => -0.5
+    _ => 1000.0
+  }
+}
+
+///|
 async fn main {
   let base_spec = {
     "bodyLength": @cli.opt_double(460.0, help="Chassis length in mm"),
@@ -112,7 +173,21 @@ async fn main {
       ),
     ),
   )
-  // 2020 T-slot chassis rails.
+  base = base.add_body(
+    @cad.BodyPart::box_mm(
+      "battery_bay",
+      body_len * 0.28,
+      body_width * 0.42,
+      body_height * 0.55,
+      x_mm=-body_len * 0.12,
+      z_mm=-body_height / 2.0,
+      density=@urdf.Density::petg(),
+      color=@step_cad.Rgb::black(),
+    ).with_part(
+      printable_fab("TPLATE-BATTERY-BAY", "Battery bay enclosure", "PETG", 8.0),
+    ),
+  )
+  // 2020 V-slot chassis rails.
   let rail_specs : Array[
     (String, Double, Double, Double, Double, Double, Double),
   ] = [
@@ -132,8 +207,9 @@ async fn main {
       ry_deg=if is_x_rail { 90.0 } else { 0.0 },
       rx_deg=if is_x_rail { 0.0 } else { -90.0 },
     )
-    let strut = @components.tslot_extrusion_strut(
+    let strut = @components.vslot_extrusion_strut(
       name=rail_name,
+      profile=@step_profiles.VSlotProfile::vslot_2020(),
       length_mm=rail_length,
       detail~,
     )
@@ -143,6 +219,30 @@ async fn main {
       strut,
       child_mate="start",
       spec=@cad.JointSpec::merge_rigid(offset_mm=-rail_length / 2.0),
+    )
+  }
+  // V-slot corner brackets tie the rails together.
+  for corner in corners_for_brackets(half_len, half_width, body_height) {
+    let (bracket_name, bx, by, bz, brx, bry, brz) = corner
+    base = base.add_mate_mm_deg(
+      "\{bracket_name}_mount",
+      x=bx,
+      y=by,
+      z=bz,
+      rx_deg=brx,
+      ry_deg=bry,
+      rz_deg=brz,
+    )
+    base = base.attach(
+      "\{bracket_name}_merge",
+      parent_mate="\{bracket_name}_mount",
+      @components.vslot_corner_bracket_part(
+        name=bracket_name,
+        leg_mm=20.0,
+        detail~,
+      ),
+      child_mate="mount_a",
+      spec=@cad.JointSpec::merge_rigid(),
     )
   }
   // Electronics: controller on standoffs, IMU, and depth camera.
@@ -304,9 +404,9 @@ async fn main {
           "\{prefix}_\{joint_names[i]}",
           actuator="\{prefix}\{actuator_suffixes[i]}",
           channel="can0:" + channel.to_string(),
-          gear_ratio=6.0,
-          soft_lower=Some(-3.0),
-          soft_upper=Some(3.0),
+          gear_ratio=@components.planetary_reduction(12, 12, 1),
+          soft_lower=Some(joint_soft_lower(i)),
+          soft_upper=Some(joint_soft_upper(i)),
         ),
       )
       channel = channel + 1

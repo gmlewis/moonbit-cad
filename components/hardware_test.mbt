@@ -152,3 +152,71 @@ test "threads override is accepted by threaded hardware" {
     helical.to_step_file().length() > cosmetic.to_step_file().length(),
   )
 }
+
+///|
+test "Tier-1 stock and motion wrappers build" {
+  let vslot = @components.vslot_extrusion_strut(name="rail", length_mm=240.0)
+  check_component(vslot, ["start", "end"])
+  assert_true(vslot.total_mass_kg() > 0.0)
+  let tnut = @components.extrusion_tnut_part(thread="M5")
+  check_component(tnut, ["seat", "thread"])
+  assert_true(tnut.total_mass_kg() > 0.0)
+  let collar = @components.shaft_collar()
+  check_component(collar, ["bore"])
+  assert_true(collar.total_mass_kg() > 0.0)
+  let block = @components.flanged_bearing_block()
+  check_component(block, ["mount", "bore"])
+  assert_true(block.total_mass_kg() > 0.0)
+  let pulley = @components.gt2_pulley_part()
+  check_component(pulley, ["bore", "top"])
+  assert_true(pulley.total_mass_kg() > 0.0)
+  let shaft = @components.stepped_shaft_part()
+  check_component(shaft, ["input", "output"])
+  assert_true(shaft.total_mass_kg() > 0.0)
+  let key = @components.key_part()
+  check_component(key, ["center"])
+  assert_true(key.total_mass_kg() > 0.0)
+}
+
+///|
+test "Tier-1 stock plates and brackets build" {
+  let plate = @components.stock_plate_part()
+  check_component(plate, ["top", "bottom"])
+  assert_true(plate.total_mass_kg() > 0.0)
+  let bearing_plate = @components.bearing_plate_part()
+  check_component(bearing_plate, ["top", "bottom", "bearing_bore"])
+  assert_true(bearing_plate.total_mass_kg() > 0.0)
+  let angle = @components.angle_bar_part()
+  check_component(angle, ["start", "end"])
+  assert_true(angle.total_mass_kg() > 0.0)
+  let corner = @components.vslot_corner_bracket_part()
+  check_component(corner, ["mount_a", "mount_b"])
+  assert_true(corner.total_mass_kg() > 0.0)
+  let joining = @components.vslot_joining_plate_part()
+  check_component(joining, ["top", "bottom"])
+  assert_true(joining.total_mass_kg() > 0.0)
+  let coupling = @components.rigid_coupling_part()
+  check_component(coupling, ["input_shaft", "output_shaft"])
+  assert_true(coupling.total_mass_kg() > 0.0)
+  let bearing = @components.deep_groove_bearing_part()
+  check_component(bearing, ["center", "bottom", "top", "bore"])
+  assert_true(bearing.total_mass_kg() > 0.0)
+  let nema_plate = @components.nema_mount_plate_part()
+  check_component(nema_plate, ["top", "bottom"])
+  assert_true(nema_plate.total_mass_kg() > 0.0)
+}
+
+///|
+test "detailed hardware wrappers are printable and glTF safe" {
+  let collar = @components.shaft_collar(
+    detail=@step_common.DetailLevel::Detailed,
+  )
+  assert_true(collar.part is Some(_))
+  let bearing = @components.deep_groove_bearing_part(
+    detail=@step_common.DetailLevel::Detailed,
+  )
+  let design = bearing.to_design()
+  let gltf = @cad.gltf_safe_design(design).to_gltf()
+  assert_true(gltf.contains("\"2.0\""))
+  assert_true(bearing.to_step_file().contains("ISO-10303-21;"))
+}
