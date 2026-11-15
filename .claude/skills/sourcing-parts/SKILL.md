@@ -73,7 +73,7 @@ part_number | supplier | supplier_url | notes | unit_cost_usd
 ```
 
 - `part_number` must match the BOM exactly (`ISO4762-M3x10.0`,
-  `BEARING-FR8-2RS`, `SHAFT-12.7x93.9`, ...).
+  `BEARING-FR8-2RS`, `SHAFT-12.7x45.9`, ...).
 - `supplier` is the shop name (`McMaster-Carr`, `Amazon`, `VXB`, `Digi-Key`,
   ...). Do not leave it `generic` for a linked part.
 - `supplier_url` is the product page. Use the canonical product URL.
@@ -151,9 +151,11 @@ current pattern:
 | `BLDC-5010_360kv` | Amazon (GoolRC) | 5010 360KV, 4 mm shaft, 19 mm bolt circle |
 | `ENC-AS5047P` | Digi-Key | AS5047P adapter/evaluation board with the diametric magnet |
 | `SHAFT-8.0x31.0` | McMaster-Carr | 8 mm 303 rotary shaft, cut to length |
-| `SHAFT-12.7x93.9` | OnlineMetals | 1/2 in 303 rod, cut to length |
+| `SHAFT-12.7x45.9` | OnlineMetals | 1/2 in 303 rod, cut to length |
 | `COLLAR-12.7-25.4` | McMaster-Carr | 1/2 in bore x 1 in OD x 7/16 in wide set-screw collar |
-| `WHEEL-7IN` | Amazon | 7 x 1.5 in wheel with a 1/2 in hub and 1-3/8 in hub length |
+| `WHEEL-7IN` | Amazon | budrash 72-107 7 x 1.5 in wheel, 2-pack, 1/2 in bore, 1-3/8 in hub; 3 holes drilled for the printed tire mount (ASIN B09XMGXFDN) |
+| `TIRE-MOUNT-86.3` | 3D print | Printed adapter; the purchased wheel's plastic hub is drilled to its 55.85 mm M4 bolt circle |
+| `INSERT-4` / `ISO4762-M4x40` | Amazon | M4 heat-set insert kit and M4 x 40 mm socket-head screws for the three-hole tire mount |
 | M3/M4 screws, inserts, set screws | Amazon kits | One or two labeled kits cover the whole fastener schedule |
 
 Always re-verify links and prices before publishing; product pages and stock

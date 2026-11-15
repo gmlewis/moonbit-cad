@@ -7,8 +7,11 @@
 ///
 /// The gearbox casing carries the integrated planetary ring gears, the motor
 /// bolts to the casing's motor cap, and the final carrier's output shaft turns
-/// in a flanged bearing in the output cap. The tire's 1/2" hub bore rides on
-/// the 1/2" output shaft and is clamped between two shaft collars.
+/// in a flanged bearing in the output cap. A printed tire mount
+/// (`@step_motion.measured_tire_mount`) bolts to three heat-set inserts in the
+/// output hub at a 55.85 mm bolt circle. The purchased budrash 72-107 wheel's
+/// plastic hub is drilled with three 4.5 mm holes and bolted to that mount with
+/// three M4 x 40 screws; the mount's hub post centers the wheel.
 ///
 /// Stage parameters are comma-separated lists: the first value goes to stage 1,
 /// the second to stage 2, and so on. A shorter list repeats its last value.
@@ -25,6 +28,47 @@ fn[T] cli_or_abort(result : Result[T, String]) -> T {
   match result {
     Ok(value) => value
     Err(message) => abort("error: " + message)
+  }
+}
+
+///|
+/// Prefixes every body name so a multi-body purchased or printed part stays
+/// identifiable and moves as one unit in the exploded view.
+fn prefix_body_names(comp : @cad.Component, prefix : String) -> @cad.Component {
+  let bodies = comp.bodies.map(fn(body) {
+    let name = prefix + "_" + body.name
+    { ..body, name, node: body.node.with_name(name), }
+  })
+  { ..comp, bodies, }
+}
+
+///|
+/// Rotates a component's bodies and mates about its own +X axis and slides it
+/// along that axis. The wheel frame's +X is the axle, so this sets the rib and
+/// bolt-hole phase and axial seat without tilting the axle.
+fn transform_component_about_x(
+  comp : @cad.Component,
+  angle_deg : Double,
+  x_mm~ : Double = 0.0,
+  anchor_mate~ : String = "",
+) -> @cad.Component {
+  let xform = @cad.urdf_transform_from_mm_deg(x_mm~, rx_deg=angle_deg)
+  let placement = @step_common.Placement::compose(
+    @step_common.Placement::translation(x_mm, 0.0, 0.0),
+    @step_common.Placement::rotation_x(angle_deg),
+  )
+  let mates : Map[String, @step_common.MateConnector] = Map([])
+  for name, mate in comp.mates {
+    if anchor_mate != "" && name == anchor_mate {
+      mates.set(name, mate)
+    } else {
+      mates.set(name, mate.transformed(placement))
+    }
+  }
+  {
+    ..comp,
+    bodies: comp.bodies.map(fn(body) { body.transform_by(xform) }),
+    mates,
   }
 }
 
@@ -54,10 +98,14 @@ fn explode_offset(
   let stage = stage_index(name, elbows.length())
   let stage_z = if stage < 0 { 0.0 } else { stage.to_double() * 80.0 }
   let print_in_place = stage >= 0 && elbows[stage] > 0
-  if name.contains("tire_collar") {
+  if name.contains("tire_bolt") {
+    (0.0, 0.0, 450.0)
+  } else if name.contains("tire_mount") || name.contains("tire-mount") {
     (0.0, 0.0, 360.0)
   } else if name.contains("tire") {
-    (0.0, 0.0, 390.0)
+    // The purchased wheel is one part: keep its ring, hub, plate, and ribs
+    // together instead of letting the carrier prefix split them apart.
+    (0.0, 0.0, 420.0)
   } else if name.contains("output_hub_collar") {
     (0.0, 0.0, 330.0)
   } else if name.contains("output_hub") {
@@ -100,7 +148,13 @@ fn explode_offset(
 ///|
 /// A distinct display color for each kind of part in the exploded view.
 fn explode_color(name : String) -> @step_cad.Rgb {
-  if name.contains("casing") || name.contains("_ring") {
+  if name.contains("tire_bolt") {
+    @step_cad.Rgb::new(0.40, 0.75, 0.95)
+  } else if name.contains("tire_mount") || name.contains("tire-mount") {
+    @step_cad.Rgb::new(0.68, 0.42, 0.12)
+  } else if name.contains("tire") {
+    @step_cad.Rgb::new(0.08, 0.08, 0.08)
+  } else if name.contains("casing") || name.contains("_ring") {
     @step_cad.Rgb::new(0.12, 0.12, 0.14)
   } else if name.contains("motor_cap") {
     @step_cad.Rgb::new(0.22, 0.24, 0.30)
@@ -110,8 +164,6 @@ fn explode_color(name : String) -> @step_cad.Rgb {
     @step_cad.Rgb::new(0.95, 0.55, 0.15)
   } else if name.contains("collar") {
     @step_cad.Rgb::new(0.60, 0.02, 0.02)
-  } else if name.contains("tire") {
-    @step_cad.Rgb::new(0.08, 0.08, 0.08)
   } else if name.contains("_sun") {
     @step_cad.Rgb::new(1.00, 0.68, 0.10)
   } else if name.contains("bearing") {
@@ -204,7 +256,7 @@ async fn main {
     ),
     "outputFree": @cli.opt_double(
       15.0,
-      help="Exposed output shaft length beyond the output hub collar in mm (overridden by the tire when fitted)",
+      help="Exposed output shaft length beyond the output hub collar in mm (forced to 0 by the tire mount when the tire is fitted)",
     ),
     "collarWidth": @cli.opt_double(
       11.1,
@@ -308,12 +360,14 @@ async fn main {
   let include_tire = !args.flag("noTire")
   if include_tire && args.flag("noOutputHub") {
     @cli.eprintln(
-      "error: the tire needs the output hub so it can seat on a flat flange; drop --noOutputHub",
+      "error: the tire needs the output hub for the printed tire mount's three M4 screws; drop --noOutputHub",
     )
     abort("")
   }
   let collar_width = args.double("collarWidth")
   let tire_spec = @step_motion.tire_spec()
+  let mount_spec = @step_motion.tire_mount_spec()
+  let tire_mount_insert_hole_mm = 6.0
   let output_bearing_name = args
     .string_opt("outputBearing")
     .unwrap_or("FR8-2RS")
@@ -330,8 +384,9 @@ async fn main {
     abort("")
   }
   let output_free = if include_tire {
-    // The tire hub slides over the shaft after the output hub collar.
-    tire_spec.hub_length_mm + collar_width + 2.0
+    // The printed tire mount sits on the output hub collar, so the shaft must
+    // not protrude into its solid front plate.
+    0.0
   } else {
     args.double("outputFree")
   }
@@ -354,17 +409,31 @@ async fn main {
     output_collar_width_mm=collar_width,
     output_collar_outer_diam_mm=args.double("collarOuter"),
     output_hub=!args.flag("noOutputHub"),
+    // A 55.85 mm bolt circle needs a hub larger than the old 60 mm flange.
+    output_hub_diam_mm=if include_tire { 80.0 } else { 60.0 },
+    tire_mount_bolt_circle_mm=if include_tire {
+      mount_spec.bolt_hole_circle_diameter_mm
+    } else {
+      0.0
+    },
+    tire_mount_bolt_count=mount_spec.bolt_hole_count,
+    tire_mount_bolt_phase_deg=mount_spec.bolt_hole_phase_deg,
+    tire_mount_bolt_hole_mm=tire_mount_insert_hole_mm,
     detail~,
     motor_source=args.string_opt("motorSource").unwrap_or("preset"),
   )
+  let hub_name = gearbox_name + "_output_hub"
+  let mut tire_mount_step : @step_common.Component? = None
   if include_tire {
     let tire_part = @cad.PartMeta::new(
       "WHEEL-7IN",
-      description="7-inch wheel and tire envelope with a 1/2 inch hub bore (measured tier-1 model)",
-      supplier="generic",
-      material="rubber/TPU tire on a printed hub",
+      description="budrash 72-107 7 x 1.5 in wheel and tire with a 1/2 in bore and a 1-3/8 in hard-plastic hub; drill 3 x 4.5 mm holes at 55.85 mm BCD for the printed tire mount",
+      supplier="Amazon",
+      supplier_url="https://www.amazon.com/budrash-72-107-Replaces-Universal-Utility/dp/B09XMGXFDN",
+      material="rubber tire on a hard plastic hub",
       process="purchased",
-      unit_cost_usd=30.0,
+      unit_cost_usd=9.50,
+      notes="2-pack. Drill 3 x 4.5 mm holes in the plastic hub at the printed tire mount's 55.85 mm bolt circle before assembly.",
     )
     let tire_step = match @step_motion.measured_tire() {
       Ok(comp) => comp
@@ -373,41 +442,117 @@ async fn main {
         abort("")
       }
     }
-    let tire = @cad.Component::from_step_component(
+    let tire = prefix_body_names(
+      @cad.Component::from_step_component(
+        "tire",
+        tire_step,
+        density=@urdf.Density::kg_per_m3(1100.0),
+        part=Some(tire_part),
+      ),
       "tire",
-      tire_step,
-      density=@urdf.Density::kg_per_m3(1100.0),
-      part=Some(tire_part),
+    ).add_mate(
+      @step_common.MateConnector::from_mm_deg(
+        "hub-bore-front",
+        axis=(1.0, 0.0, 0.0),
+        kind=@step_common.MateKind::CylindricalBore,
+        gender=@step_common.MateGender::Female,
+        diameter_mm=tire_spec.hub_bore_diameter_mm,
+        depth_mm=tire_spec.hub_length_mm,
+        description="front end of the hub bore, used by the printed tire mount",
+      ),
     )
-    let hub_name = gearbox_name + "_output_hub"
-    // The tire hub rear face seats on the output hub's clamp collar. The
-    // `tire_mount` mate carries the -90 deg frame rotation that maps the
-    // tire's +X wheel axis onto the gearbox's +Z output axis.
+    // The purchased wheel is one part. Three drilled holes in its plastic
+    // back plate line up with the printed tire mount's three M4 holes. The
+    // wheel turns by the mount's slot phase so its ribs land in the slots,
+    // and the bolt phase is offset so the drilled holes and the mount and hub
+    // bolt circles share the same 55.85 mm pattern.
+    let wheel_phase_deg = mount_spec.slot_phase_deg
+    let tire_bolt_phase_deg = mount_spec.bolt_hole_phase_deg + 270.0
+    let tire_bolt_length_mm = 40.0
+    let bolt_radius = mount_spec.bolt_hole_circle_diameter_mm / 2.0
+    let bolt_plate_x = -(tire_spec.hub_inset_mm + tire_spec.inset_thickness_mm)
+    let mut wheel = tire
+    for i in 0..<mount_spec.bolt_hole_count {
+      let theta = (
+          tire_bolt_phase_deg +
+          360.0 * i.to_double() / mount_spec.bolt_hole_count.to_double()
+        ) *
+        @math.PI /
+        180.0
+      let bolt_name = "tire_bolt_" + i.to_string()
+      let screw = prefix_body_names(
+        @components.iso_shcs_screw(
+          name=bolt_name,
+          size=@step_standards.M4,
+          length_mm=tire_bolt_length_mm,
+          detail~,
+        ),
+        bolt_name,
+      )
+      wheel = wheel
+        .add_mate_mm_deg(
+          bolt_name,
+          x=bolt_plate_x,
+          y=bolt_radius * @math.cos(theta),
+          z=bolt_radius * @math.sin(theta),
+          ry_deg=-90.0,
+        )
+        .attach(
+          bolt_name + "_merge",
+          parent_mate=bolt_name,
+          screw,
+          child_mate="head_seat",
+          spec=@cad.JointSpec::merge_rigid(),
+        )
+    }
+    let wheel = transform_component_about_x(
+      wheel,
+      wheel_phase_deg,
+      x_mm=mount_spec.ring_depth_mm,
+      anchor_mate="hub-bore-front",
+    )
+    let mount_part = @cad.PartMeta::new(
+      "TIRE-MOUNT-86.3",
+      description="Printed tire mount for the budrash 72-107 wheel; three M4 through-holes at 55.85 mm BCD, six rib slots, and a 12.7 mm hub post",
+      material="carbon fiber nylon",
+      process="3D print",
+      unit_cost_usd=2.50,
+    )
+    let mount_step = match @step_motion.measured_tire_mount() {
+      Ok(comp) => comp
+      Err(_) => {
+        @cli.eprintln("error: could not build the printed tire mount")
+        abort("")
+      }
+    }
+    tire_mount_step = Some(mount_step)
+    let mount = prefix_body_names(
+      @cad.Component::from_step_component(
+        "tire_mount",
+        mount_step,
+        density=@urdf.Density::carbon_fiber(),
+        part=Some(mount_part),
+      ),
+      "tire_mount",
+    )
+    // The mount's front plate faces the gearbox; its hub post and rib slots
+    // face outboard into the flipped wheel. The wheel carries the rib and
+    // bolt-hole phase, and the +30 deg mount twist aligns both three-hole
+    // patterns with the output hub's heat-set inserts.
+    let mount = mount.attach(
+      "tire_joint",
+      parent_mate="hub-post",
+      wheel,
+      child_mate="hub-bore-front",
+      spec=@cad.JointSpec::merge_rigid(),
+    )
     assembly = assembly.attach_to(
       hub_name,
       "tire_mount_joint",
       parent_mate="tire_mount",
-      tire,
-      child_mate="hub-bore",
-      spec=@cad.JointSpec::merge_rigid(),
-    )
-    let tire_collar = @components.shaft_collar(
-      name="tire_collar",
-      bore_diam_mm=output_shaft_diam,
-      outer_diam_mm=args.double("collarOuter"),
-      width_mm=collar_width,
-      style="set_screw",
-      thread_size=@step_standards.M4,
-    )
-    assembly = assembly.attach_to(
-      hub_name,
-      "tire_collar_joint",
-      parent_mate="output_face",
-      tire_collar,
-      child_mate="bore",
-      spec=@cad.JointSpec::merge_rigid(
-        offset_mm=collar_width + tire_spec.hub_length_mm + collar_width / 2.0,
-      ),
+      mount,
+      child_mate="front-face",
+      spec=@cad.JointSpec::merge_rigid(angle_deg=mount_spec.bolt_hole_phase_deg),
     )
   }
   let command_joint = assembly.parameters
@@ -421,6 +566,23 @@ async fn main {
     .with_supplier_links(@cad.parse_supplier_links(links_text))
     .with_param("exploded_view", "exploded.step")
   @common.write_output(assembly, output, joint_positions=positions)
+  // The tire mount is a boolean-cut printed part, so replace the nominal
+  // printable export with the OCCT-evaluated, watertight solid.
+  let print_dir = match output.build_package {
+    Some(dir) => Some(dir + "/printable")
+    None =>
+      match output.print_parts {
+        Some(dir) => Some(dir)
+        None => None
+      }
+  }
+  match (tire_mount_step, print_dir) {
+    (Some(mount_step), Some(dir)) =>
+      mount_step.write_step_evaluated(
+        Some(dir + "/" + @cad.sanitize_part_number("TIRE-MOUNT-86.3") + ".step"),
+      )
+    _ => ()
+  }
   // The build package always gets an exploded, color-coded view.
   let explode = args.flag("explode")
   let exploded_target = match output.build_package {

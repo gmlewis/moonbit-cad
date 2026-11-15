@@ -18,6 +18,9 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
+import math
+import os
 import re
 import shutil
 import subprocess
@@ -62,6 +65,8 @@ class Step:
     op: str = ""
     first: int = 0
     second: int = 0
+    operand: int = 0
+    payload: dict | None = None
 
 
 def parse_records(text: str) -> dict[int, Entity]:
@@ -160,6 +165,31 @@ def require_single_root(records: dict[int, Entity]) -> int:
     return roots[0]
 
 
+def _step_string(arg: str) -> str:
+    """Unquotes a STEP string argument and undoubles escaped quotes."""
+    arg = arg.strip()
+    if len(arg) >= 2 and arg[0] == "'" and arg[-1] == "'":
+        arg = arg[1:-1]
+    return arg.replace("''", "'")
+
+
+def edge_feature_operand(entity: Entity) -> tuple[int, dict]:
+    args = entity_args(entity)
+    if len(args) != 3:
+        raise CsgEvalError(
+            f"MOONBIT_EDGE_FEATURE #{entity.id} has {len(args)} arguments, "
+            "expected 3"
+        )
+    base_ref = ref_of(args[1])
+    try:
+        payload = json.loads(_step_string(args[2]))
+    except json.JSONDecodeError as exc:
+        raise CsgEvalError(
+            f"MOONBIT_EDGE_FEATURE #{entity.id} has an invalid payload: {exc}"
+        ) from exc
+    return base_ref, payload
+
+
 def evaluation_plan(records: dict[int, Entity], root: int) -> list[Step]:
     """Returns the post-order evaluation steps for one boolean tree."""
     plan: list[Step] = []
@@ -182,6 +212,12 @@ def evaluation_plan(records: dict[int, Entity], root: int) -> list[Step]:
             visit(second)
             visiting.discard(ref)
             plan.append(Step("boolean", ref, op, first, second))
+        elif entity.type == "MOONBIT_EDGE_FEATURE":
+            base_ref, payload = edge_feature_operand(entity)
+            visiting.add(ref)
+            visit(base_ref)
+            visiting.discard(ref)
+            plan.append(Step("edge", ref, operand=base_ref, payload=payload))
         elif entity.type in SOLID_TYPES:
             plan.append(Step("leaf", ref))
         else:
@@ -234,6 +270,183 @@ def file_schema(text: str) -> str:
             if i >= 0 and j > i:
                 return stmt[i + 1 : j].strip()
     return DEFAULT_SCHEMA
+
+
+def header_section(text: str) -> str | None:
+    """Returns the ``HEADER;`` ... ``ENDSEC;`` block, or ``None``."""
+    start = text.find("HEADER;")
+    if start < 0:
+        return None
+    end = text.find("ENDSEC;", start)
+    if end < 0:
+        return None
+    return text[start : end + len("ENDSEC;")]
+
+
+def preserve_input_header(input_text: str, output_path: Path) -> None:
+    """Replaces OCCT's synthetic header with the source design's header.
+
+    ``Design::to_csg_step`` writes the component description and the
+    machine-readable feature record into the header (as comment and
+    ``FILE_DESCRIPTION`` strings). OCCT's ``testwritestep`` replaces them with
+    its own translator strings, so the evaluated artifact would otherwise lose
+    the component documentation. The input header is self-contained (its
+    strings carry no entity references), so it can be spliced into the
+    evaluated file unchanged; the data section is not touched.
+    """
+    input_header = header_section(input_text)
+    if input_header is None:
+        return
+    output_text = output_path.read_text()
+    output_header = header_section(output_text)
+    if output_header is None:
+        return
+    output_path.write_text(output_text.replace(output_header, input_header, 1))
+
+
+# The largest per-coordinate bounding-box difference accepted when matching an
+# evaluated solid to its source layer. A disjoint layer's evaluated bbox equals
+# its nominal bbox to within the boolean tolerance; a fused solid matches no
+# single layer and is therefore left uncoloured.
+COLOR_MATCH_TOL_MM = 0.5
+
+
+def _shape_bbox(shape) -> list[float] | None:
+    """Returns [x0, x1, y0, y1, z0, z1] for a shape, or None when empty.
+
+    ``AddOptimal`` is required for colour matching: smooth B-spline walls can
+    inflate the conservative ``Add`` box by millimetres, so a valid one-solid-
+    per-layer compound would otherwise fail the 0.5 mm match and lose colours.
+    """
+    from OCP.Bnd import Bnd_Box
+    from OCP.BRepBndLib import BRepBndLib
+
+    box = Bnd_Box()
+    BRepBndLib.AddOptimal_s(shape, box)
+    if box.IsVoid():
+        return None
+    x0, y0, z0, x1, y1, z1 = box.Get()
+    return [x0, x1, y0, y1, z0, z1]
+
+
+def _solid_count(shape) -> int:
+    from OCP.TopAbs import TopAbs_SOLID
+    from OCP.TopExp import TopExp_Explorer
+
+    explorer = TopExp_Explorer(shape, TopAbs_SOLID)
+    count = 0
+    while explorer.More():
+        count += 1
+        explorer.Next()
+    return count
+
+
+def colorize_output(output_path: Path, layers_path: Path) -> bool:
+    """Restores per-solid presentation colours from the layer records.
+
+    ``testwritestep`` drops presentation styles. When the evaluated result is a
+    disjoint compound with one solid per source layer, the layer records let us
+    match each solid by bounding box and re-emit the STEP with XCAF colours.
+    Returns True when the file was recoloured. Missing OCP, a solid/layer count
+    mismatch, or an ambiguous match leaves the uncoloured file unchanged.
+    """
+    try:
+        from OCP.BRepBndLib import BRepBndLib  # noqa: F401
+        from OCP.Quantity import Quantity_Color, Quantity_TOC_RGB
+        from OCP.STEPCAFControl import (
+            STEPCAFControl_Reader,
+            STEPCAFControl_Writer,
+        )
+        from OCP.TCollection import TCollection_ExtendedString
+        from OCP.TDF import TDF_Label, TDF_LabelSequence
+        from OCP.TDocStd import TDocStd_Document
+        from OCP.XCAFApp import XCAFApp_Application
+        from OCP.XCAFDoc import XCAFDoc_ColorGen, XCAFDoc_DocumentTool
+    except Exception:
+        return False
+    try:
+        layers = json.loads(layers_path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return False
+    if not layers:
+        return False
+
+    app = XCAFApp_Application.GetApplication_s()
+    doc = TDocStd_Document(TCollection_ExtendedString("XmlXCAF"))
+    app.NewDocument(TCollection_ExtendedString("XmlXCAF"), doc)
+    reader = STEPCAFControl_Reader()
+    reader.SetColorMode(True)
+    if reader.ReadFile(str(output_path)) != 1 or not reader.Transfer(doc):
+        return False
+    shape_tool = XCAFDoc_DocumentTool.ShapeTool_s(doc.Main())
+    color_tool = XCAFDoc_DocumentTool.ColorTool_s(doc.Main())
+
+    labels = TDF_LabelSequence()
+    shape_tool.GetFreeShapes(labels)
+    targets: list[tuple[object, list[float]]] = []
+    for i in range(1, labels.Length() + 1):
+        label = labels.Value(i)
+        if shape_tool.IsAssembly_s(label):
+            comps = TDF_LabelSequence()
+            shape_tool.GetComponents_s(label, comps)
+            for j in range(1, comps.Length() + 1):
+                component = comps.Value(j)
+                referred = TDF_Label()
+                use = component
+                if shape_tool.GetReferredShape_s(component, referred):
+                    use = referred
+                shape = shape_tool.GetShape_s(use)
+                bbox = _shape_bbox(shape)
+                if bbox is not None and _solid_count(shape) == 1:
+                    targets.append((use, bbox))
+        else:
+            shape = shape_tool.GetShape_s(label)
+            bbox = _shape_bbox(shape)
+            if bbox is not None and _solid_count(shape) == 1:
+                targets.append((label, bbox))
+    if len(targets) != len(layers):
+        return False
+
+    pairs: list[tuple[float, int, int]] = []
+    for target_index, (_label, bbox) in enumerate(targets):
+        for layer_index, layer in enumerate(layers):
+            layer_bbox = layer.get("bbox") or []
+            if len(layer_bbox) != 6:
+                return False
+            distance = max(
+                abs(bbox[k] - float(layer_bbox[k])) for k in range(6)
+            )
+            pairs.append((distance, target_index, layer_index))
+    pairs.sort()
+    matched_targets: set[int] = set()
+    matched_layers: set[int] = set()
+    chosen: dict[int, int] = {}
+    for distance, target_index, layer_index in pairs:
+        if target_index in matched_targets or layer_index in matched_layers:
+            continue
+        if distance > COLOR_MATCH_TOL_MM:
+            break
+        matched_targets.add(target_index)
+        matched_layers.add(layer_index)
+        chosen[target_index] = layer_index
+    if len(chosen) != len(targets):
+        return False
+
+    for target_index, (label, _bbox) in enumerate(targets):
+        color = layers[chosen[target_index]].get("color") or [0.5, 0.5, 0.5]
+        quantity = Quantity_Color(
+            float(color[0]), float(color[1]), float(color[2]), Quantity_TOC_RGB
+        )
+        color_tool.SetColor(label, quantity, XCAFDoc_ColorGen)
+
+    writer = STEPCAFControl_Writer()
+    writer.SetColorMode(True)
+    if not writer.Transfer(doc):
+        return False
+    if not writer.Write(str(output_path)):
+        return False
+    return True
+
 
 
 def write_leaf(
@@ -303,12 +516,233 @@ def _tcl_path(path: Path) -> str:
 
 
 def _shape_name(records: dict[int, Entity], ref: int) -> str:
-    if records[ref].type == "BOOLEAN_RESULT":
+    if records[ref].type in ("BOOLEAN_RESULT", "MOONBIT_EDGE_FEATURE"):
         return f"r{ref}"
     return f"s{ref}"
 
 
-def evaluate(input_path: Path, output_path: Path, timeout: int = 1800) -> str:
+def _vec3(v: list[float]) -> tuple[float, float, float]:
+    return (float(v[0]), float(v[1]), float(v[2]))
+
+
+def _length(v: tuple[float, ...]) -> float:
+    return math.sqrt(sum(c * c for c in v))
+
+
+def _norm(v: tuple[float, ...]) -> tuple[float, ...]:
+    length = _length(v)
+    if length < 1.0e-12:
+        return tuple(0.0 for _ in v)
+    return tuple(c / length for c in v)
+
+
+def _dot(a: tuple[float, ...], b: tuple[float, ...]) -> float:
+    return sum(x * y for x, y in zip(a, b))
+
+
+def _bbox_distance(point: tuple[float, float, float], bb) -> float:
+    xmin, ymin, zmin, xmax, ymax, zmax = bb
+    dx = max(xmin - point[0], 0.0, point[0] - xmax)
+    dy = max(ymin - point[1], 0.0, point[1] - ymax)
+    dz = max(zmin - point[2], 0.0, point[2] - zmax)
+    return math.sqrt(dx * dx + dy * dy + dz * dz)
+
+
+def edge_bounds(tool: str, leaf_path: Path, timeout: int) -> list[tuple]:
+    """Returns ``(index, xmin, ymin, zmin, xmax, ymax, zmax)`` for each edge."""
+    with tempfile.TemporaryDirectory(prefix="edge-bounds-") as tmp:
+        csv_path = Path(tmp) / "edges.csv"
+        script = "\n".join(
+            [
+                "pload ALL",
+                f'testreadstep "{_tcl_path(leaf_path)}" s',
+                "set els [explode s E]",
+                f'set f [open "{_tcl_path(csv_path)}" w]',
+                "set i 0",
+                'foreach e $els { incr i; puts $f "$i [bounding $e]" }',
+                "close $f",
+            ]
+        )
+        proc = subprocess.run(
+            [tool, "-b"],
+            input=script + "\n",
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+        if not csv_path.exists() or not csv_path.read_text().strip():
+            raise CsgEvalError(
+                "OCCT could not explode the edge-feature base into edges:\n"
+                + _tail(proc.stdout + proc.stderr)
+            )
+        rows: list[tuple] = []
+        for line in csv_path.read_text().splitlines():
+            parts = line.split()
+            if len(parts) != 7:
+                continue
+            try:
+                index = int(parts[0])
+                nums = [float(x) for x in parts[1:]]
+            except ValueError:
+                continue
+            rows.append((index, *nums))
+        return rows
+
+
+def select_edges(
+    tool: str,
+    leaf_path: Path,
+    payload: dict,
+    timeout: int,
+) -> list[int]:
+    """Resolves an `EdgeSelector` JSON payload into 1-based edge indices."""
+    selector = payload.get("selector") or {"kind": "all"}
+    rows = edge_bounds(tool, leaf_path, timeout)
+    if not rows:
+        raise CsgEvalError("edge selection found no edges")
+    kind = selector.get("kind", "all")
+    if kind == "all":
+        return [row[0] for row in rows]
+    if kind == "indices":
+        out: list[int] = []
+        for raw in selector.get("indices", []):
+            index = int(raw)
+            if index < 1 or index > len(rows):
+                raise CsgEvalError(
+                    f"edge index {index} is out of range 1..{len(rows)}"
+                )
+            out.append(index)
+        return out
+    if kind == "direction":
+        direction = _norm(_vec3(selector["dir"]))
+        tol = math.cos(math.radians(float(selector.get("tol_deg", 1.0))))
+        out = []
+        for row in rows:
+            _index, xmin, ymin, zmin, xmax, ymax, zmax = row
+            diag = (xmax - xmin, ymax - ymin, zmax - zmin)
+            if _length(diag) < 1.0e-9:
+                continue
+            if abs(_dot(_norm(diag), direction)) >= tol:
+                out.append(row[0])
+        return out
+    if kind == "perpendicular":
+        direction = _norm(_vec3(selector["dir"]))
+        tol = math.sin(math.radians(float(selector.get("tol_deg", 1.0))))
+        out = []
+        for row in rows:
+            _index, xmin, ymin, zmin, xmax, ymax, zmax = row
+            diag = (xmax - xmin, ymax - ymin, zmax - zmin)
+            if _length(diag) < 1.0e-9:
+                continue
+            if abs(_dot(_norm(diag), direction)) <= tol:
+                out.append(row[0])
+        return out
+    if kind == "near_point":
+        point = _vec3(selector["point"])
+        radius = float(selector["radius"])
+        return [
+            row[0] for row in rows if _bbox_distance(point, row[1:]) <= radius
+        ]
+    raise CsgEvalError(f"unsupported edge selector kind {kind!r}")
+
+
+def ocp_multi_chamfer(
+    base_path: Path,
+    selector: dict,
+    size: float,
+    output_path: Path,
+) -> None:
+    """Chamfers several edges in one OCCT operation.
+
+    DRAW's ``chamf`` exposes one edge per call. A cap-boundary chamfer needs
+    every top/bottom boundary edge at once, so use OCP's MakeChamfer directly.
+    OCP must select its own edges: DRAW and OCP number the same STEP edges
+    differently, so DRAW indices cannot be reused here.
+    """
+    try:
+        from OCP.BRepAdaptor import BRepAdaptor_Curve
+        from OCP.BRepCheck import BRepCheck_Analyzer
+        from OCP.BRepFilletAPI import BRepFilletAPI_MakeChamfer
+        from OCP.IFSelect import IFSelect_RetDone
+        from OCP.STEPControl import (
+            STEPControl_AsIs,
+            STEPControl_Reader,
+            STEPControl_Writer,
+        )
+        from OCP.TopAbs import TopAbs_EDGE
+        from OCP.TopExp import TopExp_Explorer
+        from OCP.TopoDS import TopoDS
+    except Exception as exc:  # noqa: BLE001
+        raise CsgEvalError(
+            f"multi-edge chamfer requires OCP: {exc}"
+        ) from exc
+    reader = STEPControl_Reader()
+    if reader.ReadFile(str(base_path)) != IFSelect_RetDone:
+        raise CsgEvalError(f"cannot read chamfer base {base_path}")
+    reader.TransferRoots()
+    shape = reader.OneShape()
+    kind = selector.get("kind", "all")
+    direction = (
+        _norm(_vec3(selector["dir"]))
+        if kind in ("direction", "perpendicular")
+        else None
+    )
+    limit = (
+        math.sin(math.radians(float(selector.get("tol_deg", 1.0))))
+        if kind == "perpendicular"
+        else math.cos(math.radians(float(selector.get("tol_deg", 1.0))))
+        if kind == "direction"
+        else 0.0
+    )
+    explorer = TopExp_Explorer(shape, TopAbs_EDGE)
+    selected_edges = []
+    while explorer.More():
+        edge = TopoDS.Edge_s(explorer.Current())
+        curve = BRepAdaptor_Curve(edge)
+        keep = kind == "all"
+        if kind in ("direction", "perpendicular"):
+            first = curve.FirstParameter()
+            last = curve.LastParameter()
+            dirs = []
+            for sample in range(8):
+                a = first + (last - first) * sample / 8.0
+                b = first + (last - first) * (sample + 1) / 8.0
+                p = curve.Value(a)
+                q = curve.Value(b)
+                tangent = _norm((q.X() - p.X(), q.Y() - p.Y(), q.Z() - p.Z()))
+                dirs.append(abs(_dot(tangent, direction)))
+            keep = (
+                all(value <= limit for value in dirs)
+                if kind == "perpendicular"
+                else all(value >= limit for value in dirs)
+            )
+        if keep:
+            selected_edges.append(edge)
+        explorer.Next()
+    if not selected_edges:
+        raise CsgEvalError("multi-edge chamfer selector matched no edges")
+    maker = BRepFilletAPI_MakeChamfer(shape)
+    for edge in selected_edges:
+        maker.Add(size, edge)
+    maker.Build()
+    if not maker.IsDone():
+        raise CsgEvalError("OCCT could not build the multi-edge chamfer")
+    result = maker.Shape()
+    if not BRepCheck_Analyzer(result).IsValid():
+        raise CsgEvalError("OCCT multi-edge chamfer produced an invalid shape")
+    writer = STEPControl_Writer()
+    if writer.Transfer(result, STEPControl_AsIs) != IFSelect_RetDone:
+        raise CsgEvalError("cannot transfer the multi-edge chamfer result")
+    if not writer.Write(str(output_path)):
+        raise CsgEvalError("cannot write the multi-edge chamfer result")
+
+
+def evaluate(
+    input_path: Path,
+    output_path: Path,
+    timeout: int = 1800,
+    layers_path: Path | None = None,
+) -> str:
     """Evaluates the CSG tree and writes a flat B-Rep STEP file.
 
     Returns the combined DRAWEXE output. Raises ``CsgEvalError`` on failure.
@@ -341,12 +775,70 @@ def evaluate(input_path: Path, output_path: Path, timeout: int = 1800) -> str:
                     commands.append(
                         f'testreadstep "{_tcl_path(leaf_path)}" s{step.ref}'
                     )
-                else:
+                elif step.kind == "boolean":
                     first = _shape_name(records, step.first)
                     second = _shape_name(records, step.second)
                     commands.append(
                         f"{DRAW_OP[step.op]} r{step.ref} {first} {second}"
                     )
+                elif step.kind == "edge":
+                    base = _shape_name(records, step.operand)
+                    if records[step.operand].type not in SOLID_TYPES:
+                        raise CsgEvalError(
+                            "edge feature base must be a single solid, "
+                            "not a boolean result"
+                        )
+                    leaf_path = tmpdir / f"leaf-{step.operand}.step"
+                    payload = step.payload or {}
+                    selected = select_edges(tool, leaf_path, payload, timeout)
+                    op = payload.get("op")
+                    size = float(payload.get("size", 0.0))
+                    if op == "fillet":
+                        if not selected:
+                            raise CsgEvalError(
+                                "fillet selector matched no edges"
+                            )
+                        commands.append(f"explode {base} E")
+                        pairs = " ".join(
+                            f"{size} {base}_{index}" for index in selected
+                        )
+                        commands.append(f"blend r{step.ref} {base} {pairs}")
+                    elif op == "chamfer":
+                        if not selected:
+                            raise CsgEvalError(
+                                "chamfer selector matched no edges"
+                            )
+                        angle = payload.get("angle")
+                        if angle is not None and abs(float(angle) - 45.0) > 1e-6:
+                            raise CsgEvalError(
+                                "angled chamfer needs a reference face; only "
+                                "equal-distance (45 degree) chamfers are "
+                                "supported"
+                            )
+                        if len(selected) == 1:
+                            commands.append(f"explode {base} E")
+                            commands.append(
+                                f"chamf r{step.ref} {base} "
+                                f"{base}_{selected[0]} {size}"
+                            )
+                        else:
+                            chamfer_path = tmpdir / f"chamfer-{step.ref}.step"
+                            ocp_multi_chamfer(
+                                leaf_path,
+                                payload.get("selector") or {"kind": "all"},
+                                size,
+                                chamfer_path,
+                            )
+                            commands.append(
+                                f'testreadstep "{_tcl_path(chamfer_path)}" '
+                                f"r{step.ref}"
+                            )
+                    else:
+                        raise CsgEvalError(
+                            f"unsupported edge operation {op!r}"
+                        )
+                else:
+                    raise CsgEvalError(f"unsupported step kind {step.kind!r}")
         result = _shape_name(records, roots[0])
         for index, root in enumerate(roots[1:]):
             name = f"fused-{index}"
@@ -354,6 +846,9 @@ def evaluate(input_path: Path, output_path: Path, timeout: int = 1800) -> str:
             result = name
         commands.append(f"checkshape {result}")
         commands.append(f'testwritestep "{_tcl_path(output_path)}" {result}')
+
+        if os.environ.get("CSG_EVAL_DEBUG"):
+            print("COMMANDS:\n" + "\n".join(commands), file=sys.stderr)
 
         try:
             proc = subprocess.run(
@@ -378,6 +873,9 @@ def evaluate(input_path: Path, output_path: Path, timeout: int = 1800) -> str:
         )
     if not output_path.exists() or output_path.stat().st_size == 0:
         raise CsgEvalError("OCCT did not write an output file:\n" + _tail(output))
+    if layers_path is not None:
+        colorize_output(output_path, layers_path)
+    preserve_input_header(text, output_path)
     return output
 
 
@@ -398,6 +896,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--timeout", type=int, default=1800, help="OCCT timeout in seconds"
     )
+    parser.add_argument(
+        "--layers",
+        type=Path,
+        default=None,
+        help=(
+            "JSON records of the source layers (name, colour, bounding box); "
+            "restores per-solid colours when the result is a disjoint compound"
+        ),
+    )
     args = parser.parse_args(argv)
 
     if not args.input.exists():
@@ -406,7 +913,12 @@ def main(argv: list[str] | None = None) -> int:
     output = args.output.resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
     try:
-        evaluate(args.input.resolve(), output, timeout=args.timeout)
+        evaluate(
+            args.input.resolve(),
+            output,
+            timeout=args.timeout,
+            layers_path=args.layers,
+        )
     except CsgEvalError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

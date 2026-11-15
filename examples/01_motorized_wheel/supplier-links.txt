@@ -18,9 +18,11 @@ SHAFT-8.0x31.0 | McMaster-Carr | https://www.mcmaster.com/4143N17/ | 8 mm x 100 
 DOWEL-12.7x18.5 | Amazon | https://www.amazon.com/Dowel-Pin-Alloy-STL-Pk10/dp/B083H48859 | 1/2 x 3/4 in hardened dowel pins, 10-pack; 0.55 mm longer than modeled, clears the planet flange | 1.50
 BEARING-FR8-2RS | Amazon | https://www.amazon.com/METERXITY-Flanged-Shielded-Bearings-Wheelbarrow/dp/B0F4QR9XYQ | FR8-2RS 10-pack (9 needed), exact 1/2 x 1-1/8 x 5/16 in flanged sealed bearing. VXB also stocks the exact bearing: https://vxb.com/products/flanged-sealed-bearing-fr8-2rs-1-2-x-1-1-8-x-5-16 | 1.55
 SET-M4x10.0 | Amazon | https://www.amazon.com/Point-Assortment-Stainless-Metric-Thread/dp/B01FH8CP3E | Same 76-piece M4 set-screw kit; covers M4 x 10 mm | 0.10
-SHAFT-12.7x93.9 | OnlineMetals | https://www.onlinemetals.com/en/buy/stainless-steel/1-2-dia-round-stainless-steel-rod-303-12-long-1-piece/pid/mp-00000673 | 1/2 in x 12 in 303 stainless rod; cut to 93.9 mm | 19.99
+SHAFT-12.7x45.9 | OnlineMetals | https://www.onlinemetals.com/en/buy/stainless-steel/1-2-dia-round-stainless-steel-rod-303-12-long-1-piece/pid/mp-00000673 | 1/2 in x 12 in 303 stainless rod; cut to 45.9 mm | 19.99
 COLLAR-12.7-25.4 | McMaster-Carr | https://www.mcmaster.com/6432K16/ | 1/2 in bore x 1 in OD x 7/16 in wide zinc-plated set-screw collar; 2 needed | 3.00
-WHEEL-7IN | Amazon | https://www.amazon.com/Arnold-490-321-0002-Plastic-Wheel-Rating/dp/B0000DGABC | Arnold 7 x 1.5 in wheel, 1/2 in offset hub, 1-3/8 in hub length; matches the modeled tire envelope | 12.71
+WHEEL-7IN | Amazon | https://www.amazon.com/budrash-72-107-Replaces-Universal-Utility/dp/B09XMGXFDN | budrash 72-107 7 x 1.5 in wheel, 2-pack; 1/2 in bore, 1-3/8 in hard-plastic hub; drill 3 x 4.5 mm holes at 55.85 mm BCD to match the printed tire mount | 9.50
+INSERT-4 | Amazon | https://www.amazon.com/Ktehloy-Threaded-Assortment-Printing-Components/dp/B0DK1FGWZ5 | 120-piece M4 heat-set insert kit (M4x4x6 and M4x6x6); use the M4x6x6 size at the output hub's 55.85 mm bolt circle | 0.08
+ISO4762-M4x40 | Amazon | https://www.amazon.com/iexcell-Metric-Stainless-Socket-Screws/dp/B089N9WMD6 | 50-piece M4 x 40 mm 304 stainless socket-head cap screw kit; 3 needed for the tire mount | 0.18
 BLDC-5010_360kv | Amazon | https://www.amazon.com/GoolRC-Brushless-MultiCopter-Quadcopter-Multi-axis/dp/B0C2YRNX1Z | GoolRC 5010 360KV outrunner, 4 mm shaft, 19 mm bolt circle | 27.98
 ENC-AS5047P | Digi-Key | https://www.digikey.com/en/products/detail/ams-osram-usa-inc/AS5047P-ADAPTERBOARD/5452344 | AS5047P adapter/evaluation board; includes the diametric magnet | 16.66
 ISO4762-M2.5x6 | Amazon | https://www.amazon.com/XunLiu-Grade-Alloy-Socket-Screws/dp/B07Q1CQJ89 | M2.5 x 6 mm socket-head 50-pack | 0.14

@@ -580,6 +580,12 @@ pub fn motorized_gearbox(
   output_hub_diam_mm~ : Double = 60.0,
   output_hub_thickness_mm~ : Double = 8.0,
   output_bolt_circle_mm~ : Double = 40.0,
+  /// Three-hole tire-mount interface on the output hub face. Zero disables it.
+  tire_mount_bolt_circle_mm~ : Double = 0.0,
+  tire_mount_bolt_count~ : Int32 = 3,
+  tire_mount_bolt_phase_deg~ : Double = 30.0,
+  /// Printed hole diameter for the tire-mount heat-set inserts.
+  tire_mount_bolt_hole_mm~ : Double = 6.0,
   frame_bolt_circle_mm~ : Double = 90.0,
   heat_set_inserts~ : Bool = true,
   detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
@@ -1473,7 +1479,7 @@ pub fn motorized_gearbox(
   // ---------------------------------------------------------------------
   if output_hub {
     let hub_part = fabricated_part(
-      "MG-OUTPUT-HUB", "Printed output flange hub with a 40 mm bolt circle for wheels, knees, hips, and other driven links; retained by the shaft collar",
+      "MG-OUTPUT-HUB", "Printed output flange hub with a 40 mm bolt circle for wheels, knees, hips, and other driven links, plus an optional three-hole tire-mount interface with heat-set inserts; retained by the shaft collar",
       "carbon fiber nylon", "3D print", 8.0,
     )
     let hub_bore = output_shaft_diam - 0.03
@@ -1488,11 +1494,32 @@ pub fn motorized_gearbox(
         ),
       )
     }
+    if tire_mount_bolt_circle_mm > 0.0 && tire_mount_bolt_count > 0 {
+      for i in 0..<tire_mount_bolt_count {
+        let theta = (
+            tire_mount_bolt_phase_deg +
+            360.0 * i.to_double() / tire_mount_bolt_count.to_double()
+          ) *
+          @math.PI /
+          180.0
+        hub_holes.push(
+          (
+            tire_mount_bolt_circle_mm / 2.0 * @math.cos(theta),
+            tire_mount_bolt_circle_mm / 2.0 * @math.sin(theta),
+            tire_mount_bolt_hole_mm,
+          ),
+        )
+      }
+    }
     let mut hub = @cad.Component::new(
         name + "_output_hub",
         description="Output flange hub",
       )
       .with_param("bolt_circle_mm", output_bolt_circle_mm.to_string())
+      .with_param(
+        "tire_mount_bolt_circle_mm",
+        tire_mount_bolt_circle_mm.to_string(),
+      )
       .with_param("shaft_bore_mm", hub_bore.to_string())
       .add_body(
         actuator_plate_body(
@@ -1511,7 +1538,8 @@ pub fn motorized_gearbox(
       .add_mate_mm_deg(
         "tire_mount",
         z=output_hub_thickness_mm + output_collar_width_mm,
-        ry_deg=-90.0,
+        ry_deg=90.0,
+        axis=(1.0, 0.0, 0.0),
       )
       .with_part(hub_part)
     for i in 0..<4 {
@@ -1522,6 +1550,37 @@ pub fn motorized_gearbox(
         y=output_bolt_circle_mm / 2.0 * @math.sin(theta),
         z=output_hub_thickness_mm,
       )
+    }
+    if tire_mount_bolt_circle_mm > 0.0 && tire_mount_bolt_count > 0 {
+      for i in 0..<tire_mount_bolt_count {
+        let theta = (
+            tire_mount_bolt_phase_deg +
+            360.0 * i.to_double() / tire_mount_bolt_count.to_double()
+          ) *
+          @math.PI /
+          180.0
+        let bx = tire_mount_bolt_circle_mm / 2.0 * @math.cos(theta)
+        let by = tire_mount_bolt_circle_mm / 2.0 * @math.sin(theta)
+        hub = hub
+          .add_mate_mm_deg(
+            "tire_mount_bolt_\{i}",
+            x=bx,
+            y=by,
+            z=output_hub_thickness_mm,
+          )
+          .attach(
+            "output_hub_insert_merge_\{i}",
+            parent_mate="tire_mount_bolt_\{i}",
+            heat_set_insert(
+              name=name + "_output_hub_insert_\{i}",
+              outer_diam_mm=tire_mount_bolt_hole_mm,
+              inner_diam_mm=4.0,
+              length_mm=6.0,
+            ),
+            child_mate="top",
+            spec=@cad.JointSpec::merge_rigid(),
+          )
+      }
     }
     casing = casing.attach_to(
       motorized_last_carrier_name(name, stage_count),

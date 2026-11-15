@@ -1,8 +1,9 @@
 # 01 — Motorized wheel
 
 A proof-of-concept wheel built from the compact multi-stage
-`motorized_gearbox` component and the measured tier-1 tire envelope from
-[`../moonbit-17-step`](https://github.com/gmlewis/moonbit-17-step).
+`motorized_gearbox` component, the printed `tire_mount` from
+[`../moonbit-17-step`](https://github.com/gmlewis/moonbit-17-step), and a
+purchased 7-inch wheel.
 
 ```sh
 ./run-example.sh 01 --headless              # two stages, 28.4:1
@@ -31,9 +32,9 @@ A proof-of-concept wheel built from the compact multi-stage
   motor end cap, which is part of the outer casing; the rotor shaft is the only
   moving input.
 - **The final carrier is the output interface.** It drives a 1/2" output shaft
-  through a flanged bearing in the output cap, and a printed flange hub with a
-  40 mm bolt circle (plus two clamp collars) is the standard attachment point
-  for a wheel, knee, hip, or other driven link.
+  through a flanged bearing in the output cap, and a printed flange hub carries
+  both a 40 mm bolt circle and the three-hole, 55.85 mm tire-mount interface. A
+  clamp collar retains the hub on the shaft.
 - **Flanged planet bearings.** The default planet bearing is a sealed, flanged
   `FR8-2RS` (1/2" x 1 1/8" x 5/16"). It presses into the planet from the lower
   face; the flange seats flush on that face and stops the bearing sliding
@@ -70,15 +71,30 @@ gearbox alone. The standard `--detail`, `--package`, `--bom`, `--plan`,
 
 ## Tire attachment
 
-The tire is the measured tier-1 wheel envelope with a 1/2" hub bore. Its hub
-slides over the 1/2" output shaft after the output-hub collar and is clamped by
-a second shaft collar at its outer face. The `tire_mount` mate on the output hub
-carries the 90-degree frame rotation that maps the tire's native `+X` wheel
-axis onto the gearbox's `+Z` output axis.
+The wheel is a purchased **budrash 72-107** 7 x 1.5 in wheel (Amazon
+[B09XMGXFDN](https://www.amazon.com/dp/B09XMGXFDN), sold as a 2-pack). Its
+hard-plastic hub has a 1/2" bore, a 1-3/8" hub length, and a back plate that
+already has the right size for the mounting interface.
 
-The tire model is owner-authored and carries no third-party license, per the
-tier-1 repository. All of its dimensions remain parameters in
-`@step_motion.tire_spec()`.
+The 3D-printed `tire_mount` (`@step_motion.measured_tire_mount()`) bolts to
+three M4 heat-set inserts in the output hub at a 55.85 mm bolt circle. Its
+front plate faces the gearbox, and its 12.7 mm hub post and six rib slots face
+outboard into the wheel. The wheel's open, ribbed side faces inboard, so the
+ribs seat in the mount's slots and the post centers the hub bore. Drill three
+4.5 mm holes through the wheel's plastic back plate at the same 55.85 mm bolt
+circle, then secure it with three M4 x 40 socket-head screws that pass through
+the wheel and the printed mount into the output-hub inserts.
+
+The output hub is widened to 80 mm so the 55.85 mm bolt circle clears its edge,
+and the output shaft is left flush with the hub collar so it cannot protrude
+into the tire mount. The old tire collar and shaft-riding arrangement are gone.
+
+The CAD wheel envelope is the owner-authored measured model in
+[`../moonbit-17-step`](https://github.com/gmlewis/moonbit-17-step); it carries no
+third-party model license. The purchased budrash wheel matches that envelope
+(7 x 1.5 in, 1/2 in bore, 1-3/8 in hub). All of its dimensions remain parameters
+in `@step_motion.tire_spec()`, and the mount dimensions are parameters in
+`@step_motion.tire_mount_spec()`.
 
 ## Verification
 
