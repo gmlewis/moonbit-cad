@@ -18,6 +18,12 @@ A proof-of-concept wheel built from the compact multi-stage
   outer housing and no separate housing wall around it. The modules bolt
   flange-to-flange, so the outer surface of the whole gearbox is the sum of the
   stage casings plus the motor and output caps.
+- **The default gear set is print-in-place.** Both stages use the 4-elbow
+  herringbone (`--numElbows 4`). The sun and planets interlock with the
+  casing's integrated ring and cannot be inserted after printing, following the
+  same principle as the example-2 cartridge. In the exploded view, each stage's
+  sun and planets stay assembled with its casing module instead of flying
+  apart. Use `--numElbows 0` for straight teeth that can be assembled axially.
 - **Any number of stages.** Stage 1's sun sits directly on the motor shaft;
   every later stage's sun sits directly on the previous stage's carrier output
   shaft. Every stage parameter is independent.
@@ -47,7 +53,7 @@ single value applies to every stage.
 | `--planetTeeth` | `20` | Planet tooth count |
 | `--numPlanets` | `4` | Planets per stage |
 | `--gearLength` | `10` | Gear face width in mm |
-| `--numElbows` | `0` | `0` = straight, axially assembleable teeth; `>0` = herringbone |
+| `--numElbows` | `4` | `0` = straight, axially assembleable teeth; `>0` = print-in-place herringbone |
 | `--planetBearing` | `FR8-2RS` | Planet bearing; an ISO designation is also accepted |
 
 The default 12/20/52 tooth set gives 5.33:1 per stage (28.4:1 for two stages).

@@ -29,17 +29,31 @@ fn[T] cli_or_abort(result : Result[T, String]) -> T {
 }
 
 ///|
-/// Display-only offset for the exploded, color-coded view.
-fn explode_offset(name : String) -> (Double, Double, Double) {
-  let stage_z = if name.contains("_stage1_") {
-    0.0
-  } else if name.contains("_stage2_") {
-    80.0
-  } else if name.contains("_stage3_") {
-    160.0
-  } else {
-    0.0
+/// The zero-based stage index of a stage-scoped CAD name, or `-1` when the
+/// part does not belong to a planetary stage.
+fn stage_index(name : String, stage_count : Int32) -> Int32 {
+  for i in 0..<stage_count {
+    if name.contains("_stage" + (i + 1).to_string() + "_") {
+      return i
+    }
   }
+  -1
+}
+
+///|
+/// Display-only offset for the exploded, color-coded view.
+///
+/// `elbows` holds each stage's herringbone elbow count. A stage with any
+/// herringbone sweep (`elbows > 0`) is print-in-place: its sun and planets are
+/// captive in the casing's integrated ring, so they keep their assembled
+/// position and move with the casing module as one unit.
+fn explode_offset(
+  name : String,
+  elbows : Array[Int32],
+) -> (Double, Double, Double) {
+  let stage = stage_index(name, elbows.length())
+  let stage_z = if stage < 0 { 0.0 } else { stage.to_double() * 80.0 }
+  let print_in_place = stage >= 0 && elbows[stage] > 0
   if name.contains("tire_collar") {
     (0.0, 0.0, 360.0)
   } else if name.contains("tire") {
@@ -57,9 +71,19 @@ fn explode_offset(name : String) -> (Double, Double, Double) {
   } else if name.contains("_motor") {
     (0.0, 0.0, -220.0)
   } else if name.contains("planet") {
-    (160.0, 0.0, stage_z)
+    if print_in_place && !name.contains("bearing") {
+      // A print-in-place planet is captive in the casing's integrated ring.
+      (0.0, 0.0, stage_z)
+    } else {
+      (160.0, 0.0, stage_z)
+    }
   } else if name.contains("_sun") {
-    (90.0, 0.0, stage_z)
+    if print_in_place {
+      // A print-in-place sun is captive in the casing's integrated ring.
+      (0.0, 0.0, stage_z)
+    } else {
+      (90.0, 0.0, stage_z)
+    }
   } else if name.contains("carrier") {
     (-150.0, 0.0, stage_z)
   } else if name.contains("insert") || name.contains("screw") {
@@ -112,13 +136,14 @@ fn explode_color(name : String) -> @step_cad.Rgb {
 fn exploded_design(
   design : @step_cad.Design,
   name~ : String,
+  elbows~ : Array[Int32],
 ) -> @step_cad.Design {
   let mut out = @step_cad.Design::new(
     name~,
     description="Exploded, color-coded view",
   )
   for node in design.nodes() {
-    let (dx, dy, dz) = explode_offset(node.name)
+    let (dx, dy, dz) = explode_offset(node.name, elbows)
     out = out.add(
       node.with_color(explode_color(node.name)).translate(x=dx, y=dy, z=dz),
     )
@@ -149,7 +174,7 @@ async fn main {
       help="Comma-separated gear face widths in mm per stage (default 10)",
     ),
     "numElbows": @cli.opt_string(
-      help="Comma-separated herringbone elbow counts per stage (default 0, straight gears)",
+      help="Comma-separated herringbone elbow counts per stage (default 4, print-in-place herringbone; 0 = straight gears)",
     ),
     "planetBearing": @cli.opt_string(
       help="Comma-separated planet bearings per stage (default FR8-2RS)",
@@ -254,7 +279,7 @@ async fn main {
   )
   let elbows = cli_or_abort(
     @cad.parse_int_list(
-      args.string_opt("numElbows").unwrap_or("0"),
+      args.string_opt("numElbows").unwrap_or("4"),
       stage_count,
       "numElbows",
     ),
@@ -411,6 +436,7 @@ async fn main {
     let exploded = exploded_design(
       assembly.to_design(joint_positions=positions),
       name="01_motorized_wheel-exploded",
+      elbows~,
     )
     let text = exploded.to_step_file()
     match exploded_target {
