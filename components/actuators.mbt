@@ -1407,8 +1407,13 @@ pub fn planetary_bldc_actuator(
   output_shaft_extension_mm~ : Double = 0.0,
   heat_set_inserts~ : Bool = true,
   motor_source~ : String = "preset",
-  controller_pad_height_mm~ : Double = 30.0,
+  output_sensor~ : String = "pcb",
+  magnet_diameter_mm~ : Double = 6.0,
+  magnet_height_mm~ : Double = 2.5,
 ) -> @cad.Component {
+  // `output_sensor = "pcb"` keeps the small printed-on-board sensor; `"none"`
+  // leaves the magnet and cover boss in place for an external sensor board
+  // such as the moteus C1.
   // `motor_source` selects the motor geometry: "preset" uses the compact
   // `low_kv_bldc_motor`; "brushless" uses the measured Tier-1
   // `step_brushless_motor` envelope.
@@ -1665,14 +1670,13 @@ pub fn planetary_bldc_actuator(
     // rotating carrier below (it clamps the output shaft, so it turns).
     .add_body(
       // 3 mm thick along X, tangent to the housing side. The face is the
-      // mounting plate for the controller board; `controller_pad_height_mm`
-      // lets a wider board (for example the 38 x 38 mm moteus C1) overhang the
-      // 30 mm housing wall on a printed plate.
+      // mounting plate for a controller board; a 42 x 30 mm board fits, and
+      // wider boards can overhang it.
       @cad.BodyPart::box_mm(
         name + "_controller_pad",
         3.0,
         42.0,
-        controller_pad_height_mm,
+        30.0,
         x_mm=housing_outer + 1.5,
         z_mm=(housing_bottom + housing_top) / 2.0,
         density=@urdf.Density::carbon_fiber(),
@@ -1686,6 +1690,9 @@ pub fn planetary_bldc_actuator(
     .add_mate_mm_deg("output_flange", z=housing_top)
     .add_mate_mm_deg("output_shaft", z=shaft_end)
     .add_mate_mm_deg("sensor_mount", z=sensor_mount_z, axis=(0.0, 0.0, -1.0))
+    // Top of the output cover plate: the support base for an external sensor
+    // bracket or long standoffs.
+    .add_mate_mm_deg("sensor_base", z=housing_top + cover_plate_mm)
     .add_mate_mm_deg(
       "controller_mount",
       x=housing_outer + 3.0,
@@ -2008,63 +2015,65 @@ pub fn planetary_bldc_actuator(
     spec=@cad.JointSpec::fixed(offset_mm=1.5),
   )
   if output_encoder {
-    // Output magnet on the final carrier shaft and the AS5047P board on the
-    // fixed cover. The magnet top is 1 mm below the chip face.
+    // Output magnet on the final carrier shaft. Its top face is at the
+    // `output_shaft` mate; an external sensor board places its chip above it.
     housing = housing.attach_to(
       output_carrier,
       "output_magnet_merge",
       parent_mate="output_shaft",
       encoder_magnet(
         name=name + "_output_magnet",
-        diameter_mm=6.0,
-        thickness_mm=2.5,
+        diameter_mm=magnet_diameter_mm,
+        thickness_mm=magnet_height_mm,
       ),
       child_mate="top",
       spec=@cad.JointSpec::merge_rigid(),
     )
-    housing = housing.attach(
-      "output_sensor_mount",
-      parent_mate="sensor_mount",
-      moteus_position_sensor(
-        name=name + "_output_sensor",
-        voltage_v=3.3,
-        current_ma=15.0,
-        detail~,
-      ),
-      child_mate="mount",
-      spec=@cad.JointSpec::merge_rigid(),
-    )
-    // Sensor standoffs and screws.
-    for i in 0..<sensor_bolts.length() {
+    if output_sensor != "none" {
       housing = housing.attach(
-        "sensor_standoff_merge_\{i}",
-        parent_mate="sensor_standoff_\{i}",
-        hex_standoff(
-          name="\{name}_sensor_standoff_\{i}",
-          length_mm=2.5,
-          across_flats_mm=5.0,
-          bore_diam_mm=2.7,
+        "output_sensor_mount",
+        parent_mate="sensor_mount",
+        moteus_position_sensor(
+          name=name + "_output_sensor",
+          voltage_v=3.3,
+          current_ma=15.0,
           detail~,
         ),
-        child_mate="bottom",
+        child_mate="mount",
         spec=@cad.JointSpec::merge_rigid(),
       )
-      // The screws belong to the sensor assembly, so the sensor's own fastener
-      // schedule is the single BOM entry for them.
-      housing = housing.attach_to(
-        name + "_output_sensor",
-        "sensor_screw_merge_\{i}",
-        parent_mate="bolt_\{i}",
-        iso_shcs_screw(
-          name="\{name}_sensor_screw_\{i}",
-          size=@step_standards.M2_5,
-          length_mm=6.0,
-          detail~,
-        ),
-        child_mate="head_seat",
-        spec=@cad.JointSpec::merge_rigid(),
-        bom_external=false,
-      )
+      // Sensor standoffs and screws.
+      for i in 0..<sensor_bolts.length() {
+        housing = housing.attach(
+          "sensor_standoff_merge_\{i}",
+          parent_mate="sensor_standoff_\{i}",
+          hex_standoff(
+            name="\{name}_sensor_standoff_\{i}",
+            length_mm=2.5,
+            across_flats_mm=5.0,
+            bore_diam_mm=2.7,
+            detail~,
+          ),
+          child_mate="bottom",
+          spec=@cad.JointSpec::merge_rigid(),
+        )
+        // The screws belong to the sensor assembly, so the sensor's own
+        // fastener schedule is the single BOM entry for them.
+        housing = housing.attach_to(
+          name + "_output_sensor",
+          "sensor_screw_merge_\{i}",
+          parent_mate="bolt_\{i}",
+          iso_shcs_screw(
+            name="\{name}_sensor_screw_\{i}",
+            size=@step_standards.M2_5,
+            length_mm=6.0,
+            detail~,
+          ),
+          child_mate="head_seat",
+          spec=@cad.JointSpec::merge_rigid(),
+          bom_external=false,
+        )
+      }
     }
   }
   let reduction = planetary_reduction(sun_teeth, planet_teeth, stage_count)

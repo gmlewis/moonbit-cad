@@ -359,3 +359,29 @@ test "planetary stage has a printed ring housing and carrier transmission" {
   }
   assert_true(has_carrier_transmission)
 }
+
+///|
+test "output magnet is parameterized and the printed sensor can be omitted" {
+  let act = @components.planetary_bldc_actuator(
+    output_sensor="none",
+    magnet_diameter_mm=8.0,
+    magnet_height_mm=3.0,
+  )
+  let robot = act.to_robot()
+  assert_true(!robot.has_errors())
+  assert_true(act.get_mate("sensor_base") is Some(_))
+  assert_true(act.get_mate("sensor_mount") is Some(_))
+  let bom = act.bom()
+  let mut has_magnet = false
+  let mut has_fake_sensor = false
+  for line in bom.lines {
+    if line.part_number == "MAG-8x3-DIA" {
+      has_magnet = true
+    }
+    if line.part_number.contains("ENC-AS5047P") {
+      has_fake_sensor = true
+    }
+  }
+  assert_true(has_magnet)
+  assert_false(has_fake_sensor)
+}

@@ -17,8 +17,9 @@
 ///
 /// `20240305-moteus-c1-r1_2.step` is the exact moteus C1 r1.2 controller board
 /// from the open-source moteus hardware project. The housed layout imports it
-/// as the actuator's controller board and places its exact B-Rep on four M3
-/// tapped standoffs. © mjbots and the moteus contributors, Apache-2.0.
+/// as the motor controller and on-axis output sensor: its centered AS5047P chip
+/// faces a diameter/height-parameterized magnet on the output shaft across a
+/// parameterized air gap. © mjbots and the moteus contributors, Apache-2.0.
 /// Upstream:
 /// <https://github.com/mjbots/moteus/blob/main/hw/c1/r1.2/20240305-moteus-c1-r1_2.step>.
 /// See `examples/02-planetary-actuator/README.md` for the full attribution.
@@ -45,6 +46,18 @@ async fn main {
     "numPlanets": @cli.opt_int(3, help="Number of orbiting planets"),
     "gearLength": @cli.opt_double(10.0, help="Face width in mm"),
     "motorDeg": @cli.opt_double(0.0, help="Motor shaft angle in degrees"),
+    "magnetDiam": @cli.opt_double(
+      6.0,
+      help="Output encoder magnet diameter in mm",
+    ),
+    "magnetHeight": @cli.opt_double(
+      2.5,
+      help="Output encoder magnet height in mm",
+    ),
+    "sensorGap": @cli.opt_double(
+      2.7,
+      help="Air gap between the AS5047P chip and the magnet top in mm",
+    ),
   }
   let spec = @common.with_output_args(base_spec)
   guard @cli.parse(
@@ -72,6 +85,9 @@ async fn main {
   let planet_teeth = args.int("planetTeeth")
   let planet_count = args.int("numPlanets")
   let gear_length = args.double("gearLength")
+  let magnet_diameter_mm = args.double("magnetDiam")
+  let magnet_height_mm = args.double("magnetHeight")
+  let sensor_gap_mm = args.double("sensorGap")
   let deg = @math.PI / 180.0
   let motor_angle = args.double("motorDeg") * deg
   let positions : Map[String, Double] = Map([])
@@ -226,11 +242,16 @@ async fn main {
       gear_type~,
       detail~,
       motor_source="brushless",
-      // The exact moteus C1 board is 38 x 38 mm, so its printed mounting pad
-      // extends past the 30 mm housing wall.
-      controller_pad_height_mm=40.0,
+      // The moteus C1 is the output sensor/controller; there is no separate
+      // small PCB on the cover.
+      output_sensor="none",
+      magnet_diameter_mm~,
+      magnet_height_mm~,
     )
-    // The exact moteus C1 r1.2 controller board (Apache-2.0, © mjbots).
+    // The exact moteus C1 r1.2 board (Apache-2.0, © mjbots). Its AS5047P
+    // chip U6 is at the board center on the bottom face; the measured package
+    // bottom is 1.2 mm below the board origin and the PCB bottom is 0.8 mm
+    // above it.
     // Vendored at examples/02-planetary-actuator/20240305-moteus-c1-r1_2.step.
     let board_path = "examples/02-planetary-actuator/20240305-moteus-c1-r1_2.step"
     let board_data = @fs.read_file(board_path) catch {
@@ -245,6 +266,20 @@ async fn main {
         abort("")
       }
     }
+    let magnet_top_z = match act.get_mate("output_shaft") {
+      Some(mate) => mate.placement.apply_point((0.0, 0.0, 0.0)).2
+      None => abort("error: actuator has no output_shaft mate")
+    }
+    let sensor_base_z = match act.get_mate("sensor_base") {
+      Some(mate) => mate.placement.apply_point((0.0, 0.0, 0.0)).2
+      None => abort("error: actuator has no sensor_base mate")
+    }
+    // Put the chip bottom `sensor_gap_mm` above the magnet top. With the board
+    // rotated +90 deg about X, local +Y is world +Z and local -Y (the chip
+    // side) faces the magnet.
+    let board_z = magnet_top_z + sensor_gap_mm + 1.2
+    let board_pcb_bottom_z = board_z + 0.8
+    let standoff_length_mm = board_pcb_bottom_z - sensor_base_z
     let board_part = @cad.PartMeta::new(
       "MOTEUS-C1-R1.2",
       description="moteus C1 r1.2 controller board",
@@ -261,30 +296,18 @@ async fn main {
       process="purchased",
       unit_cost_usd=0.35,
     )
-    // The board mounts on the actuator's pad. Query the pad frame from the
-    // actuator instead of duplicating the housing formulas.
-    let mount = match act.get_mate("controller_mount") {
-      Some(mate) => mate
-      None => {
-        @cli.eprintln("error: actuator has no controller_mount mate")
-        abort("")
-      }
-    }
-    let (pad_x, _, pad_z) = mount.placement.apply_point((0.0, 0.0, 0.0))
-    // The moteus PCB plane is at local y = 1.6. Rotate the board -90 deg about
-    // Z so its plane is parallel to the pad, then hold the PCB 6.5 mm off the
-    // pad face.
-    let board_x = pad_x + 6.5 - 1.6
     let standoff_part = @cad.PartMeta::new(
-      "STANDOFF-M3-6.5",
-      description="M3 tapped hex standoff 5 mm AF x 6.5 mm",
+      "STANDOFF-M3-SENSOR",
+      description="M3 tapped hex standoff 5 mm AF x " +
+        @step_cad.fmt_double(standoff_length_mm, Some(0.1)) +
+        " mm",
       material="brass",
       process="purchased",
       unit_cost_usd=1.2,
     )
     let mut board = @cad.Component::new(
         "moteus_c1",
-        description="moteus C1 r1.2 controller board",
+        description="moteus C1 r1.2 controller and on-axis output sensor",
       )
       .add_body(
         @cad.BodyPart::imported_step(
@@ -294,9 +317,8 @@ async fn main {
           density=@urdf.Density::g_per_cm3(1.85),
           color=@step_cad.Rgb::green(),
           part=Some(board_part),
-          x_mm=board_x,
-          z_mm=pad_z,
-          rz_deg=-90.0,
+          z_mm=board_z,
+          rx_deg=90.0,
         ),
       )
       .add_port(
@@ -308,7 +330,18 @@ async fn main {
         @cad.Port::new(
           "encoder",
           @cad.PortKind::Sensor,
-          spec="SPI/ABZ, 3.3 V from AS5047P",
+          spec="On-board AS5047P, SPI/ABZ",
+        ),
+      )
+      .with_sensor(
+        @cad.SensorSpec::new(
+          @cad.SensorKind::Encoder,
+          model="AS5047P",
+          interface="SPI/ABZ",
+          voltage_v=3.3,
+          current_ma=15.0,
+          range="360 deg",
+          resolution="14-bit (0.022 deg)",
         ),
       )
       .add_fastener(
@@ -324,31 +357,38 @@ async fn main {
           part=Some(board_screw_part),
         ),
       )
-    // Four M3 tapped standoffs bridge the 6.5 mm gap at the board's 6 mm
-    // corner holes (32 mm square pattern).
+    // Four M3 tapped standoffs reach from the cover-plate top to the board's
+    // 6 mm corner holes. They are outside the cover boss and the board's edge
+    // components, so the chip can sit close to the magnet.
     for i in 0..<4 {
-      let sy = if i % 2 == 0 { -16.0 } else { 16.0 }
-      let sz = if i < 2 { 16.0 } else { -16.0 }
+      let sx = if i % 2 == 0 { 16.0 } else { -16.0 }
+      let sy = if i < 2 { -16.0 } else { 16.0 }
       board = board.add_body(
         @cad.BodyPart::tube_mm(
           "board_standoff_\{i}",
           5.77,
           2.5,
-          6.5,
-          x_mm=pad_x + 3.25,
+          standoff_length_mm,
+          x_mm=sx,
           y_mm=sy,
-          z_mm=pad_z + sz,
-          ry_deg=90.0,
+          z_mm=(sensor_base_z + board_pcb_bottom_z) / 2.0,
           density=@urdf.Density::g_per_cm3(8.5),
           color=@step_cad.Rgb::grey(),
         ).with_part(standoff_part),
       )
     }
-    // Reusing the pad's mate keeps the attach snap an identity transform.
-    board = board.add_mate({ ..mount, name: "mount", })
+    // Reusing the sensor-mount frame keeps the attach snap an identity.
+    let sensor_mount = match act.get_mate("sensor_mount") {
+      Some(mate) => mate
+      None => {
+        @cli.eprintln("error: actuator has no sensor_mount mate")
+        abort("")
+      }
+    }
+    board = board.add_mate({ ..sensor_mount, name: "mount", })
     let mut assembly = act.attach(
-      "controller_merge",
-      parent_mate="controller_mount",
+      "sensor_merge",
+      parent_mate="sensor_mount",
       board,
       child_mate="mount",
       spec=@cad.JointSpec::merge_rigid(),
@@ -366,23 +406,12 @@ async fn main {
     )
     assembly = assembly.add_wire_run(
       @cad.WireRun::new(
-        "output_encoder_spi",
-        from_component="bldc_actuator_output_sensor",
-        from_port="spi",
+        "motor_phases",
+        from_component="bldc_actuator_motor_stator",
+        from_port="phases",
         to_component="moteus_c1",
-        to_port="encoder",
-        gauge_awg=28,
-        length_mm=120.0,
-      ),
-    )
-    assembly = assembly.add_wire_run(
-      @cad.WireRun::new(
-        "output_encoder_power",
-        from_component="bldc_actuator_output_sensor",
-        from_port="power",
-        to_component="moteus_c1",
-        to_port="power",
-        gauge_awg=28,
+        to_port="motor",
+        gauge_awg=16,
         length_mm=120.0,
       ),
     )
@@ -390,7 +419,7 @@ async fn main {
       .add_cable_route(
         @cad.CableRoute::new(
           "actuator_harness",
-          points=[(0.0, 0.0, 0.0), (20.0, 0.0, 0.0), (40.0, 0.0, 4.0)],
+          points=[(0.0, 0.0, 0.0), (20.0, 0.0, 40.0), (40.0, 0.0, 44.0)],
           jacket_diameter_mm=6.0,
           wire_names=["motor_can"],
           material="PVC",
@@ -402,15 +431,15 @@ async fn main {
       )
       .add_cable_route(
         @cad.CableRoute::new(
-          "sensor_harness",
-          points=[(0.0, 0.0, 0.0), (10.0, 20.0, 0.0), (40.0, 20.0, 4.0)],
-          jacket_diameter_mm=4.0,
-          wire_names=["output_encoder_spi", "output_encoder_power"],
+          "motor_phase_harness",
+          points=[(0.0, 0.0, 0.0), (12.0, 0.0, 36.0), (30.0, 0.0, 44.0)],
+          jacket_diameter_mm=5.0,
+          wire_names=["motor_phases"],
           material="PVC",
-          from_component="bldc_actuator_output_sensor",
-          from_port="spi",
+          from_component="bldc_actuator_motor_stator",
+          from_port="phases",
           to_component="moteus_c1",
-          to_port="encoder",
+          to_port="motor",
         ),
       )
     positions.set("bldc_actuator_motor_rotor_joint", motor_angle)
