@@ -55,6 +55,59 @@ lowest edge connector just clears the cover boss; the gap is the minimum for
 this board and cover without a relief cut. The board is held by four M3 tapped
 standoffs at its 6 mm corner holes, reaching from the output cover plate.
 
+## Viewing the design
+
+The assembled `--view` is mechanically correct but hides most purchased parts
+inside the housing and gear train. Use the exploded, color-coded view:
+
+```bash
+./run-example.sh 02-planetary-actuator --view --explode
+```
+
+or open `build/02/exploded.step` from the build package. Every kind of part has
+its own color:
+
+| Color | Part kind |
+| --- | --- |
+| near-black | printed housing |
+| blue-grey | output cover |
+| orange | motor bell |
+| gold | sun gear |
+| cyan | planet gears |
+| grey | ring gear |
+| green | carrier |
+| silver | 608 bearings |
+| steel blue | 688 planet bearings |
+| blue / light blue | M3 x 10 / M3 x 12 screws |
+| bright brass / dark brass | heat-set inserts / sensor standoffs |
+| purple | encoder magnet |
+| red / dark red | output collar / set screws |
+| grey-blue | moteus C1 board |
+
+## Purchasing links
+
+`supplier-links.txt` maps every purchased part to a real product page. The
+example reads it before writing the build package, so `START-HERE.md/.html`,
+`sourcing.csv`, and `bom.csv` all carry the links and notes. The file format is:
+
+```
+part_number | supplier | supplier_url | notes | unit_cost_usd
+```
+
+Notes on the current choices:
+
+- The exact 6 x 2.5 mm **diametrically magnetized** magnet is the mjbots sense
+  magnet. CMS Magnetics and Magnet4Sale carry 6 mm discs, but those are
+  axially magnetized; their diametric stock starts at other sizes.
+- The M3 screws, heat-set inserts, and set screws are inexpensive Amazon kits
+  that cover the required lengths with spares.
+- The 8 mm carrier shaft and dowel pins start as 8 x 20 mm DIN 6325 hardened
+  pins and are cut to length.
+- The modeled output collar is a 2 mm spacer; the linked standard collar is
+  8 mm wide, so thin it or use a thin clamp collar.
+- Prices are per-piece estimates. Kits usually cost more than the summed
+  per-piece estimate but include spares.
+
 ## Third-party assets
 
 ### moteus C1 r1.2 controller board

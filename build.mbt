@@ -653,6 +653,13 @@ pub fn Component::start_here_text(
   let mut out = "# Start here — " + package_name + "\n\n"
   out = out +
     "This folder contains everything you need. Do these three steps in order.\n\n"
+  let exploded_view = self.parameters.get("exploded_view").unwrap_or("")
+  if exploded_view != "" {
+    out = out +
+      "**Want to see every part?** Open `" +
+      exploded_view +
+      "` in a STEP viewer for the exploded, color-coded view.\n\n"
+  }
   out = out + "## 1. 3D-print these files\n\n"
   if cartridge_name != "" {
     out = out +
@@ -706,8 +713,8 @@ pub fn Component::start_here_text(
     " printed pieces**. `print-list.csv` has the same list with layer height and support notes.\n\n"
   out = out + "## 2. Buy these parts\n\n"
   out = out +
-    "| Qty | What to buy | Supplier | Unit price | Line total | Link |\n"
-  out = out + "| --- | --- | --- | --- | --- | --- |\n"
+    "| Qty | What to buy | Supplier | Unit price | Line total | Link | Notes |\n"
+  out = out + "| --- | --- | --- | --- | --- | --- | --- |\n"
   let mut purchase_total = 0.0
   for line in bom.lines {
     if line.process == "purchased" {
@@ -732,13 +739,16 @@ pub fn Component::start_here_text(
         round2(line.total_cost_usd).to_string() +
         " | " +
         link +
+        " | " +
+        md_cell(line.notes) +
         " |\n"
     }
   }
   out = out +
     "\n**Estimated purchase total: $" +
     round2(purchase_total).to_string() +
-    "** (plus shipping). `sourcing.csv` has the same list in spreadsheet form.\n\n"
+    "** (per-part estimate plus shipping; linked kits may include spares, so the cart total can differ). " +
+    "`sourcing.csv` has the same list in spreadsheet form.\n\n"
   out = out + "## 3. Assemble it\n\n"
   out = out +
     "Check that all printed pieces are cleaned up and all purchased parts are on the bench. " +

@@ -207,3 +207,42 @@ test "build manifest handles an empty component" {
   assert_true(manifest.contains("BOM lines | 0"))
   assert_true(manifest.contains("Hardware warnings | 0"))
 }
+
+///|
+test "supplier links override BOM metadata through the tree" {
+  let root = build_test_component()
+  let links : Array[@cad.SupplierLink] = [
+    @cad.SupplierLink::new(
+      part_number="SCREW-M3x12",
+      supplier="Amazon",
+      supplier_url="https://example.com/screws",
+      notes="screw kit",
+      unit_cost_usd=0.1,
+    ),
+    @cad.SupplierLink::new(
+      part_number="MOTOR-1",
+      supplier="mjbots",
+      supplier_url="https://example.com/motor",
+    ),
+  ]
+  let linked = root.with_supplier_links(links)
+  let bom = linked.bom()
+  let mut saw_screw = false
+  let mut saw_motor = false
+  for line in bom.lines {
+    if line.part_number == "SCREW-M3x12" {
+      saw_screw = true
+      assert_eq(line.supplier, "Amazon")
+      assert_eq(line.supplier_url, "https://example.com/screws")
+      assert_eq(line.notes, "screw kit")
+      assert_true((line.unit_cost_usd - 0.1).abs() < 1.0e-9)
+    }
+    if line.part_number == "MOTOR-1" {
+      saw_motor = true
+      assert_eq(line.supplier, "mjbots")
+      assert_eq(line.supplier_url, "https://example.com/motor")
+    }
+  }
+  assert_true(saw_screw)
+  assert_true(saw_motor)
+}

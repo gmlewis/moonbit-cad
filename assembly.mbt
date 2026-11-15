@@ -58,6 +58,100 @@ pub fn PartMeta::with_supplier_url(
 }
 
 ///|
+/// A per-part purchasing override, typically loaded from an example's
+/// `supplier-links.txt`. Empty fields keep the component's existing value.
+pub(all) struct SupplierLink {
+  part_number : String
+  supplier : String
+  supplier_url : String
+  notes : String
+  unit_cost_usd : Double?
+}
+
+///|
+pub fn SupplierLink::new(
+  part_number~ : String,
+  supplier~ : String = "",
+  supplier_url~ : String = "",
+  notes~ : String = "",
+  unit_cost_usd? : Double,
+) -> SupplierLink {
+  { part_number, supplier, supplier_url, notes, unit_cost_usd, }
+}
+
+///|
+fn supplier_link_for(
+  links : Array[SupplierLink],
+  part_number : String,
+) -> SupplierLink? {
+  for link in links {
+    if link.part_number == part_number {
+      return Some(link)
+    }
+  }
+  None
+}
+
+///|
+fn with_supplier_link(meta : PartMeta, links : Array[SupplierLink]) -> PartMeta {
+  match supplier_link_for(links, meta.part_number) {
+    Some(link) =>
+      {
+        ..meta,
+        supplier: if link.supplier == "" {
+          meta.supplier
+        } else {
+          link.supplier
+        },
+        supplier_url: if link.supplier_url == "" {
+          meta.supplier_url
+        } else {
+          link.supplier_url
+        },
+        notes: if link.notes == "" {
+          meta.notes
+        } else {
+          link.notes
+        },
+        unit_cost_usd: match link.unit_cost_usd {
+          Some(cost) => cost
+          None => meta.unit_cost_usd
+        },
+      }
+    None => meta
+  }
+}
+
+///|
+/// Applies purchasing-link overrides throughout this component tree. Existing
+/// values are kept when a link leaves a field empty.
+pub fn Component::with_supplier_links(
+  self : Component,
+  links : Array[SupplierLink],
+) -> Component {
+  let bodies = self.bodies.map(fn(body) {
+    match body.part {
+      Some(meta) => { ..body, part: Some(with_supplier_link(meta, links)), }
+      None => body
+    }
+  })
+  let fasteners = self.fasteners.map(fn(fastener) {
+    match fastener.part {
+      Some(meta) => { ..fastener, part: Some(with_supplier_link(meta, links)), }
+      None => fastener
+    }
+  })
+  let part = match self.part {
+    Some(meta) => Some(with_supplier_link(meta, links))
+    None => None
+  }
+  let attachments = self.attachments.map(fn(att) {
+    { ..att, child: att.child.with_supplier_links(links), }
+  })
+  { ..self, bodies, fasteners, part, attachments, }
+}
+
+///|
 /// The kind of hardware a fastener record describes.
 pub(all) enum FastenerKind {
   Bolt

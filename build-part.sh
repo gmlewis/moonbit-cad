@@ -64,6 +64,7 @@ Done. Everything you need is in: ${OUT}/
   1. PRINT    ${OUT}/printable/       (settings in print-list.csv)
   2. BUY      ${START_HTML}           (section 2)
   3. ASSEMBLE ${START_HTML}           (section 3)
+  4. VIEW     ${OUT}/exploded.step    (exploded, color-coded)
 
 Open it now:
   open ${START_HTML}

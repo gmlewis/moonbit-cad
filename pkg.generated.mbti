@@ -255,6 +255,7 @@ pub fn Component::with_part(Self, PartMeta) -> Self
 pub fn Component::with_pcb(Self, PcbSpec) -> Self
 pub fn Component::with_robot_name(Self, String) -> Self
 pub fn Component::with_sensor(Self, SensorSpec) -> Self
+pub fn Component::with_supplier_links(Self, Array[SupplierLink]) -> Self
 
 #derive(@debug.Debug)
 pub(all) enum ConnectionKind {
@@ -441,6 +442,15 @@ pub(all) struct SensorSpec {
   resolution : String
 }
 pub fn SensorSpec::new(SensorKind, model? : String, interface? : String, voltage_v? : Double, current_ma? : Double, range? : String, resolution? : String) -> Self
+
+pub(all) struct SupplierLink {
+  part_number : String
+  supplier : String
+  supplier_url : String
+  notes : String
+  unit_cost_usd : Double?
+}
+pub fn SupplierLink::new(part_number~ : String, supplier? : String, supplier_url? : String, notes? : String, unit_cost_usd? : Double) -> Self
 
 pub(all) enum VisualMode {
   Primitives

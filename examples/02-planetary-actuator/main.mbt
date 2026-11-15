@@ -25,6 +25,166 @@
 /// See `examples/02-planetary-actuator/README.md` for the full attribution.
 
 ///|
+/// Parses the pipe-separated supplier-link file.
+///
+/// Format: `part_number | supplier | supplier_url | notes`; blank lines and
+/// lines starting with `#` are ignored.
+fn parse_supplier_links(text : String) -> Array[@cad.SupplierLink] {
+  let out : Array[@cad.SupplierLink] = []
+  for raw_line in text.split("\n") {
+    let line = raw_line.to_owned().trim().to_owned()
+    if line == "" || line.has_prefix("#") {
+      continue
+    }
+    let fields : Array[String] = line
+      .split("|")
+      .collect()
+      .map(fn(field) { field.to_owned().trim().to_owned() })
+    if fields.length() < 3 {
+      continue
+    }
+    let cost : Double? = if fields.length() > 4 && fields[4] != "" {
+      Some(@string.parse_double(fields[4])) catch {
+        _ => None
+      }
+    } else {
+      None
+    }
+    out.push(
+      @cad.SupplierLink::new(
+        part_number=fields[0],
+        supplier=if fields.length() > 1 { fields[1] } else { "" },
+        supplier_url=if fields.length() > 2 { fields[2] } else { "" },
+        notes=if fields.length() > 3 { fields[3] } else { "" },
+        unit_cost_usd?=cost,
+      ),
+    )
+  }
+  out
+}
+
+///|
+/// Display-only offset for the exploded, color-coded view.
+fn explode_offset(node : @step_cad.SceneNode) -> (Double, Double, Double) {
+  let name = node.name
+  let radial = fn() -> (Double, Double) {
+    let (x0, x1, y0, y1, _, _) = node.bounding_box()
+    ((x0 + x1) / 2.0 * 0.8, (y0 + y1) / 2.0 * 0.8)
+  }
+  if name.contains("bearing-688") {
+    let (dx, dy) = radial()
+    (dx, dy, 95.0)
+  } else if name.contains("stage1_planet") {
+    let (dx, dy) = radial()
+    (dx, dy, 75.0)
+  } else if name.contains("moteus") || name.contains("board_standoff") {
+    (0.0, 0.0, 250.0)
+  } else if name.contains("bearing-608") || name.contains("M3-12") {
+    (0.0, 0.0, 215.0)
+  } else if name.contains("output_cover") {
+    (0.0, 0.0, 190.0)
+  } else if name.contains("output_magnet") {
+    (0.0, 0.0, 165.0)
+  } else if name.contains("output_collar") {
+    (0.0, 0.0, 155.0)
+  } else if name.contains("carrier_pin") ||
+    name.contains("pin_washer") ||
+    name.contains("carrier_output_shaft") {
+    (0.0, 0.0, 135.0)
+  } else if name.contains("stage1_carrier") {
+    (0.0, 0.0, 115.0)
+  } else if name.contains("stage1_sun") {
+    (0.0, 0.0, 45.0)
+  } else if name.contains("/ring") {
+    (0.0, 0.0, 25.0)
+  } else if name.contains("HEATSET") {
+    // Pull the wall hardware out of the housing so it is visible.
+    (150.0, 0.0, 10.0)
+  } else if name.contains("M3-10") {
+    (150.0, 0.0, -10.0)
+  } else if name.contains("_housing") {
+    (105.0, 0.0, 0.0)
+  } else if name.contains("_motor") {
+    (0.0, 0.0, -80.0)
+  } else {
+    (0.0, 0.0, 0.0)
+  }
+}
+
+///|
+/// A distinct display color for each kind of part in the exploded view.
+fn explode_color(name : String) -> @step_cad.Rgb {
+  if name.contains("output_cover") {
+    @step_cad.Rgb::new(0.22, 0.24, 0.30)
+  } else if name.contains("housing") {
+    @step_cad.Rgb::new(0.10, 0.10, 0.12)
+  } else if name.contains("motor_plate") {
+    @step_cad.Rgb::new(0.35, 0.35, 0.40)
+  } else if name.contains("HEATSET") {
+    @step_cad.Rgb::new(0.95, 0.75, 0.10)
+  } else if name.contains("board_standoff") {
+    @step_cad.Rgb::new(0.75, 0.55, 0.20)
+  } else if name.contains("M3-10") {
+    @step_cad.Rgb::new(0.20, 0.45, 0.90)
+  } else if name.contains("M3-12") {
+    @step_cad.Rgb::new(0.40, 0.75, 0.95)
+  } else if name.contains("bearing-608") {
+    @step_cad.Rgb::new(0.78, 0.78, 0.82)
+  } else if name.contains("bearing-688") {
+    @step_cad.Rgb::new(0.45, 0.65, 0.85)
+  } else if name.contains("set_screw") {
+    @step_cad.Rgb::new(0.60, 0.02, 0.02)
+  } else if name.contains("output_collar") {
+    @step_cad.Rgb::new(0.95, 0.20, 0.20)
+  } else if name.contains("output_magnet") {
+    @step_cad.Rgb::new(0.65, 0.20, 0.85)
+  } else if name.contains("sun_hub") {
+    @step_cad.Rgb::new(0.95, 0.55, 0.15)
+  } else if name.contains("/sun") {
+    @step_cad.Rgb::new(1.00, 0.68, 0.10)
+  } else if name.contains("stage1_planet") {
+    @step_cad.Rgb::new(0.15, 0.65, 0.95)
+  } else if name.contains("/ring") {
+    @step_cad.Rgb::new(0.45, 0.45, 0.50)
+  } else if name.contains("carrier_output_shaft") ||
+    name.contains("carrier_pin") ||
+    name.contains("pin_washer") {
+    @step_cad.Rgb::new(0.72, 0.72, 0.78)
+  } else if name.contains("stage1_carrier") {
+    @step_cad.Rgb::new(0.20, 0.80, 0.40)
+  } else if name.contains("motor_rotor_bell") {
+    @step_cad.Rgb::new(0.95, 0.35, 0.05)
+  } else if name.contains("motor_rotor_shaft") {
+    @step_cad.Rgb::new(0.80, 0.80, 0.85)
+  } else if name.contains("motor_stator") {
+    @step_cad.Rgb::new(0.55, 0.55, 0.60)
+  } else if name.contains("moteus") {
+    @step_cad.Rgb::new(0.10, 0.60, 0.25)
+  } else {
+    @step_cad.Rgb::new(0.50, 0.50, 0.55)
+  }
+}
+
+///|
+/// Builds a display-only exploded design from the assembled design.
+fn exploded_design(
+  design : @step_cad.Design,
+  name~ : String,
+) -> @step_cad.Design {
+  let mut out = @step_cad.Design::new(
+    name~,
+    description="Exploded, color-coded view",
+  )
+  for node in design.nodes() {
+    let (dx, dy, dz) = explode_offset(node)
+    out = out.add(
+      node.with_color(explode_color(node.name)).translate(x=dx, y=dy, z=dz),
+    )
+  }
+  out
+}
+
+///|
 async fn main {
   let base_spec = {
     "motor": @cli.opt_string(
@@ -65,6 +225,9 @@ async fn main {
       2.7,
       help="Air gap between the AS5047P chip and the magnet top in mm",
     ),
+    "explode": @cli.flag(
+      help="Write an exploded, color-coded view instead of the assembled STEP",
+    ),
   }
   let spec = @common.with_output_args(base_spec)
   guard @cli.parse(
@@ -77,6 +240,7 @@ async fn main {
   }
   let output = @common.output_paths(args)
   let detail = output.detail_level()
+  let explode = args.flag("explode")
   let motor_kind = args.string_opt("motor").unwrap_or("bldc")
   if motor_kind != "bldc" && motor_kind != "exposed" {
     @cli.eprintln(
@@ -304,7 +468,7 @@ async fn main {
       supplier_url="https://github.com/mjbots/moteus",
       material="FR-4",
       process="purchased",
-      unit_cost_usd=99.0,
+      unit_cost_usd=69.0,
     )
     let board_screw_part = @cad.PartMeta::new(
       "ISO4762-M3x10",
@@ -462,6 +626,13 @@ async fn main {
     positions.set("bldc_actuator_motor_rotor_joint", motor_angle)
     assembly
   }
+  // Apply the checked-in purchasing links so the build package's BOM,
+  // sourcing CSV, and START-HERE guide all point at real products.
+  let links_path = "examples/02-planetary-actuator/supplier-links.txt"
+  let links_text = @fs.read_file(links_path).text() catch { _ => "" }
+  let comp = comp
+    .with_supplier_links(parse_supplier_links(links_text))
+    .with_param("exploded_view", "exploded.step")
   @common.write_output(comp, output, joint_positions=positions)
   // The 4-elbow herringbone gear set is print-in-place. Add its single
   // cartridge STEP to the build package; the package's START-HERE and
@@ -488,6 +659,36 @@ async fn main {
         )
       }
       None => ()
+    }
+  }
+  // Exploded, color-coded view: every purchased part is separated from its
+  // neighbors so bearings, inserts, screws, pins, washers, the magnet, and the
+  // collar are all visible. The package always gets one; --explode also puts
+  // it in the main --out file for `./run-example.sh 02 --view --explode`.
+  let exploded_target = match output.build_package {
+    Some(dir) => Some(dir + "/exploded.step")
+    None =>
+      if explode {
+        Some("/tmp/02-planetary-actuator-exploded.step")
+      } else {
+        None
+      }
+  }
+  if exploded_target is Some(_) || explode {
+    let exploded = exploded_design(
+      comp.to_design(joint_positions=positions),
+      name="02-planetary-actuator-exploded",
+    )
+    let text = exploded.to_step_file()
+    match exploded_target {
+      Some(path) => @step_cad.write_text_file(text, Some(path))
+      None => ()
+    }
+    if explode {
+      match output.step {
+        Some(path) => @step_cad.write_text_file(text, Some(path))
+        None => ()
+      }
     }
   }
 }

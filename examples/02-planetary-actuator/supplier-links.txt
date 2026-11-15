@@ -1,0 +1,25 @@
+# Purchasing links for example 02.
+#
+# Format (one part per line, pipe-separated):
+#   part_number | supplier | supplier_url | notes | unit_cost_usd
+#
+# Empty fields keep the part's existing value. These links are applied by the
+# example before the build package is written, so START-HERE.md/.html,
+# sourcing.csv, and bom.csv all use them. Costs are per piece; a linked kit
+# may include spares, so the cart total can differ from the estimate.
+
+ISO4762-M3x12 | Amazon | https://www.amazon.com/NIULUNBAO-Socket-Machine-Threaded-Assortment/dp/B0BJQ6M8XW | 250-piece M3 socket-head kit (4/6/8/10/12 mm) | 0.05
+ISO4762-M3x10 | Amazon | https://www.amazon.com/NIULUNBAO-Socket-Machine-Threaded-Assortment/dp/B0BJQ6M8XW | Same 250-piece kit also covers M3 x 10 mm | 0.05
+BEARING-608 | Amazon | https://www.amazon.com/Bearings-Skateboard-Shielded-Miniature-Skateboards/dp/B07R7PR72H | 608-2RS, 8 x 22 x 7 mm, 10-pack | 0.70
+INSERT-3 | Amazon | https://www.amazon.com/Vibit-Threaded-Soldering-Printing-Component/dp/B0FWWW8VP1 | M3 heat-set insert kit with soldering tips | 0.05
+BLDC-5010_360kv | Amazon | https://www.amazon.com/GoolRC-Brushless-MultiCopter-Quadcopter-Multi-axis/dp/B0C2YRNX1Z | 5010 360KV outrunner (GoolRC) | 27.98
+SET-M3x5.9 | Amazon | https://www.amazon.com/HanTof-Set-Screws-Grub/dp/B07CKFJ8GY | M3-M8 grub-screw kit; M3 x 6 mm is the closest length | 0.03
+SHAFT-8x18 | McMaster-Carr | https://www.mcmaster.com/91595A558/ | 8 x 20 mm DIN 6325 hardened pins, 10-pack; cut to 18 mm | 1.50
+DOWEL-8x18.5 | McMaster-Carr | https://www.mcmaster.com/91595A558/ | Same 8 x 20 mm hardened pins; cut to 18.5 mm | 1.50
+WASHER-14x8.2x1 | McMaster-Carr | https://www.mcmaster.com/98055A115/ | DIN 988 spring-steel shim, 8 x 14 x 1 mm, pack of 50 | 0.20
+SET-M4x12 | Amazon | https://www.amazon.com/Prime-Line-9185823-Socket-Screws-10-Pack/dp/B07DS7CVBP | M4 x 12 mm cup-point set screws, 10-pack | 0.60
+BEARING-688 | Amazon | https://www.amazon.com/uxcell-Groove-Bearings-Metric-Double/dp/B0B5XPHC51 | 688-2RS, 8 x 16 x 5 mm, 10-pack | 1.12
+COLLAR-8-16 | McMaster-Carr | https://www.mcmaster.com/57485K67/ | 8 mm bore x 16 mm OD, 8 mm wide; model uses a 2 mm spacer, so thin it | 8.00
+MAG-6x2.5-DIA | mjbots | https://mjbots.com/products/diametric-disc-magnet | Exact 6 x 2.5 mm diametric sense magnet (mdd060a025c35sh); CMS Magnetics and Magnet4Sale only list axial 6 mm discs | 2.00
+MOTEUS-C1-R1.2 | mjbots | https://mjbots.com/products/moteus-c1 | Bare moteus C1 controller | 69.00
+STANDOFF-M3-SENSOR | Amazon | https://www.amazon.com/Uxcell-a15081800ux0064-Standoff-Spacer-Threaded/dp/B016B2ESOE | M3 x 13 mm female-female brass hex, 5 mm AF, 25-pack | 0.40
