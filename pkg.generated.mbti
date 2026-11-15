@@ -225,6 +225,7 @@ pub fn Component::get_mate(Self, String) -> @common.MateConnector?
 pub fn Component::harness_checks(Self) -> Array[String]
 pub fn Component::link_design(Self, String) -> @gmlewis/step/cad.Design?
 pub fn Component::link_parts_csv(Self) -> String
+pub fn Component::name_key_text(Self, name? : String) -> String
 pub fn Component::new(String, description? : String) -> Self
 pub fn Component::pcb_placements_csv(Self) -> String
 pub fn Component::placed_shapes(Self, joint_positions? : Map[String, Double]) -> Array[@collision.PlacedShape]
@@ -233,6 +234,7 @@ pub fn Component::print_list_csv(Self) -> String
 pub fn Component::printable_parts(Self) -> Array[PrintablePart]
 pub fn Component::report_text(Self) -> String
 pub fn Component::sourcing_csv(Self) -> String
+pub fn Component::start_here_text(Self, name? : String) -> String
 pub fn Component::to_assembly_step(Self, joint_positions? : Map[String, Double]) -> String
 pub fn Component::to_blender_python(Self, joint_positions? : Map[String, Double], segments? : Int32) -> String
 pub fn Component::to_bom_csv(Self) -> String

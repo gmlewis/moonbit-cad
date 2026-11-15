@@ -9,6 +9,22 @@ kinematics and inertia model from
 `Component` tree compiles to a STEP assembly, a glTF scene, a Blender script,
 a URDF robot, or a complete ROS 2 package bundle.
 
+## Build a part in one command
+
+```bash
+./build-part.sh 02
+```
+
+This writes `build/02/` and tells you to open `build/02/START-HERE.md`. That
+page has exactly three sections:
+
+1. the STEP files to 3D-print (in `printable/`, with material and infill),
+2. the shopping list (quantities, prices, and supplier links),
+3. the numbered assembly steps.
+
+Use `./build-part.sh 05` or `./build-part.sh 06` for the other maintained
+examples. Nothing is opened on your screen while the package is generated.
+
 ## Architecture
 
 A **`Component`** is a reusable, parameterized mechanical or robotic module: a

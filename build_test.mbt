@@ -120,15 +120,38 @@ test "build package files cover sourcing, print list, torque, and procedure" {
   assert_true(manifest.contains("`sourcing.csv`"))
   assert_true(manifest.contains("bundle/parts"))
   let files = root.build_package_files(name="demo")
-  assert_eq(files.length(), 13)
+  assert_eq(files.length(), 15)
   let names : Array[String] = files.map(fn(file) { file.path })
   for
     name in [
-      "README.md", "bom.csv", "sourcing.csv", "print-list.csv", "fasteners.csv",
-      "assembly.txt", "report.txt", "control.yaml", "pins.csv",
+      "START-HERE.md", "NAME-KEY.md", "README.md", "bom.csv", "sourcing.csv", "print-list.csv",
+      "fasteners.csv", "assembly.txt", "report.txt", "control.yaml", "pins.csv",
     ] {
     assert_true(names.contains(name))
   }
+}
+
+///|
+test "name key maps assembly names to parts" {
+  let root = build_test_component()
+  let key = root.name_key_text(name="demo")
+  assert_true(key.contains("# Name key — demo"))
+  assert_true(key.contains("SCREW-M3x12"))
+  assert_true(key.contains("SENSOR-1"))
+}
+
+///|
+test "start-here guide covers print, buy, and assemble" {
+  let root = build_test_component()
+  let guide = root.start_here_text(name="demo")
+  assert_true(guide.contains("# Start here — demo"))
+  assert_true(guide.contains("## 1. 3D-print these files"))
+  assert_true(guide.contains("printable/PLATE-1.step"))
+  assert_true(guide.contains("## 2. Buy these parts"))
+  assert_true(guide.contains("SCREW-M3x12"))
+  assert_true(guide.contains("## 3. Assemble it"))
+  assert_true(guide.contains("Assembly and test procedure"))
+  assert_true(guide.contains("Fastener torque table"))
 }
 
 ///|

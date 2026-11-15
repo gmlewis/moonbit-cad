@@ -530,6 +530,231 @@ pub fn Component::pcb_placements_csv(self : Component) -> String {
 }
 
 ///|
+/// Escapes text for a Markdown table cell.
+fn md_cell(text : String) -> String {
+  text.replace(old="|", new="\\|").replace(old="\n", new=" ")
+}
+
+///|
+/// Collects the CAD names that appear in the assembly procedure and maps each
+/// to the part a builder should pick up.
+fn collect_name_key(
+  component : Component,
+  procedure : String,
+  out : Array[(String, String)],
+  seen : Array[String],
+) -> Unit {
+  let name = component.name
+  if procedure.contains(name) && !seen.contains(name) {
+    match component.part {
+      Some(meta) => {
+        seen.push(name)
+        out.push((name, meta.part_number + " — " + meta.description))
+      }
+      None => {
+        let mut first = ""
+        for body in component.bodies {
+          match body.part {
+            Some(meta) =>
+              if first == "" {
+                first = meta.part_number + " — " + meta.description
+              }
+            None => ()
+          }
+        }
+        if first != "" {
+          seen.push(name)
+          out.push((name, first))
+        }
+      }
+    }
+  }
+  for body in component.bodies {
+    if procedure.contains(body.name) && !seen.contains(body.name) {
+      match body.part {
+        Some(meta) => {
+          seen.push(body.name)
+          out.push((body.name, meta.part_number + " — " + meta.description))
+        }
+        None => ()
+      }
+    }
+  }
+  for fastener in component.fasteners {
+    if procedure.contains(fastener.name) && !seen.contains(fastener.name) {
+      match fastener.part {
+        Some(meta) => {
+          seen.push(fastener.name)
+          out.push(
+            (fastener.name, meta.part_number + " — " + meta.description),
+          )
+        }
+        None => ()
+      }
+    }
+  }
+  for att in component.attachments {
+    collect_name_key(att.child, procedure, out, seen)
+  }
+}
+
+///|
+/// The one-page beginner guide shipped at the root of every build package.
+///
+/// It answers exactly three questions in order: what to print, what to buy,
+/// and how to assemble it. The engineering manifest, CSVs, and bundle remain
+/// available for advanced users.
+pub fn Component::start_here_text(
+  self : Component,
+  name~ : String = "",
+) -> String {
+  let package_name = if name == "" { self.display_name() } else { name }
+  let bom = self.bom()
+  let printable = self.printable_parts()
+  let printable_files : Array[String] = printable.map(fn(part) {
+    sanitize_part_number(part.part_number)
+  })
+  let mut out = "# Start here — " + package_name + "\n\n"
+  out = out +
+    "This folder contains everything you need. Do these three steps in order.\n\n"
+  out = out + "## 1. 3D-print these files\n\n"
+  out = out +
+    "Open the `printable/` folder. Print one copy of each file unless the Qty column says more. " +
+    "Use the material and infill below, and put the largest flat face on the build plate.\n\n"
+  out = out +
+    "| File to print | What it is | Qty | Material | Process | Infill | Orientation |\n"
+  out = out + "| --- | --- | --- | --- | --- | --- | --- |\n"
+  let mut printed_count = 0
+  for line in bom.lines {
+    if line.process != "purchased" &&
+      printable_files.contains(sanitize_part_number(line.part_number)) {
+      printed_count = printed_count + line.quantity
+      let infill = print_infill(line)
+      out = out +
+        "| `printable/" +
+        sanitize_part_number(line.part_number) +
+        ".step` | " +
+        md_cell(line.description) +
+        " | " +
+        line.quantity.to_string() +
+        " | " +
+        md_cell(line.material) +
+        " | " +
+        md_cell(line.process) +
+        " | " +
+        (if infill == "" { "—" } else { infill + "%" }) +
+        " | " +
+        md_cell(print_orientation(line)) +
+        " |\n"
+    }
+  }
+  out = out +
+    "\nThat is **" +
+    printed_count.to_string() +
+    " printed pieces**. `print-list.csv` has the same list with layer height and support notes.\n\n"
+  out = out + "## 2. Buy these parts\n\n"
+  out = out +
+    "| Qty | What to buy | Supplier | Unit price | Line total | Link |\n"
+  out = out + "| --- | --- | --- | --- | --- | --- |\n"
+  let mut purchase_total = 0.0
+  for line in bom.lines {
+    if line.process == "purchased" {
+      purchase_total = purchase_total + line.total_cost_usd
+      let link = if line.supplier_url == "" {
+        "—"
+      } else {
+        "[open](" + line.supplier_url + ")"
+      }
+      out = out +
+        "| " +
+        line.quantity.to_string() +
+        " | " +
+        md_cell(line.description) +
+        " (" +
+        md_cell(line.part_number) +
+        ") | " +
+        md_cell(if line.supplier == "" { "any" } else { line.supplier }) +
+        " | $" +
+        round2(line.unit_cost_usd).to_string() +
+        " | $" +
+        round2(line.total_cost_usd).to_string() +
+        " | " +
+        link +
+        " |\n"
+    }
+  }
+  out = out +
+    "\n**Estimated purchase total: $" +
+    round2(purchase_total).to_string() +
+    "** (plus shipping). `sourcing.csv` has the same list in spreadsheet form.\n\n"
+  out = out + "## 3. Assemble it\n\n"
+  out = out +
+    "Check that all printed pieces are cleaned up and all purchased parts are on the bench. " +
+    "You will need a 3D printer (step 1), a clean bench, and these hex keys: "
+  let procedure = self.build_procedure_text()
+  let sizes : Array[String] = ["2", "2.5", "3", "4", "5", "6", "8", "10"]
+  let keys : Array[String] = []
+  for size in sizes {
+    if procedure.contains("[" + size + " mm hex key") {
+      keys.push(size + " mm")
+    }
+  }
+  out = out +
+    (if keys.length() == 0 {
+      "none listed in the steps.\n\n"
+    } else {
+      keys.join(", ") + ".\n\n"
+    })
+  out = out +
+    "If a step uses a name you do not recognize, open `NAME-KEY.md`; it maps every name to the part it means.\n\n"
+  let step_count = self.assembly_plan().length()
+  if step_count <= 80 {
+    out = out + "```\n" + procedure + "```\n\n"
+  } else {
+    out = out +
+      "This design has **" +
+      step_count.to_string() +
+      " steps**. Open `assembly.txt` and follow it in order.\n\n"
+  }
+  out = out +
+    "---\n\nAdvanced files: `README.md` (manifest), `bom.csv`, `sourcing.csv`, " +
+    "`print-list.csv`, `fasteners.csv`, `assembly.txt`, and `bundle/` (URDF/glTF).\n"
+  out
+}
+
+///|
+/// Maps the CAD names used in the assembly steps to the part a builder picks
+/// up. Long names with a shared prefix are capped so the file stays readable.
+pub fn Component::name_key_text(
+  self : Component,
+  name~ : String = "",
+) -> String {
+  let package_name = if name == "" { self.display_name() } else { name }
+  let procedure = self.build_procedure_text()
+  let name_key : Array[(String, String)] = []
+  collect_name_key(self, procedure, name_key, [])
+  let mut out = "# Name key — " + package_name + "\n\n"
+  out = out +
+    "The assembly steps use the CAD names below. Find the name in the first column to see the part it means.\n\n"
+  if name_key.length() == 0 {
+    return out + "No named parts were found.\n"
+  }
+  out = out + "| Name in the steps | Part |\n| --- | --- |\n"
+  let shown = if name_key.length() > 80 { 80 } else { name_key.length() }
+  for i in 0..<shown {
+    let (cad_name, part) = name_key[i]
+    out = out + "| `" + md_cell(cad_name) + "` | " + md_cell(part) + " |\n"
+  }
+  if name_key.length() > shown {
+    out = out +
+      "\nThe rest of the names are in `bom.csv` and `link-parts.csv`.\n"
+  }
+  out = out +
+    "\nFiles: `print-list.csv` (printed parts), `bom.csv` (all parts), `assembly.txt` (steps).\n"
+  out
+}
+
+///|
 /// The package manifest: part counts, cost, step count, warnings, and files.
 pub fn Component::build_manifest(
   self : Component,
@@ -597,6 +822,10 @@ pub fn Component::build_manifest(
     " |\n"
   out = out + "\n## Files\n\n"
   out = out + "| File | Contents |\n| --- | --- |\n"
+  out = out +
+    "| `START-HERE.md` | Beginner guide: what to print, what to buy, and how to assemble. |\n"
+  out = out +
+    "| `NAME-KEY.md` | Maps the CAD names in the assembly steps to real parts. |\n"
   out = out + "| `bom.csv` | Aggregated bill of materials. |\n"
   out = out + "| `sourcing.csv` | Suppliers, links, quantities, and costs. |\n"
   out = out +
@@ -633,6 +862,8 @@ pub fn Component::build_package_files(
   name~ : String = "",
 ) -> Array[BuildFile] {
   let files : Array[BuildFile] = [
+    BuildFile::new("START-HERE.md", self.start_here_text(name~)),
+    BuildFile::new("NAME-KEY.md", self.name_key_text(name~)),
     BuildFile::new("README.md", self.build_manifest(name~)),
     BuildFile::new("bom.csv", self.to_bom_csv()),
     BuildFile::new("sourcing.csv", self.sourcing_csv()),
