@@ -308,7 +308,10 @@ async fn main {
       15.0,
       help="Exposed output shaft length beyond the output hub collar in mm (overridden by the tire when fitted)",
     ),
-    "collarWidth": @cli.opt_double(10.0, help="Shaft collar width in mm"),
+    "collarWidth": @cli.opt_double(
+      11.1,
+      help="Shaft collar width in mm (default 7/16 in)",
+    ),
     "collarOuter": @cli.opt_double(
       25.4,
       help="Shaft collar outside diameter in mm",

@@ -50,6 +50,17 @@ echo "Building ${EXAMPLE} ..."
 # lighter mock-up.
 ./run-example.sh "${EXAMPLE}" --headless --detail detailed --package "${OUT}"
 
+# Every purchased part should carry a viable supplier link. This is a warning,
+# not a build failure, so existing examples keep building while their link
+# files are filled in. See .claude/skills/sourcing-parts/SKILL.md.
+if [[ -f scripts/check_supplier_links.py ]]; then
+  if ! python3 scripts/check_supplier_links.py "${OUT}"; then
+    echo
+    echo "warning: some purchased parts have no supplier link." >&2
+    echo "See the checker output above and .claude/skills/sourcing-parts." >&2
+  fi
+fi
+
 # Render the beginner guide as a self-contained HTML page so it opens with
 # proper typography and tables in any browser.
 START_HTML="${OUT}/START-HERE.md"

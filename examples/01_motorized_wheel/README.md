@@ -76,6 +76,12 @@ tier-1 repository. All of its dimensions remain parameters in
 
 ## Verification
 
+Every purchased part in the build package's "Buy these parts" table has a
+researched supplier link in `supplier-links.txt`; the sourcing workflow and
+source list are in `.claude/skills/sourcing-parts/SKILL.md`. `./build-part.sh 1`
+runs `scripts/check_supplier_links.py` and warns if a purchased BOM line is
+still unlinked.
+
 ```sh
 ./run-example.sh 01 --headless --detail detailed --validate \
   -o /tmp/01.step --urdf /tmp/01.urdf

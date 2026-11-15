@@ -149,10 +149,30 @@ fn fmt_mm(value : Double) -> String {
 }
 
 ///|
-/// Rounds a millimeter dimension up to the next whole millimeter, the way
-/// standard set screws are stocked.
-fn whole_mm(value : Double) -> Double {
-  (value + 0.5).to_int().to_double()
+/// Rounds a millimeter dimension to the nearest stocked length in `options`.
+fn nearest_standard(value : Double, options : Array[Double]) -> Double {
+  let mut best = options[0]
+  let mut best_distance = (value - best).abs()
+  for option in options {
+    let distance = (value - option).abs()
+    if distance < best_distance {
+      best = option
+      best_distance = distance
+    }
+  }
+  best
+}
+
+///|
+/// Rounds a set-screw length to a standard stocked length.
+fn standard_set_screw_len(value : Double) -> Double {
+  nearest_standard(value, [6.0, 8.0, 10.0, 12.0, 16.0, 20.0])
+}
+
+///|
+/// Rounds a socket-head cap-screw length to a standard stocked length.
+fn standard_shcs_len(value : Double) -> Double {
+  nearest_standard(value, [6.0, 8.0, 10.0, 12.0, 16.0, 20.0, 25.0, 30.0])
 }
 
 ///|
@@ -301,13 +321,15 @@ fn motorized_carrier(
   plate_holes.push((0.0, 0.0, central_diameter))
   for i in 0..<layout.planets.length() {
     let planet = layout.planets[i]
-    plate_holes.push((planet.x, -planet.z, pin_diam + 0.1))
+    plate_holes.push((planet.x, -planet.z, pin_diam - 0.1))
   }
   let hub_diam = if shaft_diam + 14.0 > 32.0 { shaft_diam + 14.0 } else { 32.0 }
   let hub_height = 4.0
   let bore_diam = shaft_diam + 0.1
-  let set_screw_len = whole_mm(hub_diam / 2.0 - bore_diam / 2.0 + 2.0)
-  let set_screw_center = (bore_diam / 2.0 + hub_diam / 2.0 + 2.0) / 2.0
+  let set_screw_len = standard_set_screw_len(
+    hub_diam / 2.0 - bore_diam / 2.0 + 0.5,
+  )
+  let set_screw_center = bore_diam / 2.0 + set_screw_len / 2.0
   let set_screw_part = purchased_part(
     "SET-M4x\{fmt_mm(set_screw_len)}",
     "M4 x \{fmt_mm(set_screw_len)} socket set screw",
@@ -455,8 +477,10 @@ fn motorized_sun(
     part_number, "Printed planetary sun gear with integral input hub; drill/tap the radial set-screw hole",
     "carbon fiber nylon", "3D print", 4.0,
   )
-  let set_screw_len = whole_mm(hub_diam / 2.0 - bore_diam / 2.0 + 2.0)
-  let set_screw_center = (bore_diam / 2.0 + hub_diam / 2.0 + 2.0) / 2.0
+  let set_screw_len = standard_set_screw_len(
+    hub_diam / 2.0 - bore_diam / 2.0 + 0.5,
+  )
+  let set_screw_center = bore_diam / 2.0 + set_screw_len / 2.0
   let set_screw_part = purchased_part(
     "SET-\{set_screw_size}x\{fmt_mm(set_screw_len)}",
     "\{set_screw_size} x \{fmt_mm(set_screw_len)} socket set screw",
@@ -550,7 +574,7 @@ pub fn motorized_gearbox(
   coupling_shaft_mm~ : Double = 8.0,
   output_bearing~ : String = "FR8-2RS",
   output_free_length_mm~ : Double = 15.0,
-  output_collar_width_mm~ : Double = 10.0,
+  output_collar_width_mm~ : Double = 11.1,
   output_collar_outer_diam_mm~ : Double = 25.4,
   output_hub~ : Bool = true,
   output_hub_diam_mm~ : Double = 60.0,
@@ -607,7 +631,7 @@ pub fn motorized_gearbox(
     }
     let sun_bore_radius = input_shaft_diam / 2.0 + 0.1
     let planet_bore_radius = bearing.outer_mm / 2.0 - 0.03
-    let pin_diam = bearing.bore_mm - 0.2
+    let pin_diam = bearing.bore_mm
     let planet_root = spec.module_mm *
       (spec.planet_teeth.to_double() / 2.0 - 1.25)
     if planet_bore_radius > planet_root - 1.5 {
@@ -1213,7 +1237,7 @@ pub fn motorized_gearbox(
   // The motor is a purchased solid, so its mounting screws are a schedule.
   let motor_m4 = p.mount_hole_mm > 3.5
   let motor_screw_thread = if motor_m4 { "M4" } else { "M3" }
-  let motor_screw_length = whole_mm(motor_cap_thickness + 5.0)
+  let motor_screw_length = standard_shcs_len(motor_cap_thickness + 4.0)
   let motor_screw_part = purchased_part(
     "ISO4762-\{motor_screw_thread}x\{fmt_mm(motor_screw_length)}",
     "ISO 4762 socket head cap screw \{motor_screw_thread} x \{fmt_mm(motor_screw_length)} mm",
@@ -1381,7 +1405,7 @@ pub fn motorized_gearbox(
         iso_shcs_screw(
           name="\{name}_motor_cap_screw_\{i}",
           size=@step_standards.M3,
-          length_mm=motor_cap_thickness + 6.0,
+          length_mm=standard_shcs_len(motor_cap_thickness + 6.0),
           detail~,
         ),
         child_mate="head_seat",
@@ -1410,7 +1434,7 @@ pub fn motorized_gearbox(
           iso_shcs_screw(
             name="\{name}_stage\{idx}_joint_screw_\{i}",
             size=@step_standards.M3,
-            length_mm=flange_thickness_mm + 6.0,
+            length_mm=standard_shcs_len(flange_thickness_mm + 6.0),
             detail~,
           ),
           child_mate="head_seat",
@@ -1437,7 +1461,7 @@ pub fn motorized_gearbox(
         iso_shcs_screw(
           name="\{name}_output_cap_screw_\{i}",
           size=@step_standards.M3,
-          length_mm=output_cap_thickness + 6.0,
+          length_mm=standard_shcs_len(output_cap_thickness + 6.0),
           detail~,
         ),
         child_mate="head_seat",
