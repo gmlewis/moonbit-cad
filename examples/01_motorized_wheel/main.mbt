@@ -11,7 +11,7 @@
 /// (`@step_motion.measured_tire_mount`) bolts to three heat-set inserts in the
 /// output hub at a 55.85 mm bolt circle. The purchased budrash 72-107 wheel's
 /// plastic hub is drilled with three 4.5 mm holes and bolted to that mount with
-/// three M4 x 40 screws; the mount's hub post centers the wheel.
+/// three M4 x 30 screws; the mount's hub post centers the wheel.
 ///
 /// Stage parameters are comma-separated lists: the first value goes to stage 1,
 /// the second to stage 2, and so on. A shorter list repeats its last value.
@@ -61,15 +61,49 @@ fn stage_index(name : String, stage_count : Int32) -> Int32 {
 /// herringbone sweep (`elbows > 0`) is print-in-place: its sun and planets are
 /// captive in the casing's integrated ring, so they keep their assembled
 /// position and move with the casing module as one unit.
+///
+/// Fasteners and heat-set inserts are pulled radially outward from their
+/// holes (or listed above the part they screw into) so they sit next to
+/// where they are used instead of hidden inside the printed parts.
+fn radial_offset(
+  node : @step_cad.SceneNode,
+  distance : Double,
+) -> (Double, Double, Double) {
+  let (x, y) = (node.tx, node.ty)
+  let r = (x * x + y * y).sqrt()
+  if r < 1.0e-6 {
+    (distance, 0.0, 0.0)
+  } else {
+    (x / r * distance, y / r * distance, 0.0)
+  }
+}
+
+///|
+/// Display-only offset for the exploded, color-coded view.
 fn explode_offset(
-  name : String,
+  node : @step_cad.SceneNode,
   elbows : Array[Int32],
 ) -> (Double, Double, Double) {
+  let name = node.name
   let stage = stage_index(name, elbows.length())
   let stage_z = if stage < 0 { 0.0 } else { stage.to_double() * 80.0 }
   let print_in_place = stage >= 0 && elbows[stage] > 0
   if name.contains("tire_bolt") {
-    (0.0, 0.0, 450.0)
+    // The bolts screw in from the top of the wheel; float them just above it.
+    (0.0, 0.0, 480.0)
+  } else if name.contains("HEATSET") {
+    // Heat-set inserts in the printed casing: hover beside the flange they
+    // are pressed into, at the same height.
+    radial_offset(node, 45.0)
+  } else if name.contains("output_hub_insert") {
+    // Output-hub inserts: hover beside their holes in the hub face.
+    radial_offset(node, 22.0)
+  } else if name.contains("ISO4762-M3") {
+    // Casing screws: hover beside their holes in the flange.
+    radial_offset(node, 75.0)
+  } else if name.contains("set_screw") || name.contains("set-screw") {
+    // Radial clamp screws sit on the axis; slide them out sideways.
+    radial_offset(node, 50.0)
   } else if name.contains("tire_mount") || name.contains("tire-mount") {
     (0.0, 0.0, 360.0)
   } else if name.contains("tire") {
@@ -104,8 +138,6 @@ fn explode_offset(
     }
   } else if name.contains("carrier") {
     (-150.0, 0.0, stage_z)
-  } else if name.contains("insert") || name.contains("screw") {
-    (-160.0, 0.0, stage_z + 60.0)
   } else if name.contains("_ring") ||
     name.contains("casing_sleeve") ||
     name.contains("_flange") {
@@ -165,7 +197,7 @@ fn exploded_design(
     description="Exploded, color-coded view",
   )
   for node in design.nodes() {
-    let (dx, dy, dz) = explode_offset(node.name, elbows)
+    let (dx, dy, dz) = explode_offset(node, elbows)
     out = out.add(
       node.with_color(explode_color(node.name)).translate(x=dx, y=dy, z=dz),
     )
@@ -393,7 +425,6 @@ async fn main {
     motor_source=args.string_opt("motorSource").unwrap_or("preset"),
   )
   let hub_name = gearbox_name + "_output_hub"
-  let mut tire_mount_step : @step_common.Component? = None
   if include_tire {
     let tire_part = @cad.PartMeta::new(
       "WHEEL-7IN",
@@ -428,7 +459,10 @@ async fn main {
     // plate share the mount's 55.85 mm bolt circle and hole phase, and sit
     // in the gaps halfway between the ribs.
     let tire_bolt_phase_deg = mount_spec.bolt_hole_phase_deg
-    let tire_bolt_length_mm = 40.0
+    // Stack from the wheel's back plate outward face to the insert back end:
+    // 2 mm plate + 23.05 mm mount + 6 mm heat-set insert. An M4 x 30 keeps
+    // ~5 mm of thread engagement without bottoming out in the inserts.
+    let tire_bolt_length_mm = 30.0
     let bolt_radius = mount_spec.bolt_hole_circle_diameter_mm / 2.0
     let bolt_plate_x = -(tire_spec.hub_inset_mm + tire_spec.inset_thickness_mm)
     let mut wheel = tire
@@ -479,7 +513,6 @@ async fn main {
         abort("")
       }
     }
-    tire_mount_step = Some(mount_step)
     // The mount is a boolean-cut printed part. Evaluate it with OCCT so the
     // assembled and exploded STEP files show the real through-holes and
     // slots instead of the flat writer's nominal untrimmed booleans, then
@@ -544,23 +577,6 @@ async fn main {
     .with_supplier_links(@cad.parse_supplier_links(links_text))
     .with_param("exploded_view", "exploded.step")
   @common.write_output(assembly, output, joint_positions=positions)
-  // The tire mount is a boolean-cut printed part, so replace the nominal
-  // printable export with the OCCT-evaluated, watertight solid.
-  let print_dir = match output.build_package {
-    Some(dir) => Some(dir + "/printable")
-    None =>
-      match output.print_parts {
-        Some(dir) => Some(dir)
-        None => None
-      }
-  }
-  match (tire_mount_step, print_dir) {
-    (Some(mount_step), Some(dir)) =>
-      mount_step.write_step_evaluated(
-        Some(dir + "/" + @cad.sanitize_part_number("TIRE-MOUNT-86.3") + ".step"),
-      )
-    _ => ()
-  }
   // The build package always gets an exploded, color-coded view.
   let explode = args.flag("explode")
   let exploded_target = match output.build_package {

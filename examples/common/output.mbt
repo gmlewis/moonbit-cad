@@ -33,6 +33,46 @@ pub(all) struct OutputPaths {
 }
 
 ///|
+/// Returns true when a design contains boolean or edge-feature nodes that the
+/// flat STEP writer cannot trim.
+fn design_has_boolean(design : @step_cad.Design) -> Bool {
+  let mut found = false
+  for node in design.nodes() {
+    match node.shape {
+      @step_cad.Shape::Union(_)
+      | @step_cad.Shape::Difference(_)
+      | @step_cad.Shape::Fillet(_)
+      | @step_cad.Shape::Chamfer(_) => found = true
+      _ => ()
+    }
+  }
+  found
+}
+
+///|
+/// Writes one printable part. Parts whose geometry is a boolean or edge
+/// feature are OCCT-evaluated so the printed STEP carries the trimmed solid;
+/// if OCCT is unavailable the nominal export is written with a warning.
+async fn write_print_part(design : @step_cad.Design, path : String) -> Unit {
+  if design_has_boolean(design) {
+    let evaluated = Some(design.to_step_evaluated()) catch { _ => None }
+    match evaluated {
+      Some(text) => {
+        @step_cad.write_text_file(text, Some(path))
+        return
+      }
+      None =>
+        @cli.eprintln(
+          "warning: OCCT evaluation failed for " +
+          path +
+          "; writing the nominal boolean instead",
+        )
+    }
+  }
+  @step_cad.write_text_file(design.to_step_file(), Some(path))
+}
+
+///|
 /// Adds the standard output options to an example's argument spec.
 pub fn with_output_args(spec : Map[String, @cli.Arg]) -> Map[String, @cli.Arg] {
   spec.set(
@@ -461,11 +501,9 @@ pub async fn write_output(
     Some(dir) => {
       @fs.mkdir(dir, recursive=true, allow_exist=true)
       for part in comp.printable_parts() {
-        @step_cad.write_text_file(
-          part.design.to_step_file(),
-          Some(
-            dir + "/" + @cad.sanitize_part_number(part.part_number) + ".step",
-          ),
+        write_print_part(
+          part.design,
+          dir + "/" + @cad.sanitize_part_number(part.part_number) + ".step",
         )
       }
       @step_cad.write_text_file(

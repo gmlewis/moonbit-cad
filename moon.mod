@@ -1,10 +1,10 @@
 name = "gmlewis/cad"
 
-version = "0.2.2"
+version = "0.2.3"
 
 import {
-  "gmlewis/step@0.2.2",
-  "gmlewis/urdf@0.2.2",
+  "gmlewis/step@0.2.3",
+  "gmlewis/urdf@0.2.3",
   "moonbitlang/async@0.22.9",
 }
 

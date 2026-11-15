@@ -13,9 +13,9 @@
 ///   enters the stage-1 sun directly (no coupling hub);
 /// - each later stage's sun sits on the previous stage's carrier output shaft
 ///   and is locked by a radial set screw;
-/// - each planet runs on a flanged `FR8-2RS` bearing pressed into it from the
-///   planet's lower face, with the flange flush against that face so it cannot
-///   slide through the planet;
+/// - each planet gear is cut with a counterbore on its lower face sized to the
+///   planet bearing's flange, so the flange seats flush with the gear face and
+///   the bearing cannot slide through the gear;
 /// - the final carrier carries the output shaft and an output flange hub with
 ///   a standard 40 mm bolt circle for wheels, knees, hips, and other driven
 ///   links.
@@ -28,6 +28,12 @@
 /// casing-integrated ring must be assembled axially. A herringbone stage
 /// (`num_elbows > 0`) is modeled when requested, but its ring, sun, and
 /// planets must then be printed in place rather than dropped into the casing.
+
+///|
+/// Radial clearance around the flange of a flanged planet bearing inside its
+/// counterbore, in millimetres. Small enough to locate the gear, large enough
+/// to print.
+const PLANET_POCKET_CLEARANCE_MM : Double = 0.1
 
 ///|
 /// One planetary stage of a `motorized_gearbox`.
@@ -1061,18 +1067,40 @@ pub fn motorized_gearbox(
       let raw_planet = planet_comp.bodies[0]
       let planet_part = fabricated_part(
         "MG-PLANET-\{idx}",
-        "Printed planetary planet gear; press the flanged bearing into the bore from the lower face",
+        "Printed planetary planet gear; press the flanged bearing into the counterbore from the lower face until it seats flush",
         "carbon fiber nylon",
         "3D print",
         3.0,
       )
-      let planet_body = {
+      // Cut a counterbore for the flanged bearing into the lower face, so the
+      // flange seats flush with the gear face and cannot walk out axially.
+      // The gear body spans z in [0, gear_length]; the pocket is cut from
+      // just below the face to the flange thickness.
+      let planet_body0 = {
         ..raw_planet,
         name: "\{name}_stage\{idx}_planet_\{i}",
         node: raw_planet.node
         .with_name("\{name}_stage\{idx}_planet_\{i}")
         .with_color(@step_cad.Rgb::blue()),
         part: Some(planet_part),
+      }
+      let planet_body = if info.bearing.flange_thickness_mm > 0.0 {
+        let pocket_radius = info.bearing.flange_outer_mm / 2.0 +
+          PLANET_POCKET_CLEARANCE_MM
+        let pocket_cutter = @step_cad.Cylinder::new(
+          pocket_radius * 2.0,
+          info.bearing.flange_thickness_mm,
+        ).with_name("\{name}_stage\{idx}_planet_\{i}_pocket_cutter")
+        {
+          ..planet_body0,
+          node: @step_cad.difference(
+            planet_body0.node,
+            [pocket_cutter],
+            name="\{name}_stage\{idx}_planet_\{i}",
+          ).with_color(@step_cad.Rgb::blue()),
+        }
+      } else {
+        planet_body0
       }
       let mut planet = @cad.Component::new(
           "\{name}_stage\{idx}_planet_\{i}",
@@ -1095,7 +1123,9 @@ pub fn motorized_gearbox(
         parent_mate="bottom",
         bearing,
         child_mate="flange_top",
-        spec=@cad.JointSpec::merge_rigid(),
+        spec=@cad.JointSpec::merge_rigid(
+          offset_mm=info.bearing.flange_thickness_mm,
+        ),
       )
       carrier = carrier.attach(
         "\{name}_stage\{idx}_planet_\{i}_joint",

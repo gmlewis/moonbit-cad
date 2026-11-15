@@ -155,7 +155,7 @@ current pattern:
 | `COLLAR-12.7-25.4` | McMaster-Carr | 1/2 in bore x 1 in OD x 7/16 in wide set-screw collar |
 | `WHEEL-7IN` | Amazon | budrash 72-107 7 x 1.5 in wheel, 2-pack, 1/2 in bore, 1-3/8 in hub; 3 holes drilled for the printed tire mount (ASIN B09XMGXFDN) |
 | `TIRE-MOUNT-86.3` | 3D print | Printed adapter; the purchased wheel's plastic hub is drilled to its 55.85 mm M4 bolt circle |
-| `INSERT-4` / `ISO4762-M4x40` | Amazon | M4 heat-set insert kit and M4 x 40 mm socket-head screws for the three-hole tire mount |
+| `INSERT-4` / `ISO4762-M4x30` | Amazon | M4 heat-set insert kit and M4 x 30 mm socket-head screws for the three-hole tire mount |
 | M3/M4 screws, inserts, set screws | Amazon kits | One or two labeled kits cover the whole fastener schedule |
 
 Always re-verify links and prices before publishing; product pages and stock

@@ -36,9 +36,11 @@ purchased 7-inch wheel.
   both a 40 mm bolt circle and the three-hole, 55.85 mm tire-mount interface. A
   clamp collar retains the hub on the shaft.
 - **Flanged planet bearings.** The default planet bearing is a sealed, flanged
-  `FR8-2RS` (1/2" x 1 1/8" x 5/16"). It presses into the planet from the lower
-  face; the flange seats flush on that face and stops the bearing sliding
-  through the gear.
+  `FR8-2RS` (1/2" x 1 1/8" x 5/16"). Each planet is printed with a counterbore
+  sized to the bearing flange; the bearing presses in from the lower face and
+  the flange seats flush with the gear face, so the bearing cannot walk out of
+  the bore. Bearing pockets are part of the printed gear, and the printed gear
+  STEP is exported through OCCT so the pocket is a true counterbore.
 
 ## Stage parameters
 
@@ -82,7 +84,7 @@ front plate faces the gearbox, and its 12.7 mm hub post and six rib slots face
 outboard into the wheel. The wheel's open, ribbed side faces inboard, so the
 ribs seat in the mount's slots and the post centers the hub bore. Drill three
 4.5 mm holes through the wheel's plastic back plate at the same 55.85 mm bolt
-circle, then secure it with three M4 x 40 socket-head screws that pass through
+circle, then secure it with three M4 x 30 socket-head screws that pass through
 the wheel and the printed mount into the output-hub inserts.
 
 The output hub is widened to 80 mm so the 55.85 mm bolt circle clears its edge,

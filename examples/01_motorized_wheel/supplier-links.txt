@@ -22,7 +22,7 @@ SHAFT-12.7x45.9 | OnlineMetals | https://www.onlinemetals.com/en/buy/stainless-s
 COLLAR-12.7-25.4 | McMaster-Carr | https://www.mcmaster.com/6432K16/ | 1/2 in bore x 1 in OD x 7/16 in wide zinc-plated set-screw collar; 2 needed | 3.00
 WHEEL-7IN | Amazon | https://www.amazon.com/budrash-72-107-Replaces-Universal-Utility/dp/B09XMGXFDN | budrash 72-107 7 x 1.5 in wheel, 2-pack; 1/2 in bore, 1-3/8 in hard-plastic hub; drill 3 x 4.5 mm holes at 55.85 mm BCD to match the printed tire mount | 9.50
 INSERT-4 | Amazon | https://www.amazon.com/Ktehloy-Threaded-Assortment-Printing-Components/dp/B0DK1FGWZ5 | 120-piece M4 heat-set insert kit (M4x4x6 and M4x6x6); use the M4x6x6 size at the output hub's 55.85 mm bolt circle | 0.08
-ISO4762-M4x40 | Amazon | https://www.amazon.com/iexcell-Metric-Stainless-Socket-Screws/dp/B089N9WMD6 | 50-piece M4 x 40 mm 304 stainless socket-head cap screw kit; 3 needed for the tire mount | 0.18
+ISO4762-M4x30 | Amazon | https://www.amazon.com/Socket-Screws-Stainless-Thread-Spanner/dp/B0DJP83447 | 100-set M4 x 30 mm 304 stainless socket-head cap screw kit (with nuts, washers, hex key); 3 needed for the tire mount | 0.09
 BLDC-5010_360kv | Amazon | https://www.amazon.com/GoolRC-Brushless-MultiCopter-Quadcopter-Multi-axis/dp/B0C2YRNX1Z | GoolRC 5010 360KV outrunner, 4 mm shaft, 19 mm bolt circle | 27.98
 ENC-AS5047P | Digi-Key | https://www.digikey.com/en/products/detail/ams-osram-usa-inc/AS5047P-ADAPTERBOARD/5452344 | AS5047P adapter/evaluation board; includes the diametric magnet | 16.66
 ISO4762-M2.5x6 | Amazon | https://www.amazon.com/XunLiu-Grade-Alloy-Socket-Screws/dp/B07Q1CQJ89 | M2.5 x 6 mm socket-head 50-pack | 0.14
