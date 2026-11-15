@@ -678,11 +678,16 @@ pub fn low_kv_bldc_motor(
   name~ : String = "bldc_motor",
   preset~ : String = "5010_360kv",
   detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
+  joint_name~ : String = "",
 ) -> @cad.Component {
   let p = resolve_bldc_preset(preset)
   let stator_name = name + "_stator"
   let rotor_name = name + "_rotor"
-  let rotor_joint = name + "_rotor_joint"
+  let rotor_joint = if joint_name == "" {
+    name + "_rotor_joint"
+  } else {
+    joint_name
+  }
   let bell_wall = 2.5
   let endbell_thickness = 4.0
   let stack_outer = p.diameter_mm * 0.72
@@ -740,18 +745,37 @@ pub fn low_kv_bldc_motor(
     .add_port(@cad.Port::new("phases", @cad.PortKind::Power, spec="3-phase"))
     .add_port(@cad.Port::new("can", @cad.PortKind::Bus, spec="CAN 2.0B"))
     .add_port(@cad.Port::new("ground", @cad.PortKind::Ground, spec="0 V"))
-  // Rear sensor/encoder boss and mounting bolt circle.
-  stator = stator.add_body(
-    @cad.BodyPart::tube_mm(
-      stator_name + "_sensor_boss",
-      12.0,
-      10.0,
-      4.0,
-      z_mm=-p.body_length_mm - 2.0,
-      density=@urdf.Density::aluminum_6061(),
-      color=@step_cad.Rgb::grey(),
-    ).with_part(stator_part),
-  )
+  // Rear endbell disc, sensor/encoder boss, and mounting bolt circle.
+  stator = stator
+    .add_body(
+      @cad.BodyPart::cylinder_mm(
+        stator_name + "_rear_endbell",
+        p.diameter_mm * 0.88,
+        endbell_thickness,
+        z_mm=-p.body_length_mm + endbell_thickness / 2.0,
+        density=@urdf.Density::aluminum_6061(),
+        color=@step_cad.Rgb::black(),
+      ).with_part(stator_part),
+    )
+    .add_body(
+      @cad.BodyPart::tube_mm(
+        stator_name + "_sensor_boss",
+        12.0,
+        10.0,
+        4.0,
+        z_mm=-p.body_length_mm - 2.0,
+        density=@urdf.Density::aluminum_6061(),
+        color=@step_cad.Rgb::grey(),
+      ).with_part(stator_part),
+    )
+    // The encoder board sits behind the rear endbell, its chip facing the
+    // rotor magnet with a 1 mm air gap.
+    .add_mate_mm_deg(
+      "encoder_mount",
+      z=-p.body_length_mm - 4.0,
+      rx_deg=180.0,
+      axis=(0.0, 0.0, 1.0),
+    )
   let bolt_radius = p.bolt_circle_mm / 2.0
   for i in 0..<4 {
     let theta = 2.0 * @math.PI * i.to_double() / 4.0
@@ -764,6 +788,56 @@ pub fn low_kv_bldc_motor(
     )
   }
   if detail_is_rich(detail) {
+    // Rear endbell ventilation slots: six nominal louvres between radial
+    // spokes. They are separate bodies, not a boolean cut, so the printed
+    // envelope keeps its exact analytic surfaces.
+    let vent_radius = p.diameter_mm * 0.30
+    for i in 0..<6 {
+      let theta = 2.0 * @math.PI * i.to_double() / 6.0
+      stator = stator.add_body(
+        @cad.BodyPart::box_mm(
+          "\{stator_name}_vent_\{i}",
+          2.5,
+          6.0,
+          1.2,
+          x_mm=vent_radius * @math.cos(theta),
+          y_mm=vent_radius * @math.sin(theta),
+          z_mm=-p.body_length_mm + endbell_thickness / 2.0,
+          rz_deg=theta * 180.0 / @math.PI,
+          density=@urdf.Density::aluminum_6061(),
+          color=@step_cad.Rgb::grey(),
+        ).with_part(stator_part),
+      )
+    }
+    // Three phase leads and a connector stub exit the rear endbell.
+    let lead_radius = p.diameter_mm * 0.42
+    for i in 0..<3 {
+      let theta = (30.0 + 120.0 * i.to_double()) * @math.PI / 180.0
+      stator = stator.add_body(
+        @cad.BodyPart::cylinder_mm(
+          "\{stator_name}_phase_lead_\{i}",
+          2.0,
+          12.0,
+          x_mm=lead_radius * @math.cos(theta),
+          y_mm=lead_radius * @math.sin(theta),
+          z_mm=-p.body_length_mm - 6.0,
+          density=@urdf.Density::kg_per_m3(1200.0),
+          color=@step_cad.Rgb::red(),
+        ).with_part(stator_part),
+      )
+    }
+    stator = stator.add_body(
+      @cad.BodyPart::box_mm(
+        stator_name + "_connector_stub",
+        10.0,
+        8.0,
+        6.0,
+        x_mm=lead_radius,
+        z_mm=-p.body_length_mm - 3.0,
+        density=@urdf.Density::pla(),
+        color=@step_cad.Rgb::black(),
+      ).with_part(stator_part),
+    )
     // Front and rear bearings share the rotor shaft. The preset's bearing bore
     // matches the shaft diameter.
     stator = stator.add_mate_mm_deg(
@@ -799,6 +873,20 @@ pub fn low_kv_bldc_motor(
         spec=@cad.JointSpec::merge_rigid(),
         bom_external=false,
       )
+      // The rotor position sensor: an AS5047P-class board behind the rear
+      // endbell, its chip 1 mm from the rotor magnet.
+      .attach(
+        "rotor_sensor_mount",
+        parent_mate="encoder_mount",
+        moteus_position_sensor(
+          name=stator_name + "_position_sensor",
+          voltage_v=3.3,
+          current_ma=15.0,
+          detail~,
+        ),
+        child_mate="mount",
+        spec=@cad.JointSpec::merge_rigid(),
+      )
   }
   let rotor_part = purchased_part(
     "BLDC-ROTOR-\{p.name}",
@@ -806,33 +894,69 @@ pub fn low_kv_bldc_motor(
     "mixed",
     0.0,
   )
+  let shaft_total_len = p.body_length_mm + p.shaft_length_mm
   let mut rotor = @cad.Component::new(
       rotor_name,
       description="Low-KV BLDC rotor",
     )
     .with_param("shaft_diameter_mm", p.shaft_diameter_mm.to_string())
     .with_param("shaft_length_mm", p.shaft_length_mm.to_string())
-    .add_body(
+  if detail_is_rich(detail) {
+    // A keyed shaft transmits torque to the sun clamp hub without relying on
+    // clamp friction alone. It runs through both motor bearings.
+    let keyed = expect_step(
+      "keyed BLDC shaft",
+      @step_motion.keyed_shaft(
+        p.shaft_diameter_mm,
+        shaft_total_len,
+        p.shaft_diameter_mm * 0.22,
+        p.shaft_diameter_mm * 0.12,
+        segments=@step_common.DetailPolicy::for_level(detail).circle_segments,
+      ),
+    )
+    rotor = rotor.add_bodies(
+      @cad.BodyPart::from_step_component(
+        keyed,
+        density=@urdf.Density::steel_mild(),
+        z_mm=-p.body_length_mm,
+      ).map(fn(body) { body.with_part(rotor_part) }),
+    )
+  } else {
+    rotor = rotor.add_body(
       @cad.BodyPart::cylinder_mm(
         rotor_name + "_shaft",
         p.shaft_diameter_mm,
-        p.body_length_mm + p.shaft_length_mm,
+        shaft_total_len,
         z_mm=(p.shaft_length_mm - p.body_length_mm) / 2.0,
         density=@urdf.Density::steel_mild(),
         color=@step_cad.Rgb::grey(),
       ).with_part(rotor_part),
     )
+  }
   if detail_is_rich(detail) {
+    let bell_inner = p.diameter_mm - 2.0 * bell_wall
     rotor = rotor
       .add_body(
         @cad.BodyPart::tube_mm(
           rotor_name + "_bell",
           p.diameter_mm,
-          p.diameter_mm - 2.0 * bell_wall,
+          bell_inner,
           p.body_length_mm - 8.0,
           z_mm=-p.body_length_mm / 2.0 - 2.0,
           density=@urdf.Density::aluminum_6061(),
           color=@step_cad.Rgb::black(),
+        ).with_part(rotor_part),
+      )
+      // An explicit steel flux ring lines the bell skirt.
+      .add_body(
+        @cad.BodyPart::tube_mm(
+          rotor_name + "_flux_ring",
+          bell_inner - 0.4,
+          bell_inner - 1.4,
+          p.body_length_mm - 9.0,
+          z_mm=-p.body_length_mm / 2.0 - 2.0,
+          density=@urdf.Density::steel_mild(),
+          color=@step_cad.Rgb::grey(),
         ).with_part(rotor_part),
       )
       .add_body(
@@ -861,6 +985,13 @@ pub fn low_kv_bldc_motor(
     encoder="AS5600",
   )
   stator
+  .with_param("phase_resistance_ohm", (0.18 * 360.0 / p.kv).to_string())
+  .with_param("thermal_resistance_c_per_w", "2.5")
+  .with_param("rated_current_a", p.current_rated_a.to_string())
+  .with_param("peak_current_a", p.current_peak_a.to_string())
+  .with_param("poles", (p.pole_pairs * 2).to_string())
+  .with_param("rotor_encoder", "AS5600 / AS5047P-class, SPI")
+  .with_param("rotor_encoder_air_gap_mm", "1.0")
   .with_actuator(spec)
   .with_part(stator_part)
   .attach(
@@ -1052,6 +1183,205 @@ pub fn sun_clamp_hub(
 }
 
 ///|
+/// Maps a `cad` BLDC preset onto the measured Tier-1 brushless-motor envelope.
+///
+/// The Tier-1 defaults are measured from a 50 x 20 mm 360 KV outrunner, so the
+/// 5010 preset reproduces that geometry directly. Larger presets scale the
+/// measured proportions radially and axially and widen the stator hub when the
+/// preset's bolt circle needs more edge margin.
+fn brushless_motor_spec_for_preset(
+  p : BldcPreset,
+) -> @step_motors.BrushlessMotorSpec {
+  let base = @step_motors.brushless_motor_360kv_spec()
+  let radial = p.diameter_mm / base.bell_outer_diameter_mm
+  let axial = p.body_length_mm / 20.0
+  let stator_thickness = base.stator_hub_thickness_mm * axial
+  let min_stator_hub = p.bolt_circle_mm + p.mount_hole_mm + 2.0
+  let scaled_stator_hub = base.stator_hub_diameter_mm * radial
+  let stator_hub = if scaled_stator_hub > min_stator_hub {
+    scaled_stator_hub
+  } else {
+    min_stator_hub
+  }
+  {
+    bell_outer_diameter_mm: p.diameter_mm,
+    bell_wall_thickness_mm: base.bell_wall_thickness_mm * radial,
+    bell_face_outer_diameter_mm: base.bell_face_outer_diameter_mm * radial,
+    bell_face_thickness_mm: base.bell_face_thickness_mm,
+    bell_cone_thickness_mm: base.bell_cone_thickness_mm * radial,
+    bell_cone_run_mm: base.bell_cone_run_mm * radial,
+    bell_rim_start_mm: base.bell_rim_start_mm * axial,
+    bell_rim_length_mm: base.bell_rim_length_mm * axial,
+    bell_lip_major_radius_mm: base.bell_lip_major_radius_mm * radial,
+    bell_lip_minor_radius_mm: base.bell_lip_minor_radius_mm * radial,
+    bell_hub_diameter_mm: base.bell_hub_diameter_mm * radial,
+    window_count: base.window_count,
+    window_inner_diameter_mm: base.window_inner_diameter_mm * radial,
+    window_outer_diameter_mm: base.window_outer_diameter_mm * radial,
+    window_inner_half_angle_deg: base.window_inner_half_angle_deg,
+    window_outer_half_angle_deg: base.window_outer_half_angle_deg,
+    window_corner_radius_mm: base.window_corner_radius_mm * radial,
+    window_phase_deg: base.window_phase_deg,
+    prop_hole_count: base.prop_hole_count,
+    prop_hole_diameter_mm: base.prop_hole_diameter_mm * radial,
+    prop_hole_circle_diameter_mm: base.prop_hole_circle_diameter_mm * radial,
+    stator_hub_diameter_mm: stator_hub,
+    stator_hub_start_mm: p.body_length_mm - stator_thickness,
+    stator_hub_thickness_mm: stator_thickness,
+    mount_hole_count: base.mount_hole_count,
+    mount_hole_diameter_mm: p.mount_hole_mm,
+    mount_hole_circle_diameter_mm: p.bolt_circle_mm,
+    shaft_diameter_mm: p.shaft_diameter_mm,
+    shaft_rear_extension_mm: base.shaft_rear_extension_mm * axial,
+    shaft_front_extension_mm: p.shaft_length_mm,
+  }
+}
+
+///|
+/// A low-KV BLDC outrunner built from the Tier-1
+/// `@step_motors.brushless_motor` envelope.
+///
+/// The Tier-1 component is one rigid part with separate `bell`, `shaft`, and
+/// `stator-hub` layers. This adapter rotates it onto the `cad` motor frame
+/// (axis +Z, mounting face at `z = 0`, shaft forward into the gearbox), splits
+/// the layers into a fixed stator link and a rotating rotor link, and adds the
+/// same mates, ports, and continuous rotor joint as `low_kv_bldc_motor`, so it
+/// can drive `planetary_bldc_actuator` and the exposed example-02 stage.
+pub fn step_brushless_motor(
+  name~ : String = "bldc_motor",
+  preset~ : String = "5010_360kv",
+  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
+  joint_name~ : String = "",
+) -> @cad.Component {
+  let _ = detail
+  let p = resolve_bldc_preset(preset)
+  let measured = brushless_motor_spec_for_preset(p)
+  let step_comp = expect_step(
+    "Tier-1 brushless motor",
+    @step_motors.brushless_motor(measured),
+  )
+  let stator_name = name + "_stator"
+  let rotor_name = name + "_rotor"
+  let rotor_joint = if joint_name == "" {
+    name + "_rotor_joint"
+  } else {
+    joint_name
+  }
+  // The Tier-1 model is built on +X with its mounting face at the stator hub's
+  // outboard face. Rotate +X onto +Z and drop that face onto z = 0.
+  let mount_x = measured.stator_hub_start_mm + measured.stator_hub_thickness_mm
+  let frame_ry = -90.0
+  let frame_z = -mount_x
+  let stator_part = purchased_part(
+    "BLDC-\{p.name}",
+    "Low-KV brushless outrunner \{p.name} (\{p.kv} KV), measured Tier-1 envelope",
+    "mixed",
+    p.cost_usd,
+    supplier_url="https://www.hobbyking.com/",
+  )
+  let mut stator = @cad.Component::from_step_layer(
+    stator_name,
+    step_comp,
+    "stator-hub",
+    density=@urdf.Density::aluminum_6061(),
+    include_connectors=false,
+    ry_deg=frame_ry,
+    z_mm=frame_z,
+  )
+  stator = stator
+    .add_mate_mm_deg("mount", axis=(0.0, 0.0, -1.0))
+    .add_mate_mm_deg("front_face")
+    .add_mate_mm_deg("rear", z=-p.body_length_mm, axis=(0.0, 0.0, -1.0))
+    .add_mate_mm_deg("sensor_boss", z=-p.body_length_mm, axis=(0.0, 0.0, -1.0))
+    .add_mate_mm_deg("encoder_mount", z=-p.body_length_mm - 4.0, rx_deg=180.0)
+    .with_param("preset", p.name)
+    .with_param("kv", p.kv.to_string())
+    .with_param("pole_pairs", p.pole_pairs.to_string())
+    .with_param("voltage_v", p.voltage_v.to_string())
+    .with_param("phase_resistance_ohm", (0.18 * 360.0 / p.kv).to_string())
+    .with_param("thermal_resistance_c_per_w", "2.5")
+    .with_param("rated_current_a", p.current_rated_a.to_string())
+    .with_param("peak_current_a", p.current_peak_a.to_string())
+    .with_param("poles", (p.pole_pairs * 2).to_string())
+    .with_param("rotor_encoder", "AS5600 / AS5047P-class, SPI")
+    .with_param("rotor_encoder_air_gap_mm", "1.0")
+    .with_param("motor_envelope", "Tier-1 brushless_motor (measured)")
+    .add_port(
+      @cad.Port::new(
+        "power",
+        @cad.PortKind::Power,
+        spec=p.voltage_v.to_string() +
+          " V, " +
+          p.current_rated_a.to_string() +
+          " A",
+      ),
+    )
+    .add_port(@cad.Port::new("phases", @cad.PortKind::Power, spec="3-phase"))
+    .add_port(@cad.Port::new("can", @cad.PortKind::Bus, spec="CAN 2.0B"))
+    .add_port(@cad.Port::new("ground", @cad.PortKind::Ground, spec="0 V"))
+    .with_actuator(
+      @cad.ActuatorSpec::new(
+        @cad.ActuatorKind::Bldc,
+        model="BLDC " + p.name,
+        voltage_v=p.voltage_v,
+        current_rated_a=p.current_rated_a,
+        current_stall_a=p.current_peak_a,
+        torque_rated_nm=bldc_rated_torque(p),
+        driver="SimpleFOC",
+        interface="CAN",
+        encoder="AS5600",
+      ),
+    )
+    .with_part(stator_part)
+  let mut rotor = @cad.Component::from_step_layer(
+    rotor_name,
+    step_comp,
+    "bell",
+    density=@urdf.Density::aluminum_6061(),
+    include_connectors=false,
+    ry_deg=frame_ry,
+    z_mm=frame_z,
+  )
+  let shaft = @cad.Component::from_step_layer(
+    name + "_shaft",
+    step_comp,
+    "shaft",
+    density=@urdf.Density::steel_mild(),
+    include_connectors=false,
+    ry_deg=frame_ry,
+    z_mm=frame_z,
+  )
+  rotor = rotor
+    .attach(
+      name + "_shaft_merge",
+      parent_mate="origin",
+      shaft,
+      child_mate="origin",
+      spec=@cad.JointSpec::merge_rigid(),
+      bom_external=false,
+    )
+    .add_mate_mm_deg("base")
+    .add_mate_mm_deg("shaft", z=p.shaft_length_mm)
+  stator.attach(
+    rotor_joint,
+    parent_mate="front_face",
+    rotor,
+    child_mate="base",
+    spec=@cad.JointSpec::continuous(
+      limit=Some(
+        @urdf.JointLimit::new(
+          effort=bldc_rated_torque(p) * 4.0,
+          velocity=p.kv * 0.1,
+        ),
+      ),
+      dynamics=Some(@urdf.JointDynamics::new(damping=0.01, friction=0.005)),
+      transmission_reduction=Some(1.0),
+    ),
+    bom_external=false,
+  )
+}
+
+///|
 /// Builds an integrated planetary BLDC actuator: an inexpensive low-KV BLDC
 /// outrunner driving a printed Tier-1 planetary gearbox inside a printed
 /// housing with a rear motor plate, a clamped sun input, planet bearings, a
@@ -1071,14 +1401,41 @@ pub fn planetary_bldc_actuator(
   gear_length_mm~ : Double = 10.0,
   gear_type~ : String = "herringbone",
   detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
+  joint_name~ : String = "",
+  add_binding~ : Bool = true,
+  output_encoder~ : Bool = true,
+  output_shaft_extension_mm~ : Double = 0.0,
+  heat_set_inserts~ : Bool = true,
+  motor_source~ : String = "preset",
 ) -> @cad.Component {
+  // `motor_source` selects the motor geometry: "preset" uses the compact
+  // `low_kv_bldc_motor`; "brushless" uses the measured Tier-1
+  // `step_brushless_motor` envelope.
   let p = resolve_bldc_preset(preset)
   let stage_count = if stages < 1 { 1 } else if stages > 2 { 2 } else { stages }
   // Simplified actuators use exact line/arc gears for fast simulation meshes;
   // herringbone sweeps are reserved for detailed and fully modeled builds.
   let smooth = gear_type == "spur" || !detail_is_rich(detail)
-  let motor = low_kv_bldc_motor(name=name + "_motor", preset~, detail~)
-  let rotor_joint = name + "_motor_rotor_joint"
+  let rotor_joint = if joint_name == "" {
+    name + "_motor_rotor_joint"
+  } else {
+    joint_name
+  }
+  let motor = if motor_source == "brushless" {
+    step_brushless_motor(
+      name=name + "_motor",
+      preset~,
+      detail~,
+      joint_name=rotor_joint,
+    )
+  } else {
+    low_kv_bldc_motor(
+      name=name + "_motor",
+      preset~,
+      detail~,
+      joint_name=rotor_joint,
+    )
+  }
   let motor_plate_mm = 6.0
   // A 6 mm wall leaves more than 1 mm of printed material around the M3
   // cover screws at the bolt circle.
@@ -1111,9 +1468,20 @@ pub fn planetary_bldc_actuator(
   let housing_bottom = -motor_plate_mm
   let housing_height = housing_top - housing_bottom
   let cover_plate_mm = 8.0
-  let cover_tube_mm = 8.0
-  let cover_top = housing_top + cover_plate_mm + cover_tube_mm
-  let shaft_end = cover_top + 0.5
+  // The bearing boss above the cover plate is 8 mm tall. With the on-axis
+  // output encoder fitted, an output-shaft extension also raises the boss so
+  // the magnet and AS5047P board stay 1 mm apart. Without the encoder (used
+  // when a wheel or leg link occupies the outboard end), the extension is a
+  // bare shaft protruding past the cover.
+  let base_cover_top = housing_top + cover_plate_mm + 8.0
+  let cover_tube_mm = if output_encoder {
+    8.0 + output_shaft_extension_mm
+  } else {
+    8.0
+  }
+  let cover_top = base_cover_top +
+    (if output_encoder { output_shaft_extension_mm } else { 0.0 })
+  let shaft_end = base_cover_top + 0.5 + output_shaft_extension_mm
   let sensor_mount_z = cover_top + 2.5
   let final_carrier_top = housing_top - 2.0 + pgb_carrier_clearance_mm
   let final_shaft_len = shaft_end - final_carrier_top
@@ -1182,8 +1550,16 @@ pub fn planetary_bldc_actuator(
   )
   let motor_bolt_radius = p.bolt_circle_mm / 2.0
   let plate_holes : Array[(Double, Double, Double)] = []
-  // Size the plate bore to the motor's own front bearing, which runs in it.
-  plate_holes.push((0.0, 0.0, bldc_front_bearing_outer(p.name) + 0.2))
+  // Size the plate bore to the motor's own front bearing, but never so large
+  // that it breaks into the motor mounting holes.
+  let bearing_bore = bldc_front_bearing_outer(p.name) + 0.2
+  let bolt_clear = 2.0 * (p.bolt_circle_mm / 2.0 - p.mount_hole_mm / 2.0 - 0.5)
+  let plate_bore = if bearing_bore < bolt_clear {
+    bearing_bore
+  } else {
+    bolt_clear
+  }
+  plate_holes.push((0.0, 0.0, plate_bore))
   for i in 0..<4 {
     let theta = 2.0 * @math.PI * i.to_double() / 4.0
     plate_holes.push(
@@ -1204,8 +1580,17 @@ pub fn planetary_bldc_actuator(
       ),
     )
   }
-  // Motor phase-wire pass-through, outside the motor bell.
-  plate_holes.push((p.diameter_mm * 0.5 + 5.0, 0.0, 6.0))
+  // Motor phase-wire pass-through, outside the motor bell but inside the
+  // plate rim and clear of the housing-screw holes (which sit on the axes).
+  let phase_radius = p.diameter_mm * 0.5 + 3.0
+  let phase_angle = @math.PI / 4.0
+  plate_holes.push(
+    (
+      phase_radius * @math.cos(phase_angle),
+      phase_radius * @math.sin(phase_angle),
+      5.0,
+    ),
+  )
   let cover_holes : Array[(Double, Double, Double)] = []
   cover_holes.push((0.0, 0.0, actuator_bearing_outer("608") + 0.2))
   for i in 0..<4 {
@@ -1275,21 +1660,8 @@ pub fn planetary_bldc_actuator(
         color=@step_cad.Rgb::black(),
       ).with_part(cover_boss_part),
     )
-    .add_body(
-      @cad.BodyPart::tube_mm(
-        name + "_output_bearing_spacer",
-        12.0,
-        8.2,
-        2.0,
-        z_mm=housing_top + 8.0,
-        density=@urdf.Density::steel_mild(),
-        color=@step_cad.Rgb::grey(),
-      ).with_part(
-        purchased_part(
-          "SPACER-12x8x2", "Steel bearing spacer 12 x 8 x 2 mm", "steel", 0.40,
-        ),
-      ),
-    )
+    // The clamp collar between the two output bearings is attached to the
+    // rotating carrier below (it clamps the output shaft, so it turns).
     .add_body(
       // 3 mm thick along X, tangent to the housing side. The 42 x 30 face is
       // the mounting face for the controller board and matches the housing
@@ -1471,6 +1843,49 @@ pub fn planetary_bldc_actuator(
         spec=@cad.JointSpec::merge_rigid(),
       )
   }
+  // Heat-set inserts in the 6 mm housing wall at both screw circles. The four
+  // rear inserts run forward from the motor plate, the four cover inserts run
+  // back from the cover face, so each screw engages a real threaded insert
+  // instead of printed plastic.
+  if heat_set_inserts && detail_is_rich(detail) {
+    for i in 0..<4 {
+      let theta = 2.0 * @math.PI * i.to_double() / 4.0
+      let bx = bolt_circle / 2.0 * @math.cos(theta)
+      let by = bolt_circle / 2.0 * @math.sin(theta)
+      housing = housing
+        .add_mate_mm_deg(
+          "cover_insert_\{i}",
+          x=bx,
+          y=by,
+          z=housing_top,
+          rx_deg=180.0,
+        )
+        .attach(
+          "cover_insert_merge_\{i}",
+          parent_mate="cover_insert_\{i}",
+          heat_set_insert(
+            name="\{name}_cover_insert_\{i}",
+            outer_diam_mm=4.5,
+            inner_diam_mm=3.0,
+            length_mm=4.0,
+          ),
+          child_mate="seat",
+          spec=@cad.JointSpec::merge_rigid(),
+        )
+        .attach(
+          "rear_insert_merge_\{i}",
+          parent_mate="housing_bolt_\{i}",
+          heat_set_insert(
+            name="\{name}_rear_insert_\{i}",
+            outer_diam_mm=4.5,
+            inner_diam_mm=3.0,
+            length_mm=4.0,
+          ),
+          child_mate="top",
+          spec=@cad.JointSpec::merge_rigid(),
+        )
+    }
+  }
   // The motor bolts onto the rear plate; its shaft points into the gearbox.
   housing = housing.attach(
     name + "_motor_mount_joint",
@@ -1573,63 +1988,82 @@ pub fn planetary_bldc_actuator(
     output_joint = name + "_stage2_carrier_joint"
     output_carrier = name + "_stage2_carrier"
   }
-  // Output magnet on the final carrier shaft and the AS5047P board on the
-  // fixed cover. The magnet top is 1 mm below the chip face.
+  // A set-screw clamp collar on the output shaft, between the two 608
+  // bearings, retains the inner races and locks the shaft to the carrier.
   housing = housing.attach_to(
     output_carrier,
-    "output_magnet_merge",
-    parent_mate="output_shaft",
-    encoder_magnet(
-      name=name + "_output_magnet",
-      diameter_mm=6.0,
-      thickness_mm=2.5,
+    name + "_output_collar_merge",
+    parent_mate="output_flange",
+    shaft_collar(
+      name=name + "_output_collar",
+      bore_diam_mm=8.0,
+      outer_diam_mm=16.0,
+      width_mm=2.0,
+      style="set_screw",
+      thread_size=@step_standards.M2,
     ),
-    child_mate="top",
-    spec=@cad.JointSpec::merge_rigid(),
+    child_mate="origin",
+    spec=@cad.JointSpec::fixed(offset_mm=1.5),
   )
-  housing = housing.attach(
-    "output_sensor_mount",
-    parent_mate="sensor_mount",
-    moteus_position_sensor(
-      name=name + "_output_sensor",
-      voltage_v=3.3,
-      current_ma=15.0,
-      detail~,
-    ),
-    child_mate="mount",
-    spec=@cad.JointSpec::merge_rigid(),
-  )
-  // Sensor standoffs and screws.
-  for i in 0..<sensor_bolts.length() {
-    housing = housing.attach(
-      "sensor_standoff_merge_\{i}",
-      parent_mate="sensor_standoff_\{i}",
-      hex_standoff(
-        name="\{name}_sensor_standoff_\{i}",
-        length_mm=2.5,
-        across_flats_mm=5.0,
-        bore_diam_mm=2.7,
-        detail~,
-      ),
-      child_mate="bottom",
-      spec=@cad.JointSpec::merge_rigid(),
-    )
-    // The screws belong to the sensor assembly, so the sensor's own fastener
-    // schedule is the single BOM entry for them.
+  if output_encoder {
+    // Output magnet on the final carrier shaft and the AS5047P board on the
+    // fixed cover. The magnet top is 1 mm below the chip face.
     housing = housing.attach_to(
-      name + "_output_sensor",
-      "sensor_screw_merge_\{i}",
-      parent_mate="bolt_\{i}",
-      iso_shcs_screw(
-        name="\{name}_sensor_screw_\{i}",
-        size=@step_standards.M2_5,
-        length_mm=6.0,
+      output_carrier,
+      "output_magnet_merge",
+      parent_mate="output_shaft",
+      encoder_magnet(
+        name=name + "_output_magnet",
+        diameter_mm=6.0,
+        thickness_mm=2.5,
+      ),
+      child_mate="top",
+      spec=@cad.JointSpec::merge_rigid(),
+    )
+    housing = housing.attach(
+      "output_sensor_mount",
+      parent_mate="sensor_mount",
+      moteus_position_sensor(
+        name=name + "_output_sensor",
+        voltage_v=3.3,
+        current_ma=15.0,
         detail~,
       ),
-      child_mate="head_seat",
+      child_mate="mount",
       spec=@cad.JointSpec::merge_rigid(),
-      bom_external=false,
     )
+    // Sensor standoffs and screws.
+    for i in 0..<sensor_bolts.length() {
+      housing = housing.attach(
+        "sensor_standoff_merge_\{i}",
+        parent_mate="sensor_standoff_\{i}",
+        hex_standoff(
+          name="\{name}_sensor_standoff_\{i}",
+          length_mm=2.5,
+          across_flats_mm=5.0,
+          bore_diam_mm=2.7,
+          detail~,
+        ),
+        child_mate="bottom",
+        spec=@cad.JointSpec::merge_rigid(),
+      )
+      // The screws belong to the sensor assembly, so the sensor's own fastener
+      // schedule is the single BOM entry for them.
+      housing = housing.attach_to(
+        name + "_output_sensor",
+        "sensor_screw_merge_\{i}",
+        parent_mate="bolt_\{i}",
+        iso_shcs_screw(
+          name="\{name}_sensor_screw_\{i}",
+          size=@step_standards.M2_5,
+          length_mm=6.0,
+          detail~,
+        ),
+        child_mate="head_seat",
+        spec=@cad.JointSpec::merge_rigid(),
+        bom_external=false,
+      )
+    }
   }
   let reduction = planetary_reduction(sun_teeth, planet_teeth, stage_count)
   let efficiency = if stage_count >= 2 { 0.80 } else { 0.90 }
@@ -1643,33 +2077,76 @@ pub fn planetary_bldc_actuator(
     torque_rated_nm=output_torque,
     driver="VESC / SimpleFOC",
     interface="CAN",
-    encoder="AS5047P output + rotor encoder",
+    encoder=if output_encoder {
+      "AS5047P output + rotor encoder"
+    } else {
+      "rotor encoder (AS5600-class)"
+    },
   )
-  housing
-  .with_actuator(geared_spec)
-  .with_param("reduction", reduction.to_string())
-  .with_param("output_torque_nm", output_torque.to_string())
-  .with_param("output_shaft_length_mm", final_shaft_len.to_string())
-  .with_param("output_joint", output_joint)
-  .with_param("output_magnet_pocket", "6.1 mm dia x 2.6 mm deep")
-  .with_param("sensor_air_gap_mm", "1.0")
-  .add_fit(
-    @cad.Fit::new(
-      "output_magnet_pocket",
-      @cad.FitClass::Clearance,
-      nominal_mm=6.1,
-      min_mm=6.1,
-      max_mm=6.2,
-    ),
-  )
-  .add_control_binding(
-    @cad.ControlBinding::new(
-      rotor_joint,
-      actuator=name + "_motor_stator",
-      channel="can0:1",
-      gear_ratio=reduction,
-      soft_lower=Some(-1000.0),
-      soft_upper=Some(1000.0),
-    ),
+  let mut out = housing
+    .with_actuator(geared_spec)
+    .with_param("reduction", reduction.to_string())
+    .with_param("output_torque_nm", output_torque.to_string())
+    .with_param("output_shaft_length_mm", final_shaft_len.to_string())
+    .with_param("output_joint", output_joint)
+    .with_param("output_encoder", output_encoder.to_string())
+    .with_param("output_magnet_pocket", "6.1 mm dia x 2.6 mm deep")
+    .with_param("sensor_air_gap_mm", "1.0")
+    .with_param("command_joint", rotor_joint)
+    .add_fit(
+      @cad.Fit::new(
+        "output_magnet_pocket",
+        @cad.FitClass::Clearance,
+        nominal_mm=6.1,
+        min_mm=6.1,
+        max_mm=6.2,
+      ),
+    )
+  if add_binding {
+    out = out.add_control_binding(
+      @cad.ControlBinding::new(
+        rotor_joint,
+        actuator=name + "_motor_stator",
+        channel="can0:1",
+        gear_ratio=reduction,
+        soft_lower=Some(-1000.0),
+        soft_upper=Some(1000.0),
+      ),
+    )
+  }
+  out
+}
+
+///|
+/// Convenience factory for the standard integrated low-KV BLDC planetary
+/// actuator: a Tier-1 motor, a printed Tier-1 planetary stage, a printed
+/// housing, planet bearings, a twin-608 output cartridge, and an optional
+/// on-axis output encoder.
+///
+/// This is the preferred name for new designs; `qdd_actuator_pod` is kept for
+/// compatibility with earlier models.
+pub fn bldc_actuator_pod(
+  name~ : String = "bldc_actuator_pod",
+  preset~ : String = "5010_360kv",
+  stages~ : Int32 = 1,
+  module_mm~ : Double = 1.0,
+  sun_teeth~ : Int32 = 12,
+  planet_teeth~ : Int32 = 12,
+  planet_count~ : Int32 = 3,
+  gear_length_mm~ : Double = 10.0,
+  gear_type~ : String = "herringbone",
+  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
+) -> @cad.Component {
+  planetary_bldc_actuator(
+    name~,
+    preset~,
+    stages~,
+    module_mm~,
+    sun_teeth~,
+    planet_teeth~,
+    planet_count~,
+    gear_length_mm~,
+    gear_type~,
+    detail~,
   )
 }

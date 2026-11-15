@@ -12,6 +12,15 @@
 /// `--motor exposed` drives the same low-KV BLDC motor into an exposed
 /// `planetary_gearset_stage` with no printed housing, useful for viewing or
 /// bench testing the gear train. Only low-KV BLDC motors are supported.
+///
+/// # Third-party asset
+///
+/// `20240305-moteus-c1-r1_2.step` is the exact moteus C1 r1.2 controller board
+/// from the open-source moteus hardware project, vendored as the controller
+/// board reference design. © mjbots and the moteus contributors, Apache-2.0.
+/// Upstream:
+/// <https://github.com/mjbots/moteus/blob/main/hw/c1/r1.2/20240305-moteus-c1-r1_2.step>.
+/// See `examples/02-planetary-actuator/README.md` for the full attribution.
 
 ///|
 async fn main {
@@ -94,6 +103,8 @@ async fn main {
       carrier_bearing=if use_planet_bearing { "688" } else { "" },
       output_shaft_length_mm=12.0,
       smooth=gear_type == "spur",
+      // The exposed bench variant deliberately has no ring housing.
+      housing=false,
       detail~,
     )
     // Adapter plate at the BLDC motor's actual mounting circle. The center
@@ -113,7 +124,9 @@ async fn main {
       bolt_circle_mm=p.bolt_circle_mm,
       bolt_diam_mm=p.mount_hole_mm,
     )
-    let motor = @components.low_kv_bldc_motor(
+    // The measured Tier-1 brushless-motor envelope from
+    // `../moonbit-17-step/components/motors`.
+    let motor = @components.step_brushless_motor(
       name="bldc_motor",
       preset~,
       detail~,
@@ -212,6 +225,7 @@ async fn main {
       gear_length_mm=gear_length,
       gear_type~,
       detail~,
+      motor_source="brushless",
     )
     // The actuator carries a flat controller pad on the housing side.
     let controller = @components.pcb_board(

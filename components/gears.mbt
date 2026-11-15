@@ -337,7 +337,17 @@ fn pgb_carrier_component(
   // top hub bridges the central hole and carries the output shaft; a radial M4
   // set screw locks the shaft into that hub.
   let plate_holes : Array[(Double, Double, Double)] = []
-  plate_holes.push((0.0, 0.0, 22.0))
+  // The central clearance hole must clear the sun and stay clear of the pin
+  // holes. Small modules put the planets close to the axis, so cap it.
+  let central_hole = 2.0 *
+    (layout.center_distance_mm - (pin_diam + 0.1) / 2.0 - 0.5)
+  let central_diameter = if central_hole < 22.0 { central_hole } else { 22.0 }
+  let central_diameter = if central_diameter < 12.0 {
+    12.0
+  } else {
+    central_diameter
+  }
+  plate_holes.push((0.0, 0.0, central_diameter))
   for i in 0..<layout.planets.length() {
     let planet = layout.planets[i]
     plate_holes.push((planet.x, -planet.z, pin_diam + 0.1))
@@ -480,6 +490,7 @@ fn pgb_build(
   smooth : Bool,
   detail : @step_common.DetailLevel,
   include_housing : Bool,
+  carrier_transmission_reduction~ : Double? = None,
 ) -> @cad.Component {
   let step_params = pgb_step_params(params, smooth, detail)
   let layout = @step_planetary.herringbone_planetary_layout(step_params)
@@ -588,6 +599,7 @@ fn pgb_build(
         mimic=Some(
           @urdf.JointMimic::new(sun_joint, multiplier=carrier_multiplier),
         ),
+        transmission_reduction=carrier_transmission_reduction,
       ),
     )
   }
@@ -807,6 +819,7 @@ pub fn planetary_gearset_stage(
   carrier_bearing~ : String = "",
   output_shaft_length_mm~ : Double = 12.0,
   smooth~ : Bool = true,
+  housing~ : Bool = true,
   detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
 ) -> @cad.Component {
   let planet_bore = if planet_bore_mm > 0.0 {
@@ -835,5 +848,14 @@ pub fn planetary_gearset_stage(
     outer_thickness_mm: 6.0,
     include_carrier: true,
   }
-  pgb_build(name, params, smooth, detail, false)
+  pgb_build(
+    name,
+    params,
+    smooth,
+    detail,
+    housing,
+    carrier_transmission_reduction=Some(
+      planetary_reduction(sun_teeth, planet_teeth, 1),
+    ),
+  )
 }

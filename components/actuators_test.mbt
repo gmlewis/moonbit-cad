@@ -134,6 +134,43 @@ test "low-KV BLDC motor exports step and glTF" {
 }
 
 ///|
+test "Tier-1 brushless motor adapts to the two-link motor interface" {
+  for preset in @components.bldc_preset_names() {
+    let motor = @components.step_brushless_motor(preset~)
+    let robot = motor.to_robot()
+    if robot.has_errors() {
+      let mut msg = "brushless motor diagnostics for " + preset + ":"
+      for diagnostic in robot.diagnostics() {
+        msg = msg + "\n  " + diagnostic.message()
+      }
+      fail(msg)
+    }
+    assert_eq(robot.links.length(), 2)
+    assert_eq(robot.joints.length(), 1)
+    assert_eq(robot.transmissions.length(), 1)
+    let joint = robot.get_joint("bldc_motor_rotor_joint")
+    assert_true(joint is Some(_))
+    match joint {
+      Some(j) => {
+        assert_true(j.joint_type == @urdf.JointType::Continuous)
+        assert_eq(j.parent, "bldc_motor_stator")
+        assert_eq(j.child, "bldc_motor_rotor")
+      }
+      None => fail("missing rotor joint")
+    }
+    assert_eq(motor.bom().unassigned, 0)
+    assert_true(motor.to_step_file().contains("ISO-10303-21;"))
+  }
+  // The measured layers survive the split: a fixed stator hub and a rotor bell
+  // plus shaft.
+  let design = @components.step_brushless_motor().to_design()
+  let names : Array[String] = design.nodes.map(fn(node) { node.name })
+  assert_true(names.contains("bldc_motor_stator_stator-hub"))
+  assert_true(names.contains("bldc_motor_rotor_bell"))
+  assert_true(names.contains("bldc_motor_rotor_shaft"))
+}
+
+///|
 test "single-stage planetary BLDC actuator is built and printable" {
   let act = @components.planetary_bldc_actuator(
     preset="5010_360kv",
@@ -224,4 +261,101 @@ test "two-stage planetary BLDC actuator compounds the reduction" {
   assert_true(has_688)
   assert_true(bom.total_cost_usd() > 20.0)
   assert_true(bom.total_cost_usd() < 500.0)
+}
+
+///|
+test "bldc actuator pod factory builds a real planetary actuator" {
+  let pod = @components.bldc_actuator_pod(preset="5208_180kv")
+  let robot = pod.to_robot()
+  assert_true(!robot.has_errors())
+  assert_true(robot.get_joint("bldc_actuator_pod_motor_rotor_joint") is Some(_))
+  let parts = pod.printable_parts()
+  let names : Array[String] = []
+  for part in parts {
+    names.push(part.part_number)
+  }
+  assert_true(names.contains("PGB-SUN"))
+  assert_true(names.contains("PGB-RING"))
+  assert_true(names.contains("PGB-CARRIER"))
+  assert_eq(pod.bom().unassigned, 0)
+}
+
+///|
+test "detailed low-KV motor adds vents, leads, flux ring, keyed shaft, encoder" {
+  for preset in @components.bldc_preset_names() {
+    let simple = @components.low_kv_bldc_motor(preset~)
+    let rich = @components.low_kv_bldc_motor(
+      preset~,
+      detail=@step_common.DetailLevel::FullyModeled,
+    )
+    assert_true(
+      rich.to_design().nodes.length() > simple.to_design().nodes.length(),
+    )
+    let mut vents = 0
+    let mut leads = 0
+    let mut flux = 0
+    let mut keyed = 0
+    for node in rich.to_design().nodes {
+      if node.name.contains("_vent_") {
+        vents = vents + 1
+      }
+      if node.name.contains("_phase_lead_") {
+        leads = leads + 1
+      }
+      if node.name.contains("_flux_ring") {
+        flux = flux + 1
+      }
+      if node.name.contains("keyed-shaft") {
+        keyed = keyed + 1
+      }
+    }
+    assert_true(vents >= 6)
+    assert_true(leads >= 3)
+    assert_true(flux >= 1)
+    assert_true(keyed >= 1)
+    let bom = rich.bom()
+    assert_eq(bom.unassigned, 0)
+    let mut encoder_boards = 0
+    for line in bom.lines {
+      if line.part_number == "ENC-AS5047P" {
+        encoder_boards = encoder_boards + 1
+      }
+    }
+    assert_eq(encoder_boards, 1)
+    assert_true(rich.parameters.get("rotor_encoder") is Some(_))
+  }
+}
+
+///|
+test "planetary stage has a printed ring housing and carrier transmission" {
+  let stage = @components.planetary_gearset_stage(
+    module_mm=1.0,
+    sun_teeth=12,
+    planet_teeth=18,
+    planet_count=3,
+    face_width_mm=8.0,
+    sun_bore_mm=6.0,
+  )
+  let robot = stage.to_robot()
+  assert_true(!robot.has_errors())
+  let parts = stage.printable_parts()
+  let names : Array[String] = []
+  for part in parts {
+    names.push(part.part_number)
+  }
+  assert_true(names.contains("PGB-HOUSING"))
+  let mut has_carrier_transmission = false
+  for transmission in robot.transmissions {
+    if transmission.joints.length() > 0 &&
+      transmission.joints[0].name == "planetary_stage_carrier_joint" {
+      has_carrier_transmission = true
+      if transmission.actuators.length() > 0 {
+        match transmission.actuators[0].mechanical_reduction {
+          Some(reduction) => assert_true(reduction > 3.0)
+          None => fail("carrier transmission has no reduction")
+        }
+      }
+    }
+  }
+  assert_true(has_carrier_transmission)
 }

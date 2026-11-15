@@ -5,7 +5,7 @@ version = "0.2.1"
 import {
   "gmlewis/step@0.2.1",
   "gmlewis/urdf@0.2.1",
-  "moonbitlang/async@0.22.7",
+  "moonbitlang/async@0.22.9",
 }
 
 readme = "README.md"

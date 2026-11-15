@@ -11,3 +11,4 @@ moon.work
 *.step
 *.stp
 /*.md
+!README.md

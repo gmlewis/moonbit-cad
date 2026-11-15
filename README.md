@@ -95,8 +95,13 @@ tree, so a load can be snapped onto a motor's nested rotor link.
   heat-set inserts. Each carries `PartMeta` so it can flow into a bill of
   materials and the printable-part export.
 - **`components/actuators`** — NEMA steppers, quasi-direct-drive BLDC actuator
-  pods, and hub-motor wheels. At `Detailed`/`FullyModeled` they add keyed
-  shafts, bearings, and real mounting screws.
+  pods, hub-motor wheels, and the integrated low-KV `planetary_bldc_actuator`
+  / `bldc_actuator_pod`. At `Detailed`/`FullyModeled` the low-KV outrunner adds
+  rear ventilation louvres, three modeled phase leads and a connector stub, a
+  bell flux ring, a keyed output shaft, and an AS5047P-class rotor encoder
+  board with a 1 mm magnet gap. Example 02 builds the actuator with heat-set
+  inserts in the 6 mm housing wall and a set-screw clamp collar between the
+  output bearings.
 - **`components/gears`** — a parameterized herringbone planetary gearbox built
   from true involute swept B-Rep gears with mimic-coupled planets and carrier
   (a local port of `moonbit-17-step/examples/38-planetary-gearbox`), plus
@@ -105,8 +110,14 @@ tree, so a load can be snapped onto a motor's nested rotor link.
   and carrier are individually printable. Tier-1 does not yet expose a
   herringbone gearbox component, only the involute planetary assembly.
 - **`components/mobility`** — reusable box-tube struts, printable robot leg
-  segments with bearing seats, treaded wheels, 4-DOF quadruped legs, and a
-  steerable suspension fork. Whole robots live in `examples/05` and
+  segments with bored proximal hubs, dual spars, lightening ribs, cable clips,
+  and a distal motor cup, treaded wheels with a printed rim and chevron/lug
+  TPU tread, 4-DOF quadruped legs, and a steerable suspension fork. Every
+  quadruped leg joint is a real `planetary_bldc_actuator`: the actuator's motor
+  rotor is the commanded joint, its printed carrier is the moving output, and
+  the next link bolts to the carrier's output shaft. A reusable
+  `joystick_pod` (2-axis Hall stick, E-stop, power button, printed housing)
+  serves assistive vehicles. Whole robots live in `examples/05` and
   `examples/06`.
 - **`components/grippers`** — a 1-DOF parallel-jaw gripper and a motorized,
   threaded lead-screw gripper (NEMA stepper, exposed screw/nut/rails, matched
@@ -130,21 +141,43 @@ the Tier-1 STEP primitives:
 - `bldc_torque_constant` / `bldc_rated_torque` — `Kt = 8.27 / KV` N·m/A and the
   rated motor torque.
 - `low_kv_bldc_motor` — stator with endbell, stack, mounting flange, sensor
-  boss, bearings and heat-set inserts; out-runner bell, flux ring, shaft, and
-  sensor magnet on a continuous `<name>_rotor_joint`.
+  boss, bearings, ventilation louvres, phase leads, and a rotor encoder board;
+  out-runner bell, flux ring, a keyed shaft, and sensor magnet on a continuous
+  `<name>_rotor_joint`. Phase resistance, thermal resistance, pole count, KV,
+  and rated/peak current are carried as design parameters.
+- `step_brushless_motor` — the measured Tier-1
+  `@step_motors.brushless_motor` outrunner envelope adapted to the same
+  two-link stator/rotor contract: the bell and shaft rotate on
+  `<name>_rotor_joint`, the stator hub carries the `mount` face, and every
+  preset is mapped proportionally. Example 02 uses it in both layouts;
+  `low_kv_bldc_motor` remains the default for examples 05/06 and the legacy
+  actuator path.
 - `planetary_bldc_actuator` — a low-KV motor driving a Tier-1 herringbone or
   exact-arc planetary stage (or two compounded stages), with a printed housing,
   a clamped sun input, 688 planet bearings on steel carrier pins, a two-bearing
   608 output cartridge, an on-axis AS5047P output encoder, and mimic-linked
   gears. The output carrier is a true mimic joint; the output sensor supplies
   absolute joint feedback rather than a second command binding.
+- `bldc_actuator_pod` — the preferred factory name for the integrated
+  actuator; `qdd_actuator_pod` remains for compatibility.
+- `planetary_gearset_stage` — the exposed stage used by example 02's
+  `--motor exposed` variant. It prints a ring outer housing by default (the
+  exposed variant passes `housing=false`) and carries the overall reduction on
+  its carrier joint.
 - `planetary_wheel_drive_unit` — a heavy `6354_190kv` two-stage wheel drive for
-  the wheelchair, and `caster_fork_assembly` for its front casters.
+  the wheelchair, and `caster_fork_assembly` for its front casters. The drive
+  extends the carrier's real 8 mm output shaft past the printed cover; the
+  wheel hub bore, a 608 hub bearing, and a set-screw clamp collar all match that
+  shaft, so the wheel is a closed load path from motor to tyre with no synthetic
+  axle frame.
+- `joystick_pod` — a reusable two-axis Hall stick with an E-stop and power
+  button, a printable housing, and `signal`/`estop`/`power`/`ground` ports.
 
-Examples 02, 05, and 06 use these modules. Example 02 also accepts
-`--motor exposed` for the exposed-stage BLDC variant; example 05 accepts
-`--foot` for a rubber-foot quadruped; example
-06 accepts `--layout scooter` for the lighter single-fork vehicle.
+Examples 02, 05, and 06 use these modules. Example 02 uses the measured Tier-1
+`step_brushless_motor` in both layouts and also accepts `--motor exposed` for
+the exposed-stage variant; example 05 accepts `--foot` for a rubber-foot
+quadruped; example 06 accepts `--layout scooter` for the lighter single-fork
+vehicle.
 
 ## Showcase examples
 
@@ -172,9 +205,15 @@ Every example supports the shared output flags:
 
 | Example | Description |
 | --- | --- |
-| `02-planetary-actuator` | Low-KV BLDC outrunner driving a Tier-1 planetary gearbox — housed with a twin-bearing output cartridge and moteus-style AS5047P encoder, or exposed as a bench/viewing stage. |
-| `05-galileo-quadruped` | Flagship 17-link wheeled quadruped with V-slot chassis and four low-KV BLDC planetary actuator pods per leg; STEP, glTF, URDF, or full ROS 2 bundle. |
-| `06-assistive-scooter` | Motorized wheelchair with two-stage planetary rear drives, a V-slot frame, seat, armrests, and front casters (or a steerable fork). |
+| `02-planetary-actuator` | Measured Tier-1 BLDC outrunner (`@step_motors.brushless_motor`) driving a Tier-1 planetary gearbox — housed with a twin-bearing output cartridge and moteus-style AS5047P encoder, or exposed as a bench/viewing stage. |
+| `05-galileo-quadruped` | Wheeled quadruped with a V-slot chassis and four 4-DOF legs; every leg joint is a real low-KV BLDC planetary actuator driving the next printed link from its carrier output shaft. STEP, glTF, URDF, or full ROS 2 bundle. |
+| `06-assistive-scooter` | Motorized wheelchair with two-stage planetary rear drives whose wheels bolt to the actuator output shafts, a V-slot frame, seat, armrests, a reusable joystick pod, and front casters (or a steerable fork). Rear and caster tyre bottoms share the `z = 0` ground plane. |
+
+Example 02 vendors the exact moteus C1 r1.2 controller board
+(`examples/02-planetary-actuator/20240305-moteus-c1-r1_2.step`), © mjbots and
+the moteus contributors, under the Apache-2.0 license. See
+[`examples/02-planetary-actuator/README.md`](examples/02-planetary-actuator/README.md)
+for the upstream link and attribution.
 
 The Galileo bundle contains `urdf/galileo_quadruped.urdf`, `package.xml`, glTF
 meshes, and the printable STEP parts:
@@ -308,9 +347,10 @@ budgets, cable-route length and wire checks, control export and
 joint-completeness checks, forward-kinematics pose smoke tests, build-package
 generation (sourcing, print list, torque table, manifest), KiCad placement
 import, every component builder at all detail levels, printable-part extraction,
-the sensor and harness components, the mimic-coupled gearbox, and the
-17-link quadruped. Drawing sheets are generated
-by `scripts/make_drawings.py` from a built package.
+the sensor and harness components, the mimic-coupled gearbox, the real
+planetary-actuator quadruped legs, the driven wheelchair wheel, and the
+joystick pod. Drawing sheets are generated by `scripts/make_drawings.py` from
+a built package.
 
 Validation and rendering helpers live in `scripts/` (they run from a clone of
 this repository alone; only the external tools named below are required):

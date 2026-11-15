@@ -18,6 +18,8 @@ pub fn ball_bearing(name? : String, designation? : String, outer_diam_mm? : Doub
 
 pub fn bearing_plate_part(name? : String, bearing_outer_mm? : Double, bore_fit_mm? : Double, width_mm? : Double, height_mm? : Double, thickness_mm? : Double, bolt_hole_mm? : Double, bolt_spacing_mm? : Double) -> @gmlewis/cad.Component
 
+pub fn bldc_actuator_pod(name? : String, preset? : String, stages? : Int32, module_mm? : Double, sun_teeth? : Int32, planet_teeth? : Int32, planet_count? : Int32, gear_length_mm? : Double, gear_type? : String, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
+
 pub fn bldc_front_bearing_outer(String) -> Double
 
 pub fn bldc_preset(String) -> BldcPreset?
@@ -78,6 +80,8 @@ pub fn iso_hex_nut(name? : String, size? : @standards.MetricSize, detail? : @com
 
 pub fn iso_shcs_screw(name? : String, size? : @standards.MetricSize, length_mm? : Double, detail? : @common.DetailLevel, threads? : @common.ThreadRepresentation) -> @gmlewis/cad.Component
 
+pub fn joystick_pod(name? : String, housing_len_mm? : Double, housing_w_mm? : Double, housing_h_mm? : Double, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
+
 pub fn key_part(name? : String, length_mm? : Double, width_mm? : Double, height_mm? : Double) -> @gmlewis/cad.Component
 
 pub fn l_bracket(name? : String, width_mm? : Double, leg_a_mm? : Double, leg_b_mm? : Double, thickness_mm? : Double, hole_diam_mm? : Double, wall_hole_diam_mm? : Double, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/cad.Component
@@ -86,7 +90,7 @@ pub fn lead_screw_gripper(name? : String, opening_mm? : Double, travel_mm? : Dou
 
 pub fn limit_switch(name? : String, body_len_mm? : Double, body_w_mm? : Double, body_h_mm? : Double, voltage_v? : Double, current_ma? : Double, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/cad.Component
 
-pub fn low_kv_bldc_motor(name? : String, preset? : String, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
+pub fn low_kv_bldc_motor(name? : String, preset? : String, detail? : @common.DetailLevel, joint_name? : String) -> @gmlewis/cad.Component
 
 pub fn magnetic_encoder(name? : String, disc_diam_mm? : Double, board_len_mm? : Double, voltage_v? : Double, current_ma? : Double) -> @gmlewis/cad.Component
 
@@ -106,11 +110,11 @@ pub fn pcb_board(name? : String, length_mm? : Double, width_mm? : Double, thickn
 
 pub fn pcb_from_kicad(name? : String, footprints? : Array[KiCadFootprint], board_len_mm? : Double, board_w_mm? : Double, thickness_mm? : Double, origin_x_mm? : Double, origin_y_mm? : Double, flip_y? : Bool, mounting_hole_match? : String, mounting_hole_diam_mm? : Double, board_margin_mm? : Double, max_component_height_mm? : Double) -> @gmlewis/cad.Component
 
-pub fn planetary_bldc_actuator(name? : String, preset? : String, stages? : Int32, module_mm? : Double, sun_teeth? : Int32, planet_teeth? : Int32, planet_count? : Int32, gear_length_mm? : Double, gear_type? : String, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
+pub fn planetary_bldc_actuator(name? : String, preset? : String, stages? : Int32, module_mm? : Double, sun_teeth? : Int32, planet_teeth? : Int32, planet_count? : Int32, gear_length_mm? : Double, gear_type? : String, detail? : @common.DetailLevel, joint_name? : String, add_binding? : Bool, output_encoder? : Bool, output_shaft_extension_mm? : Double, heat_set_inserts? : Bool, motor_source? : String) -> @gmlewis/cad.Component
 
 pub fn planetary_gearbox(name? : String, params? : PlanetaryGearboxParams, smooth? : Bool, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
 
-pub fn planetary_gearset_stage(name? : String, module_mm? : Double, sun_teeth? : Int32, planet_teeth? : Int32, planet_count? : Int32, face_width_mm? : Double, pressure_angle_deg? : Double, sun_bore_mm? : Double, planet_bore_mm? : Double, carrier_pin_diam_mm? : Double, carrier_bearing? : String, output_shaft_length_mm? : Double, smooth? : Bool, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
+pub fn planetary_gearset_stage(name? : String, module_mm? : Double, sun_teeth? : Int32, planet_teeth? : Int32, planet_count? : Int32, face_width_mm? : Double, pressure_angle_deg? : Double, sun_bore_mm? : Double, planet_bore_mm? : Double, carrier_pin_diam_mm? : Double, carrier_bearing? : String, output_shaft_length_mm? : Double, smooth? : Bool, housing? : Bool, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
 
 pub fn planetary_reduction(Int32, Int32, Int32) -> Double
 
@@ -122,7 +126,7 @@ pub fn quadruped_leg_assembly(String, is_left~ : Bool, hip_offset_y_mm? : Double
 
 pub fn rigid_coupling_part(name? : String, outer_diam_mm? : Double, bore_diam_mm? : Double, length_mm? : Double) -> @gmlewis/cad.Component
 
-pub fn robot_leg_segment(String, length_mm~ : Double, width_mm? : Double, thickness_mm? : Double, bore_diam_mm? : Double, detail? : @common.DetailLevel, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/cad.Component
+pub fn robot_leg_segment(String, length_mm~ : Double, width_mm? : Double, thickness_mm? : Double, bore_diam_mm? : Double, hub_bore_mm? : Double, distal_cup_offset_mm? : Double, detail? : @common.DetailLevel, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/cad.Component
 
 pub fn sensor_mount_bracket(name? : String, width_mm? : Double, height_mm? : Double, thickness_mm? : Double, hole_diam_mm? : Double, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
 
@@ -135,6 +139,8 @@ pub fn shaft_coupler(name? : String, outer_diam_mm? : Double, bore_in_mm? : Doub
 pub fn sleeve_bushing(name? : String, bore_diam_mm? : Double, outer_diam_mm? : Double, length_mm? : Double) -> @gmlewis/cad.Component
 
 pub fn spur_gear_part(name? : String, module_mm? : Double, teeth? : Int32, face_width_mm? : Double, bore_diameter_mm? : Double, pressure_angle_deg? : Double, backlash_mm? : Double, smooth? : Bool, detail? : @common.DetailLevel, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/cad.Component
+
+pub fn step_brushless_motor(name? : String, preset? : String, detail? : @common.DetailLevel, joint_name? : String) -> @gmlewis/cad.Component
 
 pub fn stepped_shaft_part(name? : String, segments? : Array[(Double, Double)], fillet_radius_mm? : Double) -> @gmlewis/cad.Component
 

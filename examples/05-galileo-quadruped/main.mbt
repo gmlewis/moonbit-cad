@@ -382,10 +382,16 @@ async fn main {
   ]
   for corner in corners {
     let (prefix, x, y, is_left) = corner
+    // Rotate the mount frame so the hip actuator's output axis lies along the
+    // chassis X axis (hip abduction). The actuator mounts through its own
+    // motor_mount face, which is a pure translation.
     base = base.add_mate_mm_deg(
       "\{prefix}_hip_mount",
-      x~,
+      // Clear the bulkhead: the hip actuator's outrunner hangs 26 mm inboard
+      // of its mounting face, so mount it outboard of the bulkhead.
+      x=x + (if x > 0.0 { 32.0 } else { -32.0 }),
       y~,
+      ry_deg=90.0,
       axis=(1.0, 0.0, 0.0),
     )
     let leg = @components.quadruped_leg_assembly(
@@ -399,20 +405,14 @@ async fn main {
       wheeled~,
       detail~,
     )
+    // The leg's hip actuator stator bolts directly to the chassis; the
+    // commandable hip abduction joint is the actuator's rotor joint.
     base = base.attach(
-      "\{prefix}_hip_joint",
+      "\{prefix}_leg_mount",
       parent_mate="\{prefix}_hip_mount",
       leg,
-      child_mate="hip_mount",
-      spec=@cad.JointSpec::revolute(
-        @urdf.JointLimit::new(
-          lower=Some(-0.8),
-          upper=Some(0.8),
-          effort=leg_effort,
-          velocity=leg_velocity,
-        ),
-        transmission_reduction=Some(leg_reduction),
-      ),
+      child_mate="motor_mount",
+      spec=@cad.JointSpec::fixed(),
     )
   }
   // Harness: trunk routes and point-to-point CAN/power runs.
@@ -428,8 +428,8 @@ async fn main {
     material="PVC",
     from_component="base_link",
     from_port="can",
-    to_component="rl_hip_link",
-    to_port="",
+    to_component="rl_hip_drive",
+    to_port="can",
   )
   base = base.add_cable_route(trunk)
   let can_runs : Array[String] = ["fl", "fr", "rl", "rr"]
@@ -440,7 +440,7 @@ async fn main {
         "\{prefix}_can",
         from_component="base_link",
         from_port="can",
-        to_component="\{prefix}_hip_link",
+        to_component="\{prefix}_hip_drive",
         to_port="can",
         gauge_awg=24,
         length_mm=600.0,
@@ -451,7 +451,7 @@ async fn main {
         "\{prefix}_power",
         from_component="base_link",
         from_port="power",
-        to_component="\{prefix}_hip_link",
+        to_component="\{prefix}_hip_drive",
         to_port="power",
         gauge_awg=18,
         length_mm=500.0,
@@ -462,18 +462,31 @@ async fn main {
   let joint_names : Array[String] = [
     "hip_joint", "thigh_joint", "calf_joint", "wheel_joint",
   ]
+  // Each leg joint is the rotor joint of a real planetary actuator.
   let actuator_suffixes : Array[String] = [
-    "_hip_link", "_thigh_link", "_calf_link", "_wheel_link",
+    "_hip_drive", "_thigh_drive", "_knee_drive", "_wheel_drive",
   ]
   let mut channel = 1
   let dof = if wheeled { 4 } else { 3 }
+  // Right-side pitch and knee actuators are mirror images, so their joint
+  // axes point the other way. The controller inverts them to keep one
+  // command convention across both sides.
+  let leg_side = fn(prefix : String) -> Double {
+    if prefix == "fl" || prefix == "rl" {
+      1.0
+    } else {
+      -1.0
+    }
+  }
   for prefix in ["fl", "fr", "rl", "rr"] {
+    let side = leg_side(prefix)
     for i in 0..<dof {
       base = base.add_control_binding(
         @cad.ControlBinding::new(
           "\{prefix}_\{joint_names[i]}",
           actuator="\{prefix}\{actuator_suffixes[i]}",
           channel="can0:" + channel.to_string(),
+          direction=if i == 0 || side > 0.0 { "normal" } else { "inverted" },
           gear_ratio=@components.planetary_reduction(12, 12, 1),
           soft_lower=Some(joint_soft_lower(i)),
           soft_upper=Some(joint_soft_upper(i)),
@@ -485,11 +498,21 @@ async fn main {
   let deg = @math.PI / 180.0
   let positions : Map[String, Double] = Map([])
   for prefix in ["fl", "fr", "rl", "rr"] {
+    let side = leg_side(prefix)
     positions.set("\{prefix}_hip_joint", args.double("hipAbductionDeg") * deg)
-    positions.set("\{prefix}_thigh_joint", args.double("hipPitchDeg") * deg)
-    positions.set("\{prefix}_calf_joint", args.double("kneePitchDeg") * deg)
+    positions.set(
+      "\{prefix}_thigh_joint",
+      args.double("hipPitchDeg") * deg * side,
+    )
+    positions.set(
+      "\{prefix}_calf_joint",
+      args.double("kneePitchDeg") * deg * side,
+    )
     if wheeled {
-      positions.set("\{prefix}_wheel_joint", args.double("wheelSpinDeg") * deg)
+      positions.set(
+        "\{prefix}_wheel_joint",
+        args.double("wheelSpinDeg") * deg * side,
+      )
     }
   }
   @common.write_output(base, output, joint_positions=positions)

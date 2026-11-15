@@ -234,32 +234,21 @@ async fn main {
       ).with_part(mobility_fab("WC-ARMREST", "Folding armrest", "PETG", 14.0)),
     )
   }
-  // Joystick / throttle pod with ports.
-  chassis = chassis.add_body(
-    @cad.BodyPart::box_mm(
-      "joystick_pod",
-      70.0,
-      60.0,
-      40.0,
-      x_mm=wheelbase * 0.20,
-      y_mm=-150.0,
-      z_mm=seat_height + 160.0,
-      density=@urdf.Density::petg(),
-      color=@step_cad.Rgb::black(),
-    ).with_part(mobility_fab("WC-JOYSTICK-POD", "Joystick pod", "PETG", 12.0)),
-  )
+  // Reusable joystick pod on the left armrest.
   chassis = chassis
     .add_mate_mm_deg(
-      "joystick_stick",
+      "joystick_mount",
       x=wheelbase * 0.20,
-      y=-190.0,
-      z=seat_height + 185.0,
+      y=-150.0,
+      // The left armrest top is 20 mm above its centreline.
+      z=seat_height + 140.0,
     )
-    .add_port(
-      @cad.Port::new("signal", @cad.PortKind::Signal, spec="2-axis Hall"),
-    )
-    .add_port(
-      @cad.Port::new("estop", @cad.PortKind::Signal, spec="NC to ground"),
+    .attach(
+      "joystick_joint",
+      parent_mate="joystick_mount",
+      @components.joystick_pod(name="joystick", detail~),
+      child_mate="mount",
+      spec=@cad.JointSpec::fixed(),
     )
   // Differential rear planetary drives.
   for drive in [("left", 1.0), ("right", -1.0)] {
@@ -300,7 +289,15 @@ async fn main {
   }
   // Front casters (wheelchair) or one steerable suspension fork (scooter).
   let caster_mount_z = frame_z - 30.0
-  let fork_length = if caster_mount_z > front_wheel_r + 30.0 {
+  // The suspension fork's `mount` is 18 mm above its front axle; the caster's
+  // `steering_axis` is 16 mm above its axle. Each length subtracts its own
+  // offset so the front wheel bottom lands on the same ground plane.
+  let scooter_fork_length = if caster_mount_z > front_wheel_r + 30.0 {
+    caster_mount_z - front_wheel_r - 18.0
+  } else {
+    60.0
+  }
+  let caster_fork_length = if caster_mount_z > front_wheel_r + 30.0 {
     caster_mount_z - front_wheel_r - 16.0
   } else {
     60.0
@@ -320,7 +317,7 @@ async fn main {
         @components.suspension_fork_module(
           name="front_fork",
           fork_span_mm=track_width * 0.25,
-          fork_length_mm=fork_length,
+          fork_length_mm=scooter_fork_length,
           wheel_diam_mm=front_wheel_diam,
           detail~,
         ),
@@ -354,7 +351,7 @@ async fn main {
             wheel_diam_mm=front_wheel_diam,
             wheel_width_mm=32.0,
             fork_span_mm=90.0,
-            fork_length_mm=fork_length,
+            fork_length_mm=caster_fork_length,
             detail~,
           ),
           child_mate="steering_axis",
@@ -372,12 +369,18 @@ async fn main {
   }
   // Electronics and sensors.
   let controller = @components.pcb_board(
-    name="drive_controller",
-    length_mm=90.0,
-    width_mm=60.0,
-    connectors=["power", "can", "left_motor", "right_motor", "joystick"],
-    detail~,
-  )
+      name="drive_controller",
+      length_mm=90.0,
+      width_mm=60.0,
+      connectors=["power", "can", "left_motor", "right_motor", "joystick"],
+      detail~,
+    )
+    .add_port(
+      @cad.Port::new("joystick", @cad.PortKind::Signal, spec="2-axis Hall"),
+    )
+    .add_port(
+      @cad.Port::new("estop", @cad.PortKind::Signal, spec="NC to ground"),
+    )
   chassis = chassis
     .add_mate_mm_deg("pcb_mount", x=-wheelbase * 0.10, z=seat_height - 20.0)
     .attach(
@@ -428,6 +431,28 @@ async fn main {
       to_port="can",
       gauge_awg=24,
       length_mm=900.0,
+    ),
+  )
+  chassis = chassis.add_wire_run(
+    @cad.WireRun::new(
+      "joystick_signal",
+      from_component="joystick",
+      from_port="signal",
+      to_component="drive_controller",
+      to_port="joystick",
+      gauge_awg=26,
+      length_mm=300.0,
+    ),
+  )
+  chassis = chassis.add_wire_run(
+    @cad.WireRun::new(
+      "estop_loop",
+      from_component="joystick",
+      from_port="estop",
+      to_component="drive_controller",
+      to_port="estop",
+      gauge_awg=22,
+      length_mm=300.0,
     ),
   )
   chassis = chassis.add_cable_route(
@@ -523,6 +548,39 @@ async fn main {
     positions.set("steering_joint", args.double("steerDeg") * deg)
   } else {
     positions.set("caster_left_swivel_joint", args.double("steerDeg") * deg)
+  }
+  // Ground-plane check: every drive and caster tire's lowest point must sit on
+  // z = 0 so the vehicle stands on one plane. This uses the posed design's
+  // exact body bounds, not a hand-computed estimate.
+  let design = chassis.to_design(joint_positions=positions)
+  let mut ground_min = 1.0e9
+  let mut ground_max = -1.0e9
+  let mut tires = 0
+  for node in design.nodes {
+    if node.name.contains("_tire") {
+      let (_, _, _, _, z0, _) = node.bounding_box()
+      tires = tires + 1
+      if z0 < ground_min {
+        ground_min = z0
+      }
+      if z0 > ground_max {
+        ground_max = z0
+      }
+    }
+  }
+  if tires == 0 ||
+    ground_min.abs() > 0.1 ||
+    (ground_max - ground_min).abs() > 0.1 {
+    @cli.eprintln(
+      "error: wheel ground plane is not at z = 0 (tires " +
+      tires.to_string() +
+      ", min z " +
+      ground_min.to_string() +
+      ", max z " +
+      ground_max.to_string() +
+      ")",
+    )
+    abort("")
   }
   @common.write_output(chassis, output, joint_positions=positions)
 }

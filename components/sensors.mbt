@@ -480,6 +480,169 @@ pub fn force_sensor(
 }
 
 ///|
+/// Builds a reusable assistive-vehicle joystick pod: a printable housing, a
+/// two-axis Hall/potentiometer stick, an E-stop button, and a power button,
+/// with typed ports for the two signal channels and the E-stop loop.
+///
+/// The pod's bottom face is at `z = 0`, so attaching `mount` to an armrest or
+/// console puts the housing on that surface. It has no commandable joints; the
+/// stick is an input device, not an actuator.
+pub fn joystick_pod(
+  name~ : String = "joystick_pod",
+  housing_len_mm~ : Double = 90.0,
+  housing_w_mm~ : Double = 70.0,
+  housing_h_mm~ : Double = 40.0,
+  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
+) -> @cad.Component {
+  let _ = detail
+  let housing_part = fabricated_part(
+    "JOYSTICK-HOUSING-\{housing_len_mm}x\{housing_w_mm}",
+    "Joystick pod housing",
+    "PETG",
+    "3D print",
+    12.0,
+  )
+  let electronics_part = purchased_part(
+    "JOYSTICK-2AXIS", "Two-axis Hall-effect joystick, E-stop, and power switch",
+    "mixed", 18.0,
+  )
+  let insert = heat_set_insert(
+    name=name + "_insert",
+    outer_diam_mm=4.5,
+    inner_diam_mm=3.0,
+    length_mm=4.0,
+  )
+  let screw = purchased_part(
+    "ISO4762-M3x10", "ISO 4762 socket head cap screw M3 x 10 mm", "steel", 0.35,
+  )
+  let top = housing_h_mm
+  let stick_x = housing_len_mm * 0.10
+  let axis_z = top + 8.0
+  // The Hall-effect gimbal, stick, knob, E-stop, and power switch are one
+  // purchased assembly, so they roll up as a single BOM line.
+  let electronics = @cad.Component::new(
+      name + "_electronics",
+      description="Joystick electronics",
+    )
+    .add_body(
+      @cad.BodyPart::box_mm(
+        name + "_gimbal",
+        34.0,
+        34.0,
+        14.0,
+        x_mm=stick_x,
+        z_mm=top + 7.0,
+        density=@urdf.Density::pla(),
+        color=@step_cad.Rgb::grey(),
+      ).with_part(electronics_part),
+    )
+    .add_body(
+      @cad.BodyPart::cylinder_mm(
+        name + "_stick",
+        8.0,
+        32.0,
+        x_mm=stick_x,
+        z_mm=top + 28.0,
+        density=@urdf.Density::pla(),
+        color=@step_cad.Rgb::grey(),
+      ).with_part(electronics_part),
+    )
+    .add_body(
+      @cad.BodyPart::cylinder_mm(
+        name + "_knob",
+        24.0,
+        12.0,
+        x_mm=stick_x,
+        z_mm=top + 48.0,
+        density=@urdf.Density::pla(),
+        color=@step_cad.Rgb::black(),
+      ).with_part(electronics_part),
+    )
+    .add_body(
+      @cad.BodyPart::cylinder_mm(
+        name + "_estop",
+        22.0,
+        10.0,
+        x_mm=-stick_x,
+        y_mm=housing_w_mm * 0.24,
+        z_mm=top + 5.0,
+        density=@urdf.Density::pla(),
+        color=@step_cad.Rgb::red(),
+      ).with_part(electronics_part),
+    )
+    .add_body(
+      @cad.BodyPart::cylinder_mm(
+        name + "_power_button",
+        14.0,
+        5.0,
+        x_mm=-stick_x,
+        y_mm=-housing_w_mm * 0.24,
+        z_mm=top + 2.5,
+        density=@urdf.Density::pla(),
+        color=@step_cad.Rgb::green(),
+      ).with_part(electronics_part),
+    )
+    .with_part(electronics_part)
+  @cad.Component::new(name, description="Assistive joystick pod")
+  .with_param("housing_len_mm", housing_len_mm.to_string())
+  .with_param("housing_w_mm", housing_w_mm.to_string())
+  .with_param("housing_h_mm", housing_h_mm.to_string())
+  .with_param("sticks", "2-axis Hall")
+  .add_body(
+    @cad.BodyPart::box_mm(
+      name + "_housing",
+      housing_len_mm,
+      housing_w_mm,
+      housing_h_mm,
+      z_mm=housing_h_mm / 2.0,
+      density=@urdf.Density::petg(),
+      color=@step_cad.Rgb::black(),
+    ).with_part(housing_part),
+  )
+  .attach(
+    "electronics_merge",
+    parent_mate="mount",
+    electronics,
+    child_mate="origin",
+    spec=@cad.JointSpec::merge_rigid(),
+  )
+  .add_mate_mm_deg("mount")
+  .add_mate_mm_deg("stick", x=stick_x, z=axis_z)
+  .add_mate_mm_deg("estop", x=-stick_x, y=housing_w_mm * 0.24, z=top)
+  .add_mate_mm_deg("power_button", x=-stick_x, y=-housing_w_mm * 0.24, z=top)
+  .add_port(
+    @cad.Port::new(
+      "signal",
+      @cad.PortKind::Signal,
+      spec="2 x analog / Hall, 0-3.3 V",
+    ),
+  )
+  .add_port(@cad.Port::new("estop", @cad.PortKind::Signal, spec="NC to ground"))
+  .add_port(@cad.Port::new("power", @cad.PortKind::Power, spec="5 V, 20 mA"))
+  .add_port(@cad.Port::new("ground", @cad.PortKind::Ground, spec="0 V"))
+  .attach(
+    "stick_insert_merge",
+    parent_mate="mount",
+    insert,
+    child_mate="seat",
+    spec=@cad.JointSpec::merge_rigid(),
+  )
+  .add_fastener(
+    @cad.Fastener::new(
+      "pod_mount_screws",
+      @cad.FastenerKind::Screw,
+      thread="M3",
+      length_mm=10.0,
+      engagement_mm=4.0,
+      quantity=2,
+      torque_nm=0.8,
+      references=[name + "_housing"],
+      part=Some(screw),
+    ),
+  )
+}
+
+///|
 /// Builds a printable bracket for an IMU, camera, or other sensor board.
 ///
 /// The bracket is a flat plate with two mounting holes and a raised sensor
