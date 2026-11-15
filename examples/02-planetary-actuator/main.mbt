@@ -15,7 +15,7 @@
 ///
 /// # Third-party asset
 ///
-/// `20240305-moteus-c1-r1_2.step` is the exact moteus C1 r1.2 controller board
+/// `components/vendor/20240305-moteus-c1-r1_2.step` is the exact moteus C1 r1.2 controller board
 /// from the open-source moteus hardware project. The housed layout imports it
 /// as the motor controller and on-axis output sensor: its centered AS5047P chip
 /// faces a diameter/height-parameterized magnet on the output shaft across a
@@ -391,8 +391,8 @@ async fn main {
     // chip U6 is at the board center on the bottom face; the measured package
     // bottom is 1.2 mm below the board origin and the PCB bottom is 0.8 mm
     // above it.
-    // Vendored at examples/02-planetary-actuator/20240305-moteus-c1-r1_2.step.
-    let board_path = "examples/02-planetary-actuator/20240305-moteus-c1-r1_2.step"
+    // Vendored at components/vendor/20240305-moteus-c1-r1_2.step.
+    let board_path = "components/vendor/20240305-moteus-c1-r1_2.step"
     let board_data = @fs.read_file(board_path) catch {
       _ => {
         @cli.eprintln("error: cannot read " + board_path)

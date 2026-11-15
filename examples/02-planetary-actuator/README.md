@@ -116,7 +116,7 @@ Notes on the current choices:
 
 ### moteus C1 r1.2 controller board
 
-`20240305-moteus-c1-r1_2.step` is the exact moteus C1 r1.2 controller board
+`components/vendor/20240305-moteus-c1-r1_2.step` is the exact moteus C1 r1.2 controller board
 from the open-source moteus hardware project. It is vendored here and imported
 into the housed example as the motor controller and output sensor; the flat
 STEP output carries its exact vendor B-Rep.

@@ -13,6 +13,12 @@
 /// plastic hub is drilled with three 4.5 mm holes and bolted to that mount with
 /// three M4 x 30 screws; the mount's hub post centers the wheel.
 ///
+/// The moteus C1 r1.2 controller board (the exact vendor STEP, vendored at
+/// `components/vendor/20240305-moteus-c1-r1_2.step`) hangs off the back of the
+/// motor, its AS5047P facing the rotor magnet. The rotor is 1:1 with the
+/// input (sun) gear, so the board measures the high-speed input rotation for
+/// FOC commutation and odometry.
+///
 /// Stage parameters are comma-separated lists: the first value goes to stage 1,
 /// the second to stage 2, and so on. A shorter list repeats its last value.
 ///
@@ -43,28 +49,8 @@ fn prefix_body_names(comp : @cad.Component, prefix : String) -> @cad.Component {
 }
 
 ///|
-/// The zero-based stage index of a stage-scoped CAD name, or `-1` when the
-/// part does not belong to a planetary stage.
-fn stage_index(name : String, stage_count : Int32) -> Int32 {
-  for i in 0..<stage_count {
-    if name.contains("_stage" + (i + 1).to_string() + "_") {
-      return i
-    }
-  }
-  -1
-}
-
-///|
-/// Display-only offset for the exploded, color-coded view.
-///
-/// `elbows` holds each stage's herringbone elbow count. A stage with any
-/// herringbone sweep (`elbows > 0`) is print-in-place: its sun and planets are
-/// captive in the casing's integrated ring, so they keep their assembled
-/// position and move with the casing module as one unit.
-///
-/// Fasteners and heat-set inserts are pulled radially outward from their
-/// holes (or listed above the part they screw into) so they sit next to
-/// where they are used instead of hidden inside the printed parts.
+/// Radial unit vector of a node's position, for sliding radial-axis parts
+/// (set screws) outward along their own insertion axis.
 fn radial_offset(
   node : @step_cad.SceneNode,
   distance : Double,
@@ -80,69 +66,90 @@ fn radial_offset(
 
 ///|
 /// Display-only offset for the exploded, color-coded view.
-fn explode_offset(
-  node : @step_cad.SceneNode,
-  elbows : Array[Int32],
-) -> (Double, Double, Double) {
+///
+/// The casing is the fixed reference frame. Everything else moves along the
+/// assembly axis (Z): the motor drops below, the gear stack lifts out of the
+/// ring gears, and the output stack, mount, and tire stack above — so every
+/// part stays coaxial with its mounting hole and can be traced straight
+/// along its insertion axis. Radial set screws slide along their own radial
+/// axis instead. A bearing travels with its flange, and a planet's bearing
+/// hovers just below the planet, so the press fit stays readable.
+fn explode_offset(node : @step_cad.SceneNode) -> (Double, Double, Double) {
   let name = node.name
-  let stage = stage_index(name, elbows.length())
-  let stage_z = if stage < 0 { 0.0 } else { stage.to_double() * 80.0 }
-  let print_in_place = stage >= 0 && elbows[stage] > 0
+  let (_, _, _, _, z0, z1) = node.bounding_box()
+  let zc = (z0 + z1) / 2.0
+  // The tire and the mount bolts that clamp it.
   if name.contains("tire_bolt") {
-    // The bolts screw in from the top of the wheel; float them just above it.
-    (0.0, 0.0, 480.0)
-  } else if name.contains("HEATSET") {
-    // Heat-set inserts in the printed casing: hover beside the flange they
-    // are pressed into, at the same height.
-    radial_offset(node, 45.0)
-  } else if name.contains("output_hub_insert") {
-    // Output-hub inserts: hover beside their holes in the hub face.
-    radial_offset(node, 22.0)
-  } else if name.contains("ISO4762-M3") {
-    // Casing screws: hover beside their holes in the flange.
-    radial_offset(node, 75.0)
-  } else if name.contains("set_screw") || name.contains("set-screw") {
-    // Radial clamp screws sit on the axis; slide them out sideways.
-    radial_offset(node, 50.0)
-  } else if name.contains("tire_mount") || name.contains("tire-mount") {
     (0.0, 0.0, 360.0)
+  } else if name.contains("tire_mount") || name.contains("tire-mount") {
+    (0.0, 0.0, 262.0)
   } else if name.contains("tire") {
-    // The purchased wheel is one part: keep its ring, hub, plate, and ribs
-    // together instead of letting the carrier prefix split them apart.
-    (0.0, 0.0, 420.0)
-  } else if name.contains("output_hub_collar") {
-    (0.0, 0.0, 330.0)
-  } else if name.contains("output_hub") {
-    (0.0, 0.0, 300.0)
-  } else if name.contains("output_bearing") {
-    (0.0, 0.0, 270.0)
-  } else if name.contains("output_cap") {
-    (0.0, 0.0, 240.0)
+    (0.0, 0.0, 298.0)
+  } else if name.contains("moteus") {
+    // The controller rides with the motor; it reads the rotor magnet.
+    (0.0, 0.0, -55.0)
   } else if name.contains("motor_cap") {
-    (0.0, 0.0, -150.0)
-  } else if name.contains("_motor") {
-    (0.0, 0.0, -220.0)
-  } else if name.contains("planet") {
-    if print_in_place && !name.contains("bearing") {
-      // A print-in-place planet is captive in the casing's integrated ring.
-      (0.0, 0.0, stage_z)
+    (0.0, 0.0, -28.0)
+  } else if name.contains("_motor") || name.contains("_rotor") {
+    (0.0, 0.0, -55.0)
+  } else if name.contains("collar") {
+    // The clamp collar slides over the output hub.
+    (0.0, 0.0, 250.0)
+  } else if name.contains("output_hub_insert") {
+    // Heat-set inserts hover just above the hub they press into.
+    (0.0, 0.0, 240.0)
+  } else if name.contains("output_hub") {
+    (0.0, 0.0, 225.0)
+  } else if name.contains("ISO4762-M3-16") {
+    // Output-cap screws hover just above the cap.
+    (0.0, 0.0, 195.0)
+  } else if (
+      name.contains("output_bearing") ||
+      name.contains("deep-groove-bearing") ||
+      name.contains("bearing-FR8")
+    ) &&
+    !name.contains("planet") {
+    // Output bearing: races, balls and flange travel together.
+    (0.0, 0.0, 190.0)
+  } else if name.contains("output_cap") {
+    (0.0, 0.0, 175.0)
+  } else if name.contains("ISO4762-M3-12") {
+    // M3x12 flange screws: the lower ones hold the motor cap, the rest
+    // join the stage flanges. They hover past the flange they thread into.
+    if zc < 5.0 {
+      (0.0, 0.0, -45.0)
     } else {
-      (160.0, 0.0, stage_z)
+      (0.0, 0.0, 40.0)
     }
-  } else if name.contains("_sun") {
-    if print_in_place {
-      // A print-in-place sun is captive in the casing's integrated ring.
-      (0.0, 0.0, stage_z)
+  } else if name.contains("HEATSET") {
+    // Heat-set inserts hover just past the flange they are pressed into.
+    // The stage-1 bottom-flange row drops below the casing; the rest lift.
+    if zc < 10.0 {
+      (0.0, 0.0, -22.0)
     } else {
-      (90.0, 0.0, stage_z)
+      (0.0, 0.0, 14.0)
     }
-  } else if name.contains("carrier") {
-    (-150.0, 0.0, stage_z)
-  } else if name.contains("_ring") ||
-    name.contains("casing_sleeve") ||
-    name.contains("_flange") {
-    (0.0, 0.0, stage_z)
+  } else if name.contains("set_screw") || name.contains("set-screw") {
+    // Radial clamp screws slide out along their own axis.
+    radial_offset(node, 22.0)
+  } else if name.contains("stage2") {
+    if name.contains("casing") {
+      (0.0, 0.0, 0.0)
+    } else if name.contains("bearing") {
+      (0.0, 0.0, 105.0) // bearing and flange hover below their planet
+    } else {
+      (0.0, 0.0, 128.0)
+    }
+  } else if name.contains("stage1") {
+    if name.contains("casing") {
+      (0.0, 0.0, 0.0)
+    } else if name.contains("bearing") {
+      (0.0, 0.0, 55.0) // bearing and flange hover below their planet
+    } else {
+      (0.0, 0.0, 78.0)
+    }
   } else {
+    // The casing rings, sleeves, and flanges are the fixed reference frame.
     (0.0, 0.0, 0.0)
   }
 }
@@ -152,6 +159,8 @@ fn explode_offset(
 fn explode_color(name : String) -> @step_cad.Rgb {
   if name.contains("tire_bolt") {
     @step_cad.Rgb::new(0.40, 0.75, 0.95)
+  } else if name.contains("moteus") {
+    @step_cad.Rgb::new(0.10, 0.60, 0.25)
   } else if name.contains("tire_mount") || name.contains("tire-mount") {
     @step_cad.Rgb::new(0.68, 0.42, 0.12)
   } else if name.contains("tire") {
@@ -186,18 +195,77 @@ fn explode_color(name : String) -> @step_cad.Rgb {
 }
 
 ///|
+/// A dashed trace from a part's assembled position to its exploded position,
+/// drawn as a run of thin dark cylinders (dash 7 mm, gap 5 mm, 0.7 mm dia).
+/// The trace starts and ends slightly short of the part so it reads as a
+/// path, not as geometry attached to either end.
+fn trace_sticks(
+  node : @step_cad.SceneNode,
+  dx : Double,
+  dy : Double,
+  dz : Double,
+) -> Array[@step_cad.SceneNode] {
+  let len = (dx * dx + dy * dy + dz * dz).sqrt()
+  let out : Array[@step_cad.SceneNode] = []
+  if len < 8.0 {
+    return out
+  }
+  let ux = dx / len
+  let uy = dy / len
+  let uz = dz / len
+  let (x0, x1, y0, y1, z0, z1) = node.bounding_box()
+  let cx = (x0 + x1) / 2.0
+  let cy = (y0 + y1) / 2.0
+  let cz = (z0 + z1) / 2.0
+  // Aim a Z-axis cylinder along (ux, uy, uz): Ry(acos(uz)) then Rz(atan2(uy, ux)).
+  let ry = @math.acos(uz) * 180.0 / @math.PI
+  let rz = @math.atan2(uy, ux) * 180.0 / @math.PI
+  let dash = 7.0
+  let gap = 5.0
+  let mut s = 4.0
+  let mut i = 0
+  while s + dash <= len - 4.0 {
+    let sx = cx + ux * s
+    let sy = cy + uy * s
+    let sz = cz + uz * s
+    let stick = @step_cad.Cylinder::new(0.7, dash)
+      .with_name("trace_" + node.name + "_" + i.to_string())
+      .with_color(@step_cad.Rgb::new(0.32, 0.32, 0.35))
+      .rotate_y(ry)
+      .rotate_z(rz)
+      .translate(x=sx, y=sy, z=sz)
+    out.push(stick)
+    s = s + dash + gap
+    i += 1
+  }
+  out
+}
+
+///|
 /// Builds a display-only exploded design from the assembled design.
+///
+/// Every part that moves also gets a dashed trace line from its assembled
+/// location to its exploded one, so a viewer can tell where each part goes.
 fn exploded_design(
   design : @step_cad.Design,
   name~ : String,
-  elbows~ : Array[Int32],
 ) -> @step_cad.Design {
   let mut out = @step_cad.Design::new(
     name~,
     description="Exploded, color-coded view",
   )
   for node in design.nodes() {
-    let (dx, dy, dz) = explode_offset(node, elbows)
+    let (dx, dy, dz) = explode_offset(node)
+    // One trace per moving group: individual bearing balls, inner races and
+    // flanges ride along with their outer race, so they don't get their own.
+    let skip_trace = node.name.contains("ball-") ||
+      node.name.contains("inner-ring") ||
+      node.name.contains("bearing_flange")
+    if !skip_trace {
+      for stick in trace_sticks(node, dx, dy, dz) {
+        out = out.add(stick)
+      }
+    }
     out = out.add(
       node.with_color(explode_color(node.name)).translate(x=dx, y=dy, z=dz),
     )
@@ -566,6 +634,26 @@ async fn main {
       spec=@cad.JointSpec::merge_rigid(angle_deg=mount_spec.bolt_hole_phase_deg),
     )
   }
+  // The moteus C1 r1.2 is the motor controller and the on-axis sensor for
+  // the high-speed input (sun) side of the gearbox: its AS5047P reads the
+  // magnet on the rotor shaft through the motor's rear endbell. The exact
+  // vendor board is imported as-is; it rides with the motor in the exploded
+  // view. The rotor is 1:1 with the input (sun) gear.
+  let board_path = "components/vendor/20240305-moteus-c1-r1_2.step"
+  let board_text = @fs.read_file(board_path).text() catch {
+    _ => {
+      @cli.eprintln("error: cannot read " + board_path)
+      abort("")
+    }
+  }
+  assembly = assembly.attach_to(
+    gearbox_name + "_motor_stator",
+    "rotor_sensor_merge",
+    parent_mate="encoder_mount",
+    @components.moteus_c1_board(board_text, name="moteus"),
+    child_mate="mount",
+    spec=@cad.JointSpec::merge_rigid(),
+  )
   let command_joint = assembly.parameters
     .get("command_joint")
     .unwrap_or(gearbox_name + "_motor_rotor_joint")
@@ -592,7 +680,6 @@ async fn main {
     let exploded = exploded_design(
       assembly.to_design(joint_positions=positions),
       name="01_motorized_wheel-exploded",
-      elbows~,
     )
     let text = exploded.to_step_file()
     match exploded_target {

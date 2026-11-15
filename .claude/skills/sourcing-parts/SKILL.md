@@ -149,7 +149,8 @@ current pattern:
 | --- | --- | --- |
 | `BEARING-FR8-2RS` | Amazon 10-pack; VXB alternative | 9 identical bearings; VXB is the specialist source for the exact flanged bearing |
 | `BLDC-5010_360kv` | Amazon (GoolRC) | 5010 360KV, 4 mm shaft, 19 mm bolt circle |
-| `ENC-AS5047P` | Digi-Key | AS5047P adapter/evaluation board with the diametric magnet |
+| `MOTEUS-C1-R1.2` | mjbots | moteus C1 r1.2 controller; its on-board AS5047P reads the rotor magnet on the input shaft; the vendor STEP is vendored at `components/vendor/20240305-moteus-c1-r1_2.step` |
+| `MAG-8x2-DIA` | mjbots | 8 x 2 mm diametric disc sense magnet for the rotor shaft end |
 | `SHAFT-8.0x31.0` | McMaster-Carr | 8 mm 303 rotary shaft, cut to length |
 | `SHAFT-12.7x45.9` | OnlineMetals | 1/2 in 303 rod, cut to length |
 | `COLLAR-12.7-25.4` | McMaster-Carr | 1/2 in bore x 1 in OD x 7/16 in wide set-screw collar |

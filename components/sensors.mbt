@@ -275,6 +275,70 @@ pub fn moteus_position_sensor(
 }
 
 ///|
+/// The mjbots moteus C1 r1.2 controller, imported from the vendored vendor
+/// STEP (`components/vendor/20240305-moteus-c1-r1_2.step`).
+///
+/// The board's on-axis AS5047P chip sits on the `mount` face; mount the board
+/// with the chip facing the magnet it reads, 1-3 mm away. The caller passes
+/// the file's text so this package stays file-system free. The chip face is
+/// about 1.2 mm above the component origin (local +Z after the import
+/// rotation), so a board attached at `z` reads a magnet whose face sits at
+/// `z + 1.2 mm - gap`.
+pub fn moteus_c1_board(
+  step_text : String,
+  name~ : String = "moteus_c1",
+  source~ : String = "components/vendor/20240305-moteus-c1-r1_2.step",
+) -> @cad.Component {
+  let part = purchased_part(
+    "MOTEUS-C1-R1.2",
+    "moteus C1 r1.2 controller (mjbots); on-axis AS5047P encoder and BLDC FOC driver",
+    "FR-4 / mixed",
+    69.0,
+    supplier_url="https://mjbots.com/products/moteus-c1",
+  )
+  @cad.Component::new(
+    name,
+    description="moteus C1 r1.2 controller board; on-axis AS5047P reads the rotor magnet for input (sun-gear) speed and FOC commutation",
+  )
+  .add_body(
+    @cad.BodyPart::imported_step(
+      name + "_board",
+      step_text,
+      source~,
+      density=@urdf.Density::g_per_cm3(1.85),
+      color=@step_cad.Rgb::green(),
+      part=Some(part),
+      rx_deg=-90.0,
+    ),
+  )
+  .with_part(part)
+  .with_param("chip", "AS5047P")
+  .with_param("air_gap_target_mm", "2.0")
+  .with_sensor(
+    @cad.SensorSpec::new(
+      @cad.SensorKind::Encoder,
+      model="AS5047P",
+      interface="SPI/ABZ",
+      voltage_v=3.3,
+      current_ma=15.0,
+      range="360 deg",
+      resolution="14-bit (0.022 deg)",
+    ),
+  )
+  .add_port(@cad.Port::new("power", @cad.PortKind::Power, spec="24 V, 15 A"))
+  .add_port(@cad.Port::new("can", @cad.PortKind::Bus, spec="CAN 2.0B"))
+  .add_port(@cad.Port::new("motor", @cad.PortKind::Power, spec="3-phase"))
+  .add_port(
+    @cad.Port::new(
+      "encoder",
+      @cad.PortKind::Sensor,
+      spec="On-board AS5047P, SPI/ABZ",
+    ),
+  )
+  .add_mate_mm_deg("mount")
+}
+
+///|
 /// Builds a diametrically magnetized encoder magnet.
 ///
 /// The magnet's top face is at `z = 0` and it extends `thickness_mm` below, so

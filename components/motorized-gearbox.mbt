@@ -1660,7 +1660,7 @@ pub fn motorized_gearbox(
     torque_rated_nm=output_torque,
     driver="VESC / SimpleFOC",
     interface="CAN",
-    encoder="rotor encoder (AS5600 / AS5047P-class)",
+    encoder="rotor magnet read by a rear-mounted moteus C1 (AS5047P); 1:1 with the input sun gear",
   )
   let mut out = casing
     .with_actuator(geared_spec)

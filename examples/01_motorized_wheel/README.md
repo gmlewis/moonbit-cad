@@ -22,9 +22,8 @@ purchased 7-inch wheel.
 - **The default gear set is print-in-place.** Both stages use the 4-elbow
   herringbone (`--numElbows 4`). The sun and planets interlock with the
   casing's integrated ring and cannot be inserted after printing, following the
-  same principle as the example-2 cartridge. In the exploded view, each stage's
-  sun and planets stay assembled with its casing module instead of flying
-  apart. Use `--numElbows 0` for straight teeth that can be assembled axially.
+  same principle as the example-2 cartridge. Use `--numElbows 0` for straight
+  teeth that can be assembled axially.
 - **Any number of stages.** Stage 1's sun sits directly on the motor shaft;
   every later stage's sun sits directly on the previous stage's carrier output
   shaft. Every stage parameter is independent.
@@ -35,6 +34,11 @@ purchased 7-inch wheel.
   through a flanged bearing in the output cap, and a printed flange hub carries
   both a 40 mm bolt circle and the three-hole, 55.85 mm tire-mount interface. A
   clamp collar retains the hub on the shaft.
+- **The moteus C1 r1.2 is the motor controller and the input-shaft sensor.**
+  The exact vendor board (`components/vendor/20240305-moteus-c1-r1_2.step`)
+  hangs off the back of the motor with its AS5047P facing the rotor magnet, so
+  it reads the high-speed rotation of the input (sun) shaft 1:1 for FOC and
+  odometry.
 - **Flanged planet bearings.** The default planet bearing is a sealed, flanged
   `FR8-2RS` (1/2" x 1 1/8" x 5/16"). Each planet is printed with a counterbore
   sized to the bearing flange; the bearing presses in from the lower face and

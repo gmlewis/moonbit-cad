@@ -281,7 +281,7 @@ test "bldc actuator pod factory builds a real planetary actuator" {
 }
 
 ///|
-test "detailed low-KV motor adds vents, leads, flux ring, keyed shaft, encoder" {
+test "detailed low-KV motor adds vents, leads, flux ring, keyed shaft, rotor magnet" {
   for preset in @components.bldc_preset_names() {
     let simple = @components.low_kv_bldc_motor(preset~)
     let rich = @components.low_kv_bldc_motor(
@@ -315,13 +315,16 @@ test "detailed low-KV motor adds vents, leads, flux ring, keyed shaft, encoder" 
     assert_true(keyed >= 1)
     let bom = rich.bom()
     assert_eq(bom.unassigned, 0)
-    let mut encoder_boards = 0
-    for line in bom.lines {
-      if line.part_number == "ENC-AS5047P" {
-        encoder_boards = encoder_boards + 1
+    // No built-in encoder board: the rotor magnet ships with the motor and
+    // the caller attaches a sensor (e.g. a moteus C1) to `encoder_mount`.
+    let mut magnets = 0
+    for node in rich.to_design().nodes {
+      if node.name.contains("_sensor_magnet") {
+        magnets = magnets + 1
       }
     }
-    assert_eq(encoder_boards, 1)
+    assert_eq(magnets, 1)
+    assert_true(rich.get_mate("encoder_mount") is Some(_))
     assert_true(rich.parameters.get("rotor_encoder") is Some(_))
   }
 }

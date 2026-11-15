@@ -310,7 +310,7 @@ pub fn BodyPart::imported_step(
   rz_deg~ : Double = 0.0,
 ) -> BodyPart {
   let imported = match @step_cad.ImportedStep::from_string(step_text, source~) {
-    Ok(imported) => imported
+    Ok(imported) => imported.renamed(name)
     Err(info) =>
       abort(
         "error: could not import STEP for body '\{name}'" +

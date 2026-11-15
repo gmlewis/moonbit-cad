@@ -24,8 +24,8 @@ WHEEL-7IN | Amazon | https://www.amazon.com/budrash-72-107-Replaces-Universal-Ut
 INSERT-4 | Amazon | https://www.amazon.com/Ktehloy-Threaded-Assortment-Printing-Components/dp/B0DK1FGWZ5 | 120-piece M4 heat-set insert kit (M4x4x6 and M4x6x6); use the M4x6x6 size at the output hub's 55.85 mm bolt circle | 0.08
 ISO4762-M4x30 | Amazon | https://www.amazon.com/Socket-Screws-Stainless-Thread-Spanner/dp/B0DJP83447 | 100-set M4 x 30 mm 304 stainless socket-head cap screw kit (with nuts, washers, hex key); 3 needed for the tire mount | 0.09
 BLDC-5010_360kv | Amazon | https://www.amazon.com/GoolRC-Brushless-MultiCopter-Quadcopter-Multi-axis/dp/B0C2YRNX1Z | GoolRC 5010 360KV outrunner, 4 mm shaft, 19 mm bolt circle | 27.98
-ENC-AS5047P | Digi-Key | https://www.digikey.com/en/products/detail/ams-osram-usa-inc/AS5047P-ADAPTERBOARD/5452344 | AS5047P adapter/evaluation board; includes the diametric magnet | 16.66
-ISO4762-M2.5x6 | Amazon | https://www.amazon.com/XunLiu-Grade-Alloy-Socket-Screws/dp/B07Q1CQJ89 | M2.5 x 6 mm socket-head 50-pack | 0.14
+MOTEUS-C1-R1.2 | mjbots | https://mjbots.com/products/moteus-c1 | moteus C1 r1.2 controller; the on-board AS5047P faces the rotor magnet through the rear endbell to read the input (sun) shaft 1:1. The exact vendor STEP is vendored at components/vendor/20240305-moteus-c1-r1_2.step | 69.00
+MAG-8x2-DIA | mjbots | https://mjbots.com/products/diametric-disc-magnet | 8 x 2 mm diametric disc sense magnet (same product family as the 6 x 2.5 mm one); bond to the rotor shaft end behind the rear endbell | 2.00
 INSERT-3 | Amazon | https://www.amazon.com/Vibit-Threaded-Soldering-Printing-Component/dp/B0FWWW8VP1 | 152-piece M3 heat-set insert kit with tips; choose the size closest to the modeled 4.5 mm OD x 6 mm insert | 0.05
 ISO4762-M3x12 | Amazon | https://www.amazon.com/NIULUNBAO-Socket-Machine-Threaded-Assortment/dp/B0BJQ6M8XW | Same 250-piece M3 socket-head kit; covers M3 x 12 mm (12 needed) | 0.05
 ISO4762-M3x16 | Amazon | https://www.amazon.com/Socket-Screws-Metric-Stainless-Machine/dp/B07KRRG8HT | MewuDecor M3 x 16 mm 100-pack, 304 stainless (6 needed) | 0.10

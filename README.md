@@ -250,7 +250,7 @@ Every example supports the shared output flags:
 | `06-assistive-scooter` | Motorized wheelchair with two-stage planetary rear drives whose wheels bolt to the actuator output shafts, a V-slot frame, seat, armrests, a reusable joystick pod, and front casters (or a steerable fork). Rear and caster tyre bottoms share the `z = 0` ground plane. |
 
 Example 02 vendors and imports the exact moteus C1 r1.2 controller board
-(`examples/02-planetary-actuator/20240305-moteus-c1-r1_2.step`) as its on-axis
+(`components/vendor/20240305-moteus-c1-r1_2.step`) as its on-axis
 output sensor, © mjbots and the moteus contributors, under the Apache-2.0
 license. See
 [`examples/02-planetary-actuator/README.md`](examples/02-planetary-actuator/README.md)

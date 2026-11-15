@@ -10,6 +10,7 @@ __pycache__
 moon.work
 *.blend*
 *.step
+!components/vendor/*.step
 *.stp
 /*.md
 !README.md

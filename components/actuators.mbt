@@ -768,12 +768,13 @@ pub fn low_kv_bldc_motor(
         color=@step_cad.Rgb::grey(),
       ).with_part(stator_part),
     )
-    // The encoder board sits behind the rear endbell, its chip facing the
-    // rotor magnet with a 1 mm air gap.
+    // An on-axis rotor sensor board (for example a moteus C1 r1.2) attaches
+    // here, behind the rear endbell, facing the magnet on the back of the
+    // rotor across a 2 mm air gap. The board measures the speed of the rotor
+    // — and with it the input shaft it drives 1:1.
     .add_mate_mm_deg(
       "encoder_mount",
-      z=-p.body_length_mm - 4.0,
-      rx_deg=180.0,
+      z=-p.body_length_mm - 6.7,
       axis=(0.0, 0.0, 1.0),
     )
   let bolt_radius = p.bolt_circle_mm / 2.0
@@ -809,7 +810,8 @@ pub fn low_kv_bldc_motor(
         ).with_part(stator_part),
       )
     }
-    // Three phase leads and a connector stub exit the rear endbell.
+    // Three phase leads exit the rear endbell and are dressed straight into
+    // the rear-mounted controller board (they end just above it).
     let lead_radius = p.diameter_mm * 0.42
     for i in 0..<3 {
       let theta = (30.0 + 120.0 * i.to_double()) * @math.PI / 180.0
@@ -817,10 +819,10 @@ pub fn low_kv_bldc_motor(
         @cad.BodyPart::cylinder_mm(
           "\{stator_name}_phase_lead_\{i}",
           2.0,
-          12.0,
+          4.0,
           x_mm=lead_radius * @math.cos(theta),
           y_mm=lead_radius * @math.sin(theta),
-          z_mm=-p.body_length_mm - 6.0,
+          z_mm=-p.body_length_mm - 2.0,
           density=@urdf.Density::kg_per_m3(1200.0),
           color=@step_cad.Rgb::red(),
         ).with_part(stator_part),
@@ -873,26 +875,21 @@ pub fn low_kv_bldc_motor(
         spec=@cad.JointSpec::merge_rigid(),
         bom_external=false,
       )
-      // The rotor position sensor: an AS5047P-class board behind the rear
-      // endbell, its chip 1 mm from the rotor magnet.
-      .attach(
-        "rotor_sensor_mount",
-        parent_mate="encoder_mount",
-        moteus_position_sensor(
-          name=stator_name + "_position_sensor",
-          voltage_v=3.3,
-          current_ma=15.0,
-          detail~,
-        ),
-        child_mate="mount",
-        spec=@cad.JointSpec::merge_rigid(),
-      )
   }
   let rotor_part = purchased_part(
     "BLDC-ROTOR-\{p.name}",
     "Low-KV BLDC rotor \{p.name}",
     "mixed",
     0.0,
+  )
+  // The diametric sense magnet on the shaft end is what the rotor encoder
+  // actually reads; it is a separate purchase, not part of the motor.
+  let magnet_part = purchased_part(
+    "MAG-8x2-DIA",
+    "Diametrically magnetized NdFeB disc, 8 x 2 mm; bonds to the rotor shaft end behind the rear endbell",
+    "NdFeB",
+    2.0,
+    supplier_url="https://mjbots.com/products/diametric-disc-magnet",
   )
   let shaft_total_len = p.body_length_mm + p.shaft_length_mm
   let mut rotor = @cad.Component::new(
@@ -959,17 +956,36 @@ pub fn low_kv_bldc_motor(
           color=@step_cad.Rgb::grey(),
         ).with_part(rotor_part),
       )
-      .add_body(
-        @cad.BodyPart::cylinder_mm(
-          rotor_name + "_sensor_magnet",
-          8.0,
-          2.0,
-          z_mm=-p.body_length_mm - 1.0,
-          density=@urdf.Density::kg_per_m3(5000.0),
-          color=@step_cad.Rgb::purple(),
-        ).with_part(rotor_part),
-      )
   }
+  // The rotor sensor magnet is not optional: the rotor position sensor
+  // (a rear-mounted AS5047P such as the moteus C1) reads the rotor through
+  // it, in every detail level. It is a separate purchase, so it rides on
+  // its own component with an external attachment and lands on the BOM.
+  let rotor_magnet = @cad.Component::new(
+      rotor_name + "_sensor_magnet",
+      description="Diametric sense magnet bonded to the rotor shaft end; read by the rear-mounted AS5047P",
+    )
+    .with_part(magnet_part)
+    .add_body(
+      @cad.BodyPart::cylinder_mm(
+        rotor_name + "_sensor_magnet_body",
+        8.0,
+        2.0,
+        z_mm=0.0,
+        density=@urdf.Density::kg_per_m3(5000.0),
+        color=@step_cad.Rgb::purple(),
+      ).with_part(magnet_part),
+    )
+    .add_mate_mm_deg("mount")
+  rotor = rotor
+    .add_mate_mm_deg("magnet_seat", z=-p.body_length_mm - 1.0)
+    .attach(
+      "rotor_magnet_merge",
+      parent_mate="magnet_seat",
+      rotor_magnet,
+      child_mate="mount",
+      spec=@cad.JointSpec::merge_rigid(),
+    )
   rotor = rotor
     .add_mate_mm_deg("base")
     .add_mate_mm_deg("shaft", z=p.shaft_length_mm)
@@ -982,7 +998,7 @@ pub fn low_kv_bldc_motor(
     torque_rated_nm=bldc_rated_torque(p),
     driver="SimpleFOC",
     interface="CAN",
-    encoder="AS5600",
+    encoder="AS5047P on the rotor (rear magnet) via a controller such as a moteus C1",
   )
   stator
   .with_param("phase_resistance_ohm", (0.18 * 360.0 / p.kv).to_string())
@@ -990,8 +1006,10 @@ pub fn low_kv_bldc_motor(
   .with_param("rated_current_a", p.current_rated_a.to_string())
   .with_param("peak_current_a", p.current_peak_a.to_string())
   .with_param("poles", (p.pole_pairs * 2).to_string())
-  .with_param("rotor_encoder", "AS5600 / AS5047P-class, SPI")
-  .with_param("rotor_encoder_air_gap_mm", "1.0")
+  .with_param(
+    "rotor_encoder", "AS5047P on the rotor magnet (e.g. via a moteus C1), on-axis, ~2 mm gap",
+  )
+  .with_param("rotor_encoder_air_gap_mm", "2.0")
   .with_actuator(spec)
   .with_part(stator_part)
   .attach(
