@@ -43,36 +43,6 @@ fn prefix_body_names(comp : @cad.Component, prefix : String) -> @cad.Component {
 }
 
 ///|
-/// Rotates a component's bodies and mates about its own +X axis and slides it
-/// along that axis. The wheel frame's +X is the axle, so this sets the rib and
-/// bolt-hole phase and axial seat without tilting the axle.
-fn transform_component_about_x(
-  comp : @cad.Component,
-  angle_deg : Double,
-  x_mm~ : Double = 0.0,
-  anchor_mate~ : String = "",
-) -> @cad.Component {
-  let xform = @cad.urdf_transform_from_mm_deg(x_mm~, rx_deg=angle_deg)
-  let placement = @step_common.Placement::compose(
-    @step_common.Placement::translation(x_mm, 0.0, 0.0),
-    @step_common.Placement::rotation_x(angle_deg),
-  )
-  let mates : Map[String, @step_common.MateConnector] = Map([])
-  for name, mate in comp.mates {
-    if anchor_mate != "" && name == anchor_mate {
-      mates.set(name, mate)
-    } else {
-      mates.set(name, mate.transformed(placement))
-    }
-  }
-  {
-    ..comp,
-    bodies: comp.bodies.map(fn(body) { body.transform_by(xform) }),
-    mates,
-  }
-}
-
-///|
 /// The zero-based stage index of a stage-scoped CAD name, or `-1` when the
 /// part does not belong to a planetary stage.
 fn stage_index(name : String, stage_count : Int32) -> Int32 {
@@ -450,24 +420,14 @@ async fn main {
         part=Some(tire_part),
       ),
       "tire",
-    ).add_mate(
-      @step_common.MateConnector::from_mm_deg(
-        "hub-bore-front",
-        axis=(1.0, 0.0, 0.0),
-        kind=@step_common.MateKind::CylindricalBore,
-        gender=@step_common.MateGender::Female,
-        diameter_mm=tire_spec.hub_bore_diameter_mm,
-        depth_mm=tire_spec.hub_length_mm,
-        description="front end of the hub bore, used by the printed tire mount",
-      ),
     )
-    // The purchased wheel is one part. Three drilled holes in its plastic
-    // back plate line up with the printed tire mount's three M4 holes. The
-    // wheel turns by the mount's slot phase so its ribs land in the slots,
-    // and the bolt phase is offset so the drilled holes and the mount and hub
-    // bolt circles share the same 55.85 mm pattern.
-    let wheel_phase_deg = mount_spec.slot_phase_deg
-    let tire_bolt_phase_deg = mount_spec.bolt_hole_phase_deg + 270.0
+    // The purchased wheel is one part. The tire's rib phase and the mount's
+    // slot phase are both zero in their local frames, so snapping the wheel's
+    // `hub-bore` mate onto the mount's `hub-post` mate seats the ribs in the
+    // slots with no twist. Three drilled holes in the wheel's plastic back
+    // plate share the mount's 55.85 mm bolt circle and hole phase, and sit
+    // in the gaps halfway between the ribs.
+    let tire_bolt_phase_deg = mount_spec.bolt_hole_phase_deg
     let tire_bolt_length_mm = 40.0
     let bolt_radius = mount_spec.bolt_hole_circle_diameter_mm / 2.0
     let bolt_plate_x = -(tire_spec.hub_inset_mm + tire_spec.inset_thickness_mm)
@@ -505,12 +465,6 @@ async fn main {
           spec=@cad.JointSpec::merge_rigid(),
         )
     }
-    let wheel = transform_component_about_x(
-      wheel,
-      wheel_phase_deg,
-      x_mm=mount_spec.ring_depth_mm,
-      anchor_mate="hub-bore-front",
-    )
     let mount_part = @cad.PartMeta::new(
       "TIRE-MOUNT-86.3",
       description="Printed tire mount for the budrash 72-107 wheel; three M4 through-holes at 55.85 mm BCD, six rib slots, and a 12.7 mm hub post",
@@ -526,24 +480,48 @@ async fn main {
       }
     }
     tire_mount_step = Some(mount_step)
-    let mount = prefix_body_names(
-      @cad.Component::from_step_component(
+    // The mount is a boolean-cut printed part. Evaluate it with OCCT so the
+    // assembled and exploded STEP files show the real through-holes and
+    // slots instead of the flat writer's nominal untrimmed booleans, then
+    // import the evaluated solid as the component's single body.
+    let mount_eval = mount_step.to_step_evaluated() catch {
+      @step_cad.CsgEvalError(msg) => {
+        @cli.eprintln("error: could not evaluate the tire mount: " + msg)
+        abort("")
+      }
+      _ => {
+        @cli.eprintln("error: could not evaluate the tire mount")
+        abort("")
+      }
+    }
+    let mount = {
+      ..@cad.Component::from_step_component(
         "tire_mount",
         mount_step,
         density=@urdf.Density::carbon_fiber(),
         part=Some(mount_part),
       ),
-      "tire_mount",
-    )
+      bodies: [
+        @cad.BodyPart::imported_step(
+          "tire_mount_tire-mount",
+          mount_eval,
+          source="TIRE-MOUNT-86.3 (OCCT-evaluated)",
+          density=@urdf.Density::carbon_fiber(),
+          color=@step_cad.Rgb::new(0.68, 0.42, 0.12),
+          part=Some(mount_part),
+        ),
+      ],
+    }
     // The mount's front plate faces the gearbox; its hub post and rib slots
-    // face outboard into the flipped wheel. The wheel carries the rib and
-    // bolt-hole phase, and the +30 deg mount twist aligns both three-hole
-    // patterns with the output hub's heat-set inserts.
+    // face outboard into the wheel. The wheel snaps onto the hub post with no
+    // twist — fins land in the slots and the bolt holes land halfway between
+    // fins. The +30 deg mount twist aligns both three-hole patterns with the
+    // output hub's heat-set inserts.
     let mount = mount.attach(
       "tire_joint",
       parent_mate="hub-post",
       wheel,
-      child_mate="hub-bore-front",
+      child_mate="hub-bore",
       spec=@cad.JointSpec::merge_rigid(),
     )
     assembly = assembly.attach_to(
