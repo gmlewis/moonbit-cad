@@ -7,8 +7,10 @@ import {
 }
 
 import {
+  "gmlewis/step/cad" @step_cad,
   "gmlewis/step/components/fasteners" @step_fasteners,
   "gmlewis/step/components/motion" @step_motion,
   "gmlewis/step/components/standards" @step_standards,
+  "gmlewis/urdf",
   "moonbitlang/core/encoding/utf8" @encoding/utf8,
 } for "test"

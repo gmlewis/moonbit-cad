@@ -152,3 +152,36 @@ test "design with a revolved profile exports gltf" {
   // The exact STEP export keeps the spherical surface.
   assert_true(design.to_step_file().contains("SPHERICAL_SURFACE"))
 }
+
+///|
+test "imported STEP body keeps the vendor geometry and a placed bbox" {
+  let source = @step_cad.Design::new(name="vendor")
+    .add(@step_cad.Cuboid::new(10.0, 20.0, 30.0).with_name("vendor-board"))
+    .to_step_file()
+  let part = @cad.PartMeta::new(
+    "VENDOR-BOARD",
+    description="Vendor controller board",
+    material="FR-4",
+    process="purchased",
+    unit_cost_usd=100.0,
+  )
+  let body = @cad.BodyPart::imported_step(
+    "board",
+    source,
+    source="test",
+    density=@urdf.Density::g_per_cm3(1.85),
+    part=Some(part),
+    x_mm=5.0,
+  )
+  let (x0, x1, y0, y1, z0, z1) = body.node.bounding_box()
+  assert_true((x0 - 5.0).abs() < 1.0e-9)
+  assert_true((x1 - 15.0).abs() < 1.0e-9)
+  assert_true(y1 - y0 > 19.0)
+  assert_true(z1 - z0 > 29.0)
+  assert_true(body.inertial.mass > 0.0)
+  let comp = @cad.Component::new("import-test").add_body(body)
+  let step = comp.to_step_file()
+  assert_true(step.contains("vendor-board"))
+  assert_true(step.contains("MANIFOLD_SOLID_BREP"))
+  assert_eq(comp.bom().unassigned, 0)
+}

@@ -288,6 +288,79 @@ pub fn BodyPart::from_step_component(
 }
 
 ///|
+/// Imports an exact vendor STEP file as a purchased body.
+///
+/// The imported B-Rep is emitted verbatim (rigidly placed by the body's
+/// transform) in the flat STEP output. The URDF, collision checks, and glTF
+/// fallback use the imported solid's bounding box, so the body has a real
+/// mass, a conservative collision primitive, and a box visual without
+/// re-tessellating the vendor geometry.
+pub fn BodyPart::imported_step(
+  name : String,
+  step_text : String,
+  source~ : String = "",
+  density~ : @urdf.Density = @urdf.Density::g_per_cm3(1.85),
+  color~ : @step_cad.Rgb = @step_cad.Rgb::grey(),
+  part~ : PartMeta? = None,
+  x_mm~ : Double = 0.0,
+  y_mm~ : Double = 0.0,
+  z_mm~ : Double = 0.0,
+  rx_deg~ : Double = 0.0,
+  ry_deg~ : Double = 0.0,
+  rz_deg~ : Double = 0.0,
+) -> BodyPart {
+  let imported = match @step_cad.ImportedStep::from_string(step_text, source~) {
+    Ok(imported) => imported
+    Err(info) =>
+      abort(
+        "error: could not import STEP for body '\{name}'" +
+        (if source == "" { "" } else { " from " + source }) +
+        ": " +
+        info.message,
+      )
+  }
+  let shape = imported.as_shape().with_name(name).with_color(color)
+  let xform = urdf_transform_from_mm_deg(
+    x_mm~,
+    y_mm~,
+    z_mm~,
+    rx_deg~,
+    ry_deg~,
+    rz_deg~,
+  )
+  let placed = transform_scene_node_urdf(shape, xform)
+  let (x0, x1, y0, y1, z0, z1) = placed.bounding_box()
+  let sx = if x1 - x0 > 1.0e-3 { x1 - x0 } else { 1.0 }
+  let sy = if y1 - y0 > 1.0e-3 { y1 - y0 } else { 1.0 }
+  let sz = if z1 - z0 > 1.0e-3 { z1 - z0 } else { 1.0 }
+  let origin = @urdf.Origin::from_mm_deg(
+    x=(x0 + x1) / 2.0,
+    y=(y0 + y1) / 2.0,
+    z=(z0 + z1) / 2.0,
+  )
+  let inertial = @urdf.Inertial::from_box_density(
+    sx / 1000.0,
+    sy / 1000.0,
+    sz / 1000.0,
+    density~,
+    origin~,
+  )
+  let collision = @urdf.Collision::new(
+    @urdf.Geometry::box_mm(sx, sy, sz),
+    name=Some(name),
+    origin~,
+  )
+  BodyPart::custom(
+    name,
+    placed,
+    inertial,
+    collisions=[collision],
+    density~,
+    part~,
+  )
+}
+
+///|
 /// Converts a STEP primitive component into a CAD `Component`.
 ///
 /// The component inherits the primitive's description, its metadata as design

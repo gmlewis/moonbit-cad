@@ -1407,6 +1407,7 @@ pub fn planetary_bldc_actuator(
   output_shaft_extension_mm~ : Double = 0.0,
   heat_set_inserts~ : Bool = true,
   motor_source~ : String = "preset",
+  controller_pad_height_mm~ : Double = 30.0,
 ) -> @cad.Component {
   // `motor_source` selects the motor geometry: "preset" uses the compact
   // `low_kv_bldc_motor`; "brushless" uses the measured Tier-1
@@ -1663,14 +1664,15 @@ pub fn planetary_bldc_actuator(
     // The clamp collar between the two output bearings is attached to the
     // rotating carrier below (it clamps the output shaft, so it turns).
     .add_body(
-      // 3 mm thick along X, tangent to the housing side. The 42 x 30 face is
-      // the mounting face for the controller board and matches the housing
-      // height, so every board screw lands in the wall.
+      // 3 mm thick along X, tangent to the housing side. The face is the
+      // mounting plate for the controller board; `controller_pad_height_mm`
+      // lets a wider board (for example the 38 x 38 mm moteus C1) overhang the
+      // 30 mm housing wall on a printed plate.
       @cad.BodyPart::box_mm(
         name + "_controller_pad",
         3.0,
         42.0,
-        30.0,
+        controller_pad_height_mm,
         x_mm=housing_outer + 1.5,
         z_mm=(housing_bottom + housing_top) / 2.0,
         density=@urdf.Density::carbon_fiber(),

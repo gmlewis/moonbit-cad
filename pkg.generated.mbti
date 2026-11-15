@@ -115,6 +115,7 @@ pub fn BodyPart::custom(String, @gmlewis/step/cad.SceneNode, @urdf.Inertial, col
 pub fn BodyPart::cylinder_mm(String, Double, Double, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb, x_mm? : Double, y_mm? : Double, z_mm? : Double, rx_deg? : Double, ry_deg? : Double, rz_deg? : Double) -> Self
 pub fn BodyPart::extruded_profile_mm(String, Array[(Double, Double)], Double, holes? : Array[Array[(Double, Double)]], density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb, x_mm? : Double, y_mm? : Double, z_mm? : Double, rx_deg? : Double, ry_deg? : Double, rz_deg? : Double) -> Self
 pub fn BodyPart::from_step_component(@common.Component, density? : @urdf.Density, part? : PartMeta?, x_mm? : Double, y_mm? : Double, z_mm? : Double, rx_deg? : Double, ry_deg? : Double, rz_deg? : Double) -> Array[Self]
+pub fn BodyPart::imported_step(String, String, source? : String, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb, part? : PartMeta?, x_mm? : Double, y_mm? : Double, z_mm? : Double, rx_deg? : Double, ry_deg? : Double, rz_deg? : Double) -> Self
 pub fn BodyPart::transform_by(Self, @urdf.Transform) -> Self
 pub fn BodyPart::tube_mm(String, Double, Double, Double, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb, x_mm? : Double, y_mm? : Double, z_mm? : Double, rx_deg? : Double, ry_deg? : Double, rz_deg? : Double) -> Self
 pub fn BodyPart::with_part(Self, PartMeta) -> Self
