@@ -67,16 +67,13 @@ fn parse_supplier_links(text : String) -> Array[@cad.SupplierLink] {
 /// Display-only offset for the exploded, color-coded view.
 fn explode_offset(node : @step_cad.SceneNode) -> (Double, Double, Double) {
   let name = node.name
-  let radial = fn() -> (Double, Double) {
-    let (x0, x1, y0, y1, _, _) = node.bounding_box()
-    ((x0 + x1) / 2.0 * 0.8, (y0 + y1) / 2.0 * 0.8)
-  }
-  if name.contains("bearing-688") {
-    let (dx, dy) = radial()
-    (dx, dy, 95.0)
-  } else if name.contains("stage1_planet") {
-    let (dx, dy) = radial()
-    (dx, dy, 75.0)
+  if name.contains("herringbone-planetary") {
+    // The print-in-place gear set is one printed unit: keep the sun, planets,
+    // and ring in their assembled positions and move them together.
+    (0.0, 0.0, 20.0)
+  } else if name.contains("bearing-688") {
+    // A purchased bearing is one unit; move all of its layers together.
+    (0.0, 0.0, 95.0)
   } else if name.contains("moteus") || name.contains("board_standoff") {
     (0.0, 0.0, 250.0)
   } else if name.contains("bearing-608") || name.contains("M3-12") {
