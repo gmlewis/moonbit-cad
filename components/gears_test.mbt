@@ -2,8 +2,8 @@
 test "default planetary gearbox compiles to a mimic-coupled robot" {
   let gearbox = @components.planetary_gearbox()
   let robot = gearbox.to_robot()
-  assert_eq(robot.links.length(), 6)
-  assert_eq(robot.joints.length(), 5)
+  assert_eq(robot.links.length(), 7)
+  assert_eq(robot.joints.length(), 6)
   let mut continuous = 0
   let mut mimics = 0
   for joint in robot.joints {
@@ -24,8 +24,8 @@ test "default planetary gearbox compiles to a mimic-coupled robot" {
       None => ()
     }
   }
-  assert_eq(continuous, 5)
-  assert_eq(mimics, 4)
+  assert_eq(continuous, 6)
+  assert_eq(mimics, 5)
   if robot.has_errors() {
     let mut msg = "gearbox diagnostics:"
     for diagnostic in robot.diagnostics() {

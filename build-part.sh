@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # build-part.sh — build one example's complete build package.
 #
-# The package lands in build/<example>/ and its START-HERE.md answers exactly
+# The package lands in build/<example>/ and its START-HERE.html answers exactly
 # three questions: what to 3D-print, what to buy, and how to assemble it.
 set -euo pipefail
 
@@ -17,7 +17,7 @@ Examples:
   ./build-part.sh 05      # Galileo quadruped
   ./build-part.sh 06      # assistive scooter
 
-Everything is written to build/<example>/. Open START-HERE.md first.
+Everything is written to build/<example>/. Open START-HERE.html first.
 EOF
 }
 
@@ -48,13 +48,28 @@ echo "Building ${EXAMPLE} ..."
 # lighter mock-up.
 ./run-example.sh "${EXAMPLE}" --headless --detail detailed --package "${OUT}"
 
+# Render the beginner guide as a self-contained HTML page so it opens with
+# proper typography and tables in any browser.
+START_HTML="${OUT}/START-HERE.md"
+if command -v pandoc >/dev/null 2>&1; then
+  ./scripts/md-view.sh "${OUT}/START-HERE.md" "${OUT}/START-HERE.html" >/dev/null
+  ./scripts/md-view.sh "${OUT}/NAME-KEY.md" "${OUT}/NAME-KEY.html" >/dev/null
+  START_HTML="${OUT}/START-HERE.html"
+fi
+
 cat <<EOF
 
 Done. Everything you need is in: ${OUT}/
 
-  1. PRINT   ${OUT}/printable/       (settings in print-list.csv)
-  2. BUY     ${OUT}/START-HERE.md    (section 2)
-  3. ASSEMBLE ${OUT}/START-HERE.md   (section 3)
+  1. PRINT    ${OUT}/printable/       (settings in print-list.csv)
+  2. BUY      ${START_HTML}           (section 2)
+  3. ASSEMBLE ${START_HTML}           (section 3)
 
-Open ${OUT}/START-HERE.md first.
+Open it now:
+  open ${START_HTML}
 EOF
+
+if [[ "${START_HTML}" == *.md ]]; then
+  echo
+  echo "Tip: install pandoc (brew install pandoc) for a rendered HTML page."
+fi

@@ -15,8 +15,8 @@ a URDF robot, or a complete ROS 2 package bundle.
 ./build-part.sh 02
 ```
 
-This writes `build/02/` and tells you to open `build/02/START-HERE.md`. That
-page has exactly three sections:
+This writes `build/02/` and produces a styled, self-contained
+`build/02/START-HERE.html`. Open that page; it has exactly three sections:
 
 1. the STEP files to 3D-print (in `printable/`, with material and infill),
 2. the shopping list (quantities, prices, and supplier links),
@@ -24,6 +24,16 @@ page has exactly three sections:
 
 Use `./build-part.sh 05` or `./build-part.sh 06` for the other maintained
 examples. Nothing is opened on your screen while the package is generated.
+
+To render any Markdown file nicely in your browser:
+
+```bash
+./view-md.sh README.md
+```
+
+It uses `pandoc` and an embedded stylesheet, so the resulting `.html` is
+self-contained and easy to share. Install pandoc once with
+`brew install pandoc` if needed.
 
 ## Architecture
 
@@ -221,7 +231,7 @@ Every example supports the shared output flags:
 
 | Example | Description |
 | --- | --- |
-| `02-planetary-actuator` | Measured Tier-1 BLDC outrunner (`@step_motors.brushless_motor`) driving a four-planet Tier-1 planetary gearbox — housed with a twin-bearing output cartridge and the moteus C1 on-axis AS5047P sensor, or exposed as a bench/viewing stage. |
+| `02-planetary-actuator` | Measured Tier-1 BLDC outrunner (`@step_motors.brushless_motor`) driving a print-in-place, four-elbow, four-planet Tier-1 planetary gearbox — housed with a twin-bearing output cartridge and the moteus C1 on-axis AS5047P sensor, or exposed as a bench/viewing stage. |
 | `05-galileo-quadruped` | Wheeled quadruped with a V-slot chassis and four 4-DOF legs; every leg joint is a real low-KV BLDC planetary actuator driving the next printed link from its carrier output shaft. STEP, glTF, URDF, or full ROS 2 bundle. |
 | `06-assistive-scooter` | Motorized wheelchair with two-stage planetary rear drives whose wheels bolt to the actuator output shafts, a V-slot frame, seat, armrests, a reusable joystick pod, and front casters (or a steerable fork). Rear and caster tyre bottoms share the `z = 0` ground plane. |
 

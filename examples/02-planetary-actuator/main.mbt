@@ -36,6 +36,10 @@ async fn main {
     "gearType": @cli.opt_string(
       help="Gear type: herringbone (swept) or spur (smooth exact arcs); default herringbone",
     ),
+    "numElbows": @cli.opt_int(
+      4,
+      help="Herringbone elbows (4 = print-in-place gear set; 0 = straight)",
+    ),
     "stages": @cli.opt_int(
       1,
       help="Housed actuator planetary stages: 1 or 2 (the exposed variant is single-stage)",
@@ -82,6 +86,7 @@ async fn main {
   }
   let preset = args.string_opt("preset").unwrap_or("5010_360kv")
   let gear_type = args.string_opt("gearType").unwrap_or("herringbone")
+  let num_elbows = args.int("numElbows")
   let stages = args.int("stages")
   let module_mm = args.double("module")
   let sun_teeth = args.int("sunTeeth")
@@ -124,6 +129,7 @@ async fn main {
       smooth=gear_type == "spur",
       // The exposed bench variant deliberately has no ring housing.
       housing=false,
+      num_elbows~,
       detail~,
     )
     // Adapter plate at the BLDC motor's actual mounting circle. The center
@@ -243,6 +249,7 @@ async fn main {
       planet_count~,
       gear_length_mm=gear_length,
       gear_type~,
+      num_elbows~,
       detail~,
       motor_source="brushless",
       // The moteus C1 is the output sensor/controller; there is no separate
@@ -251,6 +258,13 @@ async fn main {
       magnet_diameter_mm~,
       magnet_height_mm~,
     )
+    // The 4-elbow herringbone gear set is print-in-place. Mark it so the build
+    // package lists one cartridge instead of separate sun/planet/ring files.
+    let act = if gear_type != "spur" && num_elbows >= 4 && stages == 1 {
+      act.with_param("print_in_place_gearset", "PGB-CARTRIDGE")
+    } else {
+      act
+    }
     // The exact moteus C1 r1.2 board (Apache-2.0, © mjbots). Its AS5047P
     // chip U6 is at the board center on the bottom face; the measured package
     // bottom is 1.2 mm below the board origin and the PCB bottom is 0.8 mm
@@ -449,4 +463,31 @@ async fn main {
     assembly
   }
   @common.write_output(comp, output, joint_positions=positions)
+  // The 4-elbow herringbone gear set is print-in-place. Add its single
+  // cartridge STEP to the build package; the package's START-HERE and
+  // print-list replace the separate sun/planet/ring files with this one.
+  if motor_kind == "bldc" &&
+    gear_type != "spur" &&
+    num_elbows >= 4 &&
+    stages == 1 {
+    match output.build_package {
+      Some(dir) => {
+        let cartridge = @components.planetary_actuator_cartridge(
+          preset~,
+          module_mm~,
+          sun_teeth~,
+          planet_teeth~,
+          planet_count~,
+          gear_length_mm=gear_length,
+          num_elbows~,
+          detail~,
+        )
+        @step_cad.write_text_file(
+          cartridge.to_step_file(),
+          Some(dir + "/printable/PGB-CARTRIDGE.step"),
+        )
+      }
+      None => ()
+    }
+  }
 }

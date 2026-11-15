@@ -42,7 +42,7 @@ pub(all) struct PlanetaryGearboxParams {
 }
 
 ///|
-/// Default gearbox parameters: a fast, clean 12/12/36 tooth set with 3 planets.
+/// Default gearbox parameters: a fast, clean 12/12/36 tooth set with 4 planets.
 pub fn PlanetaryGearboxParams::default() -> PlanetaryGearboxParams {
   {
     gear_module: 3.0,
@@ -50,7 +50,7 @@ pub fn PlanetaryGearboxParams::default() -> PlanetaryGearboxParams {
     helix_angle_deg: 30.0,
     sun_teeth: 12,
     planet_teeth: 12,
-    num_planets: 3,
+    num_planets: 4,
     pressure_angle_deg: 20.0,
     num_elbows: 2,
     resolution: 5,
@@ -114,35 +114,20 @@ fn pgb_housing_cost_usd() -> Double {
 }
 
 ///|
-/// Resolves the sweep elbow count for a detail level. `smooth` forces exact
-/// line/arc extrusions (`num_elbows = 0`), which are also glTF-safe.
+/// Resolves the sweep elbow count. `smooth` forces exact line/arc extrusions
+/// (`num_elbows = 0`), which are also glTF-safe. Otherwise the requested
+/// herringbone elbow count is honored at every detail level; detail controls
+/// the profile resolution, not the number of elbows.
 fn pgb_elbows(
   params : PlanetaryGearboxParams,
   smooth : Bool,
   detail : @step_common.DetailLevel,
 ) -> Int32 {
+  let _ = detail
   if smooth {
-    return 0
-  }
-  match detail {
-    @step_common.DetailLevel::Simplified =>
-      if params.num_elbows < 2 {
-        params.num_elbows
-      } else {
-        2
-      }
-    @step_common.DetailLevel::Detailed =>
-      if params.num_elbows < 2 {
-        2
-      } else {
-        params.num_elbows
-      }
-    @step_common.DetailLevel::FullyModeled =>
-      if params.num_elbows < 4 {
-        4
-      } else {
-        params.num_elbows
-      }
+    0
+  } else {
+    params.num_elbows
   }
 }
 
@@ -744,6 +729,42 @@ pub fn planetary_gearbox(
 }
 
 ///|
+/// Builds the sun, planets, and ring as **one print-in-place gear set**.
+///
+/// The multi-elbow herringbone teeth interlock: the gears cannot be inserted
+/// into the ring after printing, so the whole set is exported in its assembled
+/// Z-up position as one multi-body STEP. Print it as a single job, then add
+/// the separately printed carrier, bearings, housing, and output hardware.
+pub fn planetary_print_in_place(
+  name~ : String = "planetary_cartridge",
+  params~ : PlanetaryGearboxParams = PlanetaryGearboxParams::default(),
+  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Detailed,
+) -> @cad.Component {
+  let step_params = pgb_step_params(params, false, detail)
+  let step_comp = expect_step(
+    "print-in-place gear set",
+    @step_planetary.herringbone_planetary_gearbox(step_params),
+  )
+  let part = fabricated_part(
+    "PGB-CARTRIDGE",
+    "Print-in-place herringbone gear set (sun, planets, and ring); print as one job",
+    "PETG / carbon fiber nylon",
+    "3D print",
+    pgb_sun_cost_usd() +
+    pgb_ring_cost_usd() +
+    pgb_planet_cost_usd() * params.num_planets.to_double(),
+  )
+  @cad.Component::from_step_component(
+    name,
+    step_comp,
+    density=@urdf.Density::petg(),
+    part=Some(part),
+  )
+  .with_param("num_elbows", params.num_elbows.to_string())
+  .with_param("print_in_place", "true")
+}
+
+///|
 /// A spur gear built from the Tier-1 involute gear primitive.
 ///
 /// The gear is centered on `z = 0` and marked as a 3D-printed part so
@@ -810,7 +831,7 @@ pub fn planetary_gearset_stage(
   module_mm~ : Double = 1.0,
   sun_teeth~ : Int32 = 12,
   planet_teeth~ : Int32 = 18,
-  planet_count~ : Int32 = 3,
+  planet_count~ : Int32 = 4,
   face_width_mm~ : Double = 8.0,
   pressure_angle_deg~ : Double = 20.0,
   sun_bore_mm~ : Double = 0.0,
@@ -820,6 +841,7 @@ pub fn planetary_gearset_stage(
   output_shaft_length_mm~ : Double = 12.0,
   smooth~ : Bool = true,
   housing~ : Bool = true,
+  num_elbows~ : Int32 = 2,
   detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
 ) -> @cad.Component {
   let planet_bore = if planet_bore_mm > 0.0 {
@@ -835,7 +857,7 @@ pub fn planetary_gearset_stage(
     planet_teeth,
     num_planets: planet_count,
     pressure_angle_deg,
-    num_elbows: 2,
+    num_elbows,
     resolution: 5,
     bore_radius_mm: sun_bore_mm / 2.0,
     planet_bore_radius_mm: planet_bore / 2.0,

@@ -1397,9 +1397,10 @@ pub fn planetary_bldc_actuator(
   module_mm~ : Double = 1.0,
   sun_teeth~ : Int32 = 12,
   planet_teeth~ : Int32 = 12,
-  planet_count~ : Int32 = 3,
+  planet_count~ : Int32 = 4,
   gear_length_mm~ : Double = 10.0,
   gear_type~ : String = "herringbone",
+  num_elbows~ : Int32 = 2,
   detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
   joint_name~ : String = "",
   add_binding~ : Bool = true,
@@ -1419,9 +1420,10 @@ pub fn planetary_bldc_actuator(
   // `step_brushless_motor` envelope.
   let p = resolve_bldc_preset(preset)
   let stage_count = if stages < 1 { 1 } else if stages > 2 { 2 } else { stages }
-  // Simplified actuators use exact line/arc gears for fast simulation meshes;
-  // herringbone sweeps are reserved for detailed and fully modeled builds.
-  let smooth = gear_type == "spur" || !detail_is_rich(detail)
+  // Only an explicit spur request uses exact line/arc gears. The default
+  // herringbone gear set uses the 4-elbow print-in-place geometry at every
+  // detail level; the detail level controls outline resolution, not elbows.
+  let smooth = gear_type == "spur"
   let rotor_joint = if joint_name == "" {
     name + "_motor_rotor_joint"
   } else {
@@ -1517,7 +1519,7 @@ pub fn planetary_bldc_actuator(
       planet_teeth,
       num_planets: planet_count,
       pressure_angle_deg: 20.0,
-      num_elbows: 2,
+      num_elbows,
       resolution: 5,
       bore_radius_mm: stage1_sun_bore,
       planet_bore_radius_mm: planet_bore_radius,
@@ -1918,7 +1920,7 @@ pub fn planetary_bldc_actuator(
         planet_teeth,
         num_planets: planet_count,
         pressure_angle_deg: 20.0,
-        num_elbows: 2,
+        num_elbows,
         resolution: 5,
         bore_radius_mm: coupling_bore,
         planet_bore_radius_mm: planet_bore_radius,
@@ -2101,6 +2103,59 @@ pub fn planetary_bldc_actuator(
 }
 
 ///|
+/// Builds the actuator's stage-1 gear set as one print-in-place cartridge.
+///
+/// The 4-elbow herringbone teeth cannot be assembled after printing. Export
+/// this single multi-body STEP, print it as one job, and then add the
+/// separately printed carrier, bearings, housing, and output hardware.
+pub fn planetary_actuator_cartridge(
+  name~ : String = "planetary_cartridge",
+  preset~ : String = "5010_360kv",
+  module_mm~ : Double = 1.0,
+  sun_teeth~ : Int32 = 12,
+  planet_teeth~ : Int32 = 12,
+  planet_count~ : Int32 = 4,
+  gear_length_mm~ : Double = 10.0,
+  num_elbows~ : Int32 = 4,
+  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Detailed,
+) -> @cad.Component {
+  let p = resolve_bldc_preset(preset)
+  let planet_root = module_mm * (planet_teeth.to_double() / 2.0 - 1.25)
+  let use_planet_bearing = planet_root > 9.5
+  let planet_bore_radius = if use_planet_bearing { 8.0 } else { 2.0 }
+  let params : PlanetaryGearboxParams = {
+    gear_module: module_mm,
+    gear_length_mm,
+    helix_angle_deg: 30.0,
+    sun_teeth,
+    planet_teeth,
+    num_planets: planet_count,
+    pressure_angle_deg: 20.0,
+    num_elbows,
+    resolution: 5,
+    bore_radius_mm: p.shaft_diameter_mm / 2.0 + 0.1,
+    planet_bore_radius_mm: planet_bore_radius,
+    carrier_pin_diam_mm: if use_planet_bearing {
+      8.0
+    } else {
+      3.8
+    },
+    carrier_bearing_designation: if use_planet_bearing {
+      "688"
+    } else {
+      ""
+    },
+    output_shaft_diam_mm: 8.0,
+    carrier_thickness_mm: 8.0,
+    output_shaft_length_mm: 12.0,
+    tolerance_mm: 0.2,
+    outer_thickness_mm: 6.0,
+    include_carrier: false,
+  }
+  planetary_print_in_place(name~, params~, detail~)
+}
+
+///|
 /// Convenience factory for the standard integrated low-KV BLDC planetary
 /// actuator: a Tier-1 motor, a printed Tier-1 planetary stage, a printed
 /// housing, planet bearings, a twin-608 output cartridge, and an optional
@@ -2115,7 +2170,7 @@ pub fn bldc_actuator_pod(
   module_mm~ : Double = 1.0,
   sun_teeth~ : Int32 = 12,
   planet_teeth~ : Int32 = 12,
-  planet_count~ : Int32 = 3,
+  planet_count~ : Int32 = 4,
   gear_length_mm~ : Double = 10.0,
   gear_type~ : String = "herringbone",
   detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,

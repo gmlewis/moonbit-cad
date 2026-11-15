@@ -565,7 +565,7 @@ pub fn quadruped_leg_assembly(
   let module_mm = 1.0
   let sun_teeth = 12
   let planet_teeth = 12
-  let planet_count = 3
+  let planet_count = 4
   let gear_length_mm = 10.0
   let thigh_name = prefix + "_thigh_link"
   let calf_name = prefix + "_calf_link"
@@ -1222,7 +1222,7 @@ pub fn planetary_wheel_drive_unit(
   module_mm~ : Double = 2.0,
   sun_teeth~ : Int32 = 12,
   planet_teeth~ : Int32 = 18,
-  planet_count~ : Int32 = 3,
+  planet_count~ : Int32 = 4,
   gear_length_mm~ : Double = 14.0,
   gear_type~ : String = "spur",
   wheel_diam_mm~ : Double = 250.0,

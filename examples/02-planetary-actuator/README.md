@@ -19,6 +19,12 @@ orbiting planets for load sharing (5:1 reduction). `--numPlanets` overrides
 the count; the equally spaced 12/48 combination supports 3, 4, 6, or 12
 planets.
 
+The stage uses the **4-elbow herringbone** geometry (`--numElbows 4`). This
+gear set is **print-in-place**: the sun, planets, and ring interlock and cannot
+be assembled after printing. The build package prints them as one
+`printable/PGB-CARTRIDGE.step` job, then adds the separately printed carrier,
+bearings, hub, housing, and output hardware.
+
 ## Drivetrain
 
 The motor rotor directly drives the sun gear. In the housed layout the rotor

@@ -110,11 +110,15 @@ pub fn pcb_board(name? : String, length_mm? : Double, width_mm? : Double, thickn
 
 pub fn pcb_from_kicad(name? : String, footprints? : Array[KiCadFootprint], board_len_mm? : Double, board_w_mm? : Double, thickness_mm? : Double, origin_x_mm? : Double, origin_y_mm? : Double, flip_y? : Bool, mounting_hole_match? : String, mounting_hole_diam_mm? : Double, board_margin_mm? : Double, max_component_height_mm? : Double) -> @gmlewis/cad.Component
 
-pub fn planetary_bldc_actuator(name? : String, preset? : String, stages? : Int32, module_mm? : Double, sun_teeth? : Int32, planet_teeth? : Int32, planet_count? : Int32, gear_length_mm? : Double, gear_type? : String, detail? : @common.DetailLevel, joint_name? : String, add_binding? : Bool, output_encoder? : Bool, output_shaft_extension_mm? : Double, heat_set_inserts? : Bool, motor_source? : String, output_sensor? : String, magnet_diameter_mm? : Double, magnet_height_mm? : Double) -> @gmlewis/cad.Component
+pub fn planetary_actuator_cartridge(name? : String, preset? : String, module_mm? : Double, sun_teeth? : Int32, planet_teeth? : Int32, planet_count? : Int32, gear_length_mm? : Double, num_elbows? : Int32, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
+
+pub fn planetary_bldc_actuator(name? : String, preset? : String, stages? : Int32, module_mm? : Double, sun_teeth? : Int32, planet_teeth? : Int32, planet_count? : Int32, gear_length_mm? : Double, gear_type? : String, num_elbows? : Int32, detail? : @common.DetailLevel, joint_name? : String, add_binding? : Bool, output_encoder? : Bool, output_shaft_extension_mm? : Double, heat_set_inserts? : Bool, motor_source? : String, output_sensor? : String, magnet_diameter_mm? : Double, magnet_height_mm? : Double) -> @gmlewis/cad.Component
 
 pub fn planetary_gearbox(name? : String, params? : PlanetaryGearboxParams, smooth? : Bool, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
 
-pub fn planetary_gearset_stage(name? : String, module_mm? : Double, sun_teeth? : Int32, planet_teeth? : Int32, planet_count? : Int32, face_width_mm? : Double, pressure_angle_deg? : Double, sun_bore_mm? : Double, planet_bore_mm? : Double, carrier_pin_diam_mm? : Double, carrier_bearing? : String, output_shaft_length_mm? : Double, smooth? : Bool, housing? : Bool, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
+pub fn planetary_gearset_stage(name? : String, module_mm? : Double, sun_teeth? : Int32, planet_teeth? : Int32, planet_count? : Int32, face_width_mm? : Double, pressure_angle_deg? : Double, sun_bore_mm? : Double, planet_bore_mm? : Double, carrier_pin_diam_mm? : Double, carrier_bearing? : String, output_shaft_length_mm? : Double, smooth? : Bool, housing? : Bool, num_elbows? : Int32, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
+
+pub fn planetary_print_in_place(name? : String, params? : PlanetaryGearboxParams, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
 
 pub fn planetary_reduction(Int32, Int32, Int32) -> Double
 

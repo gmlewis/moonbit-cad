@@ -259,8 +259,15 @@ pub fn Component::print_list_csv(self : Component) -> String {
     "layer_height_mm", "infill_percent", "support", "notes",
   ]
   let rows : Array[String] = [csv_row(header.map(fn(v) { csv_field(v) }))]
+  let cartridge_name = match self.parameters.get("print_in_place_gearset") {
+    Some(cartridge) => cartridge
+    None => ""
+  }
   for line in self.bom().lines {
     if line.process != "purchased" {
+      if cartridge_name != "" && is_gearset_layer(line.part_number) {
+        continue
+      }
       rows.push(
         csv_row([
           csv_field(line.part_number),
@@ -276,6 +283,22 @@ pub fn Component::print_list_csv(self : Component) -> String {
         ]),
       )
     }
+  }
+  if cartridge_name != "" {
+    rows.push(
+      csv_row([
+        csv_field(cartridge_name),
+        csv_field("Print-in-place herringbone gear set (sun, planets, ring)"),
+        "1",
+        csv_field("PETG / carbon fiber nylon"),
+        csv_field("3D print"),
+        csv_field("flat on the build plate, gears already in place"),
+        "0.20",
+        "40",
+        "none",
+        csv_field("print in place; do not assemble the gears afterward"),
+      ]),
+    )
   }
   rows.fold(init="", fn(acc, row) { acc + row + "\n" })
 }
@@ -536,6 +559,15 @@ fn md_cell(text : String) -> String {
 }
 
 ///|
+/// True for the sun/ring/planet layers that are replaced by a single
+/// print-in-place cartridge when the gearbox requests it.
+fn is_gearset_layer(part_number : String) -> Bool {
+  part_number == "PGB-SUN" ||
+  part_number == "PGB-RING" ||
+  part_number.has_prefix("PGB-PLANET")
+}
+
+///|
 /// Collects the CAD names that appear in the assembly procedure and maps each
 /// to the part a builder should pick up.
 fn collect_name_key(
@@ -614,10 +646,20 @@ pub fn Component::start_here_text(
   let printable_files : Array[String] = printable.map(fn(part) {
     sanitize_part_number(part.part_number)
   })
+  let cartridge_name = match self.parameters.get("print_in_place_gearset") {
+    Some(cartridge) => cartridge
+    None => ""
+  }
   let mut out = "# Start here — " + package_name + "\n\n"
   out = out +
     "This folder contains everything you need. Do these three steps in order.\n\n"
   out = out + "## 1. 3D-print these files\n\n"
+  if cartridge_name != "" {
+    out = out +
+      "> **Important — the gear set is print-in-place.** Print `printable/" +
+      cartridge_name +
+      ".step` as one job. Do not print the separate PGB-SUN, PGB-RING, or PGB-PLANET files, and do not try to assemble the gears afterward — the 4-elbow herringbone teeth cannot be inserted into the ring. You can still press the planet bearings into the captive planets from above, and skip the step that attaches the sun to the ring housing (the sun is already captive).\n\n"
+  }
   out = out +
     "Open the `printable/` folder. Print one copy of each file unless the Qty column says more. " +
     "Use the material and infill below, and put the largest flat face on the build plate.\n\n"
@@ -626,6 +668,9 @@ pub fn Component::start_here_text(
   out = out + "| --- | --- | --- | --- | --- | --- | --- |\n"
   let mut printed_count = 0
   for line in bom.lines {
+    if cartridge_name != "" && is_gearset_layer(line.part_number) {
+      continue
+    }
     if line.process != "purchased" &&
       printable_files.contains(sanitize_part_number(line.part_number)) {
       printed_count = printed_count + line.quantity
@@ -647,6 +692,13 @@ pub fn Component::start_here_text(
         md_cell(print_orientation(line)) +
         " |\n"
     }
+  }
+  if cartridge_name != "" {
+    printed_count = printed_count + 1
+    out = out +
+      "| `printable/" +
+      cartridge_name +
+      ".step` | Print-in-place herringbone gear set (sun + planets + ring) | 1 | PETG / carbon fiber nylon | 3D print | 40% | flat on the build plate, gears already in place |\n"
   }
   out = out +
     "\nThat is **" +
@@ -692,6 +744,15 @@ pub fn Component::start_here_text(
     "Check that all printed pieces are cleaned up and all purchased parts are on the bench. " +
     "You will need a 3D printer (step 1), a clean bench, and these hex keys: "
   let procedure = self.build_procedure_text()
+  let display_procedure = if cartridge_name == "" {
+    procedure
+  } else {
+    let lines : Array[String] = procedure
+      .split("\n")
+      .collect()
+      .map(fn(part) { part.to_owned() })
+    lines.filter(fn(line) { !line.contains("_stage1_sun to ") }).join("\n")
+  }
   let sizes : Array[String] = ["2", "2.5", "3", "4", "5", "6", "8", "10"]
   let keys : Array[String] = []
   for size in sizes {
@@ -709,7 +770,7 @@ pub fn Component::start_here_text(
     "If a step uses a name you do not recognize, open `NAME-KEY.md`; it maps every name to the part it means.\n\n"
   let step_count = self.assembly_plan().length()
   if step_count <= 80 {
-    out = out + "```\n" + procedure + "```\n\n"
+    out = out + "```\n" + display_procedure + "```\n\n"
   } else {
     out = out +
       "This design has **" +
@@ -877,7 +938,14 @@ pub fn Component::build_package_files(
     BuildFile::new("link-parts.csv", self.link_parts_csv()),
     BuildFile::new("firmware.h", self.firmware_header()),
   ]
+  let cartridge_name = match self.parameters.get("print_in_place_gearset") {
+    Some(cartridge) => cartridge
+    None => ""
+  }
   for part in self.printable_parts() {
+    if cartridge_name != "" && is_gearset_layer(part.part_number) {
+      continue
+    }
     files.push(
       BuildFile::new(
         "printable/\{sanitize_part_number(part.part_number)}.step",
