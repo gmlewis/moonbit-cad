@@ -64,8 +64,12 @@ inside the housing and gear train. Use the exploded, color-coded view:
 ./run-example.sh 02-planetary-actuator --view --explode
 ```
 
-or open `build/02/exploded.step` from the build package. Every kind of part has
-its own color:
+or open `build/02/exploded.step` from the build package.
+
+The print-in-place sun/planet/ring cartridge moves as **one unit** and is
+never split apart. Purchased parts — bearings, motor, board, standoffs,
+screws — also keep all their sub-bodies together, so each purchased item
+stays identifiable. Every kind of part has its own color:
 
 | Color | Part kind |
 | --- | --- |
