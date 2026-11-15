@@ -101,6 +101,9 @@ EXAMPLE_PATH="$EXAMPLE_ARG"
 if [[ "$EXAMPLE_ARG" =~ ^[0-9]+$ ]]; then
   NUM="$(printf "%02d" $((10#$EXAMPLE_ARG)))"
   MATCHES=("$ROOT_DIR"/examples/"$NUM"-*)
+  if [[ ! -d "${MATCHES[0]}" ]]; then
+    MATCHES=("$ROOT_DIR"/examples/"$NUM"_*)
+  fi
   if [[ -d "${MATCHES[0]}" ]]; then
     EXAMPLE_PATH="examples/$(basename "${MATCHES[0]}")"
   fi

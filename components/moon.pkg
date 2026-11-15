@@ -19,4 +19,5 @@ import {
   "gmlewis/cad/components",
   "gmlewis/urdf",
   "moonbitlang/core/math",
+  "moonbitlang/core/string",
 } for "test"

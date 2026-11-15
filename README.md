@@ -135,6 +135,14 @@ tree, so a load can be snapped onto a motor's nested rotor link.
   `planetary_gear_set` assembly and is what example 02 uses; sun, planet, ring,
   and carrier are individually printable. Tier-1 does not yet expose a
   herringbone gearbox component, only the involute planetary assembly.
+- **`components/motorized-gearbox`** — a compact multi-stage motorized
+  planetary gearbox: each stage's internal ring gear is printed as part of that
+  stage's outer casing module, the motor bolts to the casing's end cap, every
+  later stage's sun rides directly on the previous carrier's output shaft, and
+  the final carrier drives a flanged output shaft plus a 40 mm bolt-circle hub.
+  Planet bearings default to flanged, sealed `FR8-2RS` bearings pressed into the
+  planets from the lower face; the flange seats flush and prevents the bearing
+  sliding through the gear. Example 01 builds a motorized wheel from it.
 - **`components/mobility`** — reusable box-tube struts, printable robot leg
   segments with bored proximal hubs, dual spars, lightening ribs, cable clips,
   and a distal motor cup, treaded wheels with a printed rim and chevron/lug
@@ -184,6 +192,11 @@ the Tier-1 STEP primitives:
   608 output cartridge, an on-axis AS5047P output encoder, and mimic-linked
   gears. The output carrier is a true mimic joint; the output sensor supplies
   absolute joint feedback rather than a second command binding.
+- `motorized_gearbox` — the compact, arbitrary-stage alternative used by
+  example 01. Stage ring gears are the casing; the default planet bearing is
+  the flanged `FR8-2RS`; the motor's fixed side bolts to the casing; and the
+  final carrier carries a standard output hub. Every stage parameter is
+  independent, and the command input is the motor rotor joint.
 - `bldc_actuator_pod` — the preferred factory name for the integrated
   actuator; `qdd_actuator_pod` remains for compatibility.
 - `planetary_gearset_stage` — the exposed stage used by example 02's
@@ -199,11 +212,11 @@ the Tier-1 STEP primitives:
 - `joystick_pod` — a reusable two-axis Hall stick with an E-stop and power
   button, a printable housing, and `signal`/`estop`/`power`/`ground` ports.
 
-Examples 02, 05, and 06 use these modules. Example 02 uses the measured Tier-1
-`step_brushless_motor` in both layouts and also accepts `--motor exposed` for
-the exposed-stage variant; example 05 accepts `--foot` for a rubber-foot
-quadruped; example 06 accepts `--layout scooter` for the lighter single-fork
-vehicle.
+Examples 01, 02, 05, and 06 use these modules. Example 02 uses the measured
+Tier-1 `step_brushless_motor` in both layouts and also accepts `--motor
+exposed` for the exposed-stage variant; example 01 uses the compact multi-stage
+`motorized_gearbox`; example 05 accepts `--foot` for a rubber-foot quadruped;
+example 06 accepts `--layout scooter` for the lighter single-fork vehicle.
 
 ## Showcase examples
 
@@ -211,7 +224,7 @@ Each example is a MoonBit executable under `examples/`. Run one by number or
 name:
 
 ```bash
-./run-example.sh 01 --out bracket.step
+./run-example.sh 01 --numStages 2 --headless
 ./run-example.sh 05-galileo-quadruped --bundle /tmp/galileo_bundle
 ./run-example.sh 06 --out scooter.step --urdf scooter.urdf
 ```
@@ -231,6 +244,7 @@ Every example supports the shared output flags:
 
 | Example | Description |
 | --- | --- |
+| `01_motorized_wheel` | Compact multi-stage planetary gearbox whose ring gears are the outer casing, with a 1/2" flanged-bearing planet set and a 40 mm output bolt circle, driving the measured 7-inch tier-1 tire. Stage parameters are comma-separated lists (`--numStages 3 --numElbows 0,1,2`). |
 | `02-planetary-actuator` | Measured Tier-1 BLDC outrunner (`@step_motors.brushless_motor`) driving a print-in-place, four-elbow, four-planet Tier-1 planetary gearbox — housed with a twin-bearing output cartridge and the moteus C1 on-axis AS5047P sensor, or exposed as a bench/viewing stage. |
 | `05-galileo-quadruped` | Wheeled quadruped with a V-slot chassis and four 4-DOF legs; every leg joint is a real low-KV BLDC planetary actuator driving the next printed link from its carrier output shaft. STEP, glTF, URDF, or full ROS 2 bundle. |
 | `06-assistive-scooter` | Motorized wheelchair with two-stage planetary rear drives whose wheels bolt to the actuator output shafts, a V-slot frame, seat, armrests, a reusable joystick pod, and front casters (or a steerable fork). Rear and caster tyre bottoms share the `z = 0` ground plane. |

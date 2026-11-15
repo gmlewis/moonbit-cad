@@ -56,6 +56,8 @@ pub fn flange_plate(name? : String, outer_diam_mm? : Double, center_bore_mm? : D
 
 pub fn flanged_bearing_block(name? : String, bearing_outer_mm? : Double, bearing_width_mm? : Double, flange_diam_mm? : Double, bolt_circle_mm? : Double) -> @gmlewis/cad.Component
 
+pub fn flanged_bearing_fr8_2rs() -> FlangedBearingSpec
+
 pub fn flattened_geometry(String, @gmlewis/cad.Component, x_mm? : Double, y_mm? : Double, z_mm? : Double, rx_deg? : Double, ry_deg? : Double, rz_deg? : Double) -> @gmlewis/cad.Component
 
 pub fn force_sensor(name? : String, body_len_mm? : Double, body_w_mm? : Double, body_h_mm? : Double, voltage_v? : Double, current_ma? : Double) -> @gmlewis/cad.Component
@@ -96,6 +98,8 @@ pub fn magnetic_encoder(name? : String, disc_diam_mm? : Double, board_len_mm? : 
 
 pub fn moteus_position_sensor(name? : String, board_len_mm? : Double, board_w_mm? : Double, thickness_mm? : Double, mounting_hole_diam_mm? : Double, hole_inset_mm? : Double, chip_size_mm? : Double, chip_height_mm? : Double, voltage_v? : Double, current_ma? : Double, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
 
+pub fn motorized_gearbox(name? : String, preset? : String, stages~ : Array[MotorizedStageSpec], casing_wall_mm? : Double, flange_thickness_mm? : Double, flange_extra_mm? : Double, carrier_thickness_mm? : Double, carrier_margin_mm? : Double, casing_radial_clearance_mm? : Double, min_smooth_wall_mm? : Double, top_gap_mm? : Double, coupling_shaft_mm? : Double, output_bearing? : String, output_free_length_mm? : Double, output_collar_width_mm? : Double, output_collar_outer_diam_mm? : Double, output_hub? : Bool, output_hub_diam_mm? : Double, output_hub_thickness_mm? : Double, output_bolt_circle_mm? : Double, frame_bolt_circle_mm? : Double, heat_set_inserts? : Bool, detail? : @common.DetailLevel, motor_source? : String, joint_name? : String, add_binding? : Bool) -> @gmlewis/cad.Component
+
 pub fn nema_frame_dims(String) -> (Double, Double, Double, Double)
 
 pub fn nema_mount_plate_part(name? : String, designation? : String, width_mm? : Double, height_mm? : Double, thickness_mm? : Double, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
@@ -127,6 +131,8 @@ pub fn planetary_wheel_drive_unit(name? : String, preset? : String, stages? : In
 pub fn qdd_actuator_pod(name? : String, housing_diam_mm? : Double, housing_length_mm? : Double, output_diam_mm? : Double, output_thickness_mm? : Double, reduction? : Double, lower_rad? : Double, upper_rad? : Double, max_effort_nm? : Double, max_vel_rad_s? : Double, color? : @gmlewis/step/cad.Rgb, detail? : @common.DetailLevel, threads? : @common.ThreadRepresentation) -> @gmlewis/cad.Component
 
 pub fn quadruped_leg_assembly(String, is_left~ : Bool, hip_offset_y_mm? : Double, thigh_length_mm? : Double, calf_length_mm? : Double, wheel_diam_mm? : Double, max_effort_nm? : Double, max_vel_rad_s? : Double, wheeled? : Bool, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
+
+pub fn resolve_flanged_bearing(String) -> FlangedBearingSpec
 
 pub fn rigid_coupling_part(name? : String, outer_diam_mm? : Double, bore_diam_mm? : Double, length_mm? : Double) -> @gmlewis/cad.Component
 
@@ -189,6 +195,15 @@ pub(all) struct BldcPreset {
   bearing_designation : String
 }
 
+pub(all) struct FlangedBearingSpec {
+  designation : String
+  bore_mm : Double
+  outer_mm : Double
+  width_mm : Double
+  flange_outer_mm : Double
+  flange_thickness_mm : Double
+}
+
 pub(all) struct KiCadFootprint {
   reference : String
   value : String
@@ -199,6 +214,18 @@ pub(all) struct KiCadFootprint {
   side : String
 }
 pub fn KiCadFootprint::new(reference? : String, value? : String, footprint? : String, x_mm? : Double, y_mm? : Double, rotation_deg? : Double, side? : String) -> Self
+
+pub(all) struct MotorizedStageSpec {
+  module_mm : Double
+  sun_teeth : Int32
+  planet_teeth : Int32
+  planet_count : Int32
+  gear_length_mm : Double
+  num_elbows : Int32
+  planet_bearing : String
+}
+pub fn MotorizedStageSpec::default() -> Self
+pub fn MotorizedStageSpec::new(module_mm~ : Double, sun_teeth~ : Int32, planet_teeth~ : Int32, planet_count~ : Int32, gear_length_mm~ : Double, num_elbows? : Int32, planet_bearing? : String) -> Self
 
 pub(all) struct PlanetaryGearboxParams {
   gear_module : Double
