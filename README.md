@@ -205,7 +205,7 @@ Every example supports the shared output flags:
 
 | Example | Description |
 | --- | --- |
-| `02-planetary-actuator` | Measured Tier-1 BLDC outrunner (`@step_motors.brushless_motor`) driving a Tier-1 planetary gearbox — housed with a twin-bearing output cartridge and moteus-style AS5047P encoder, or exposed as a bench/viewing stage. |
+| `02-planetary-actuator` | Measured Tier-1 BLDC outrunner (`@step_motors.brushless_motor`) driving a four-planet Tier-1 planetary gearbox — housed with a twin-bearing output cartridge and the moteus C1 on-axis AS5047P sensor, or exposed as a bench/viewing stage. |
 | `05-galileo-quadruped` | Wheeled quadruped with a V-slot chassis and four 4-DOF legs; every leg joint is a real low-KV BLDC planetary actuator driving the next printed link from its carrier output shaft. STEP, glTF, URDF, or full ROS 2 bundle. |
 | `06-assistive-scooter` | Motorized wheelchair with two-stage planetary rear drives whose wheels bolt to the actuator output shafts, a V-slot frame, seat, armrests, a reusable joystick pod, and front casters (or a steerable fork). Rear and caster tyre bottoms share the `z = 0` ground plane. |
 

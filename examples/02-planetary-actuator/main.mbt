@@ -43,7 +43,10 @@ async fn main {
     "module": @cli.opt_double(1.5, help="Gear module (tooth size)"),
     "sunTeeth": @cli.opt_int(12, help="Sun gear tooth count"),
     "planetTeeth": @cli.opt_int(18, help="Planet gear tooth count"),
-    "numPlanets": @cli.opt_int(3, help="Number of orbiting planets"),
+    "numPlanets": @cli.opt_int(
+      4,
+      help="Number of orbiting planets (default 4 for load sharing)",
+    ),
     "gearLength": @cli.opt_double(10.0, help="Face width in mm"),
     "motorDeg": @cli.opt_double(0.0, help="Motor shaft angle in degrees"),
     "magnetDiam": @cli.opt_double(

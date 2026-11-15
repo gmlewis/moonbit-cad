@@ -12,6 +12,24 @@ Run it from the repository root:
 ./run-example.sh 02-planetary-actuator --view --motor exposed
 ```
 
+## Gearbox
+
+The default stage is a 12T sun, 18T planets, and a 48T ring with **four**
+orbiting planets for load sharing (5:1 reduction). `--numPlanets` overrides
+the count; the equally spaced 12/48 combination supports 3, 4, 6, or 12
+planets.
+
+## Drivetrain
+
+The motor rotor directly drives the sun gear. In the housed layout the rotor
+shaft spans roughly `z = -28..14 mm`; the sun clamp hub occupies
+`z = -0.5..4 mm` and the sun gear `z = 4..14 mm` for the default 10 mm stage.
+The shaft passes through both the clamp hub and the full sun bore. The sun
+joint is a 1:1 mimic of the motor rotor joint
+(`set_joint_mimic(..., multiplier=1.0)`); the carrier and planets then follow
+the sun through the planetary tooth ratios. The printed housing hides this in
+the housed layout — `--motor exposed` shows the same shaft-to-sun path openly.
+
 ## Output sensor
 
 The housed layout mounts the exact moteus C1 r1.2 board horizontally above the

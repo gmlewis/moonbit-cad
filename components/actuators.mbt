@@ -1550,10 +1550,6 @@ pub fn planetary_bldc_actuator(
     "ACT-COVER-BOSS", "Printed output cover bearing boss; press the second 608 bearing into this seat",
     "carbon fiber nylon", "3D print", 4.0,
   )
-  let pad_part = fabricated_part(
-    "ACT-CONTROLLER-PAD", "Printed controller mounting pad", "carbon fiber nylon",
-    "3D print", 3.0,
-  )
   let motor_bolt_radius = p.bolt_circle_mm / 2.0
   let plate_holes : Array[(Double, Double, Double)] = []
   // Size the plate bore to the motor's own front bearing, but never so large
@@ -1666,23 +1662,6 @@ pub fn planetary_bldc_actuator(
         color=@step_cad.Rgb::black(),
       ).with_part(cover_boss_part),
     )
-    // The clamp collar between the two output bearings is attached to the
-    // rotating carrier below (it clamps the output shaft, so it turns).
-    .add_body(
-      // 3 mm thick along X, tangent to the housing side. The face is the
-      // mounting plate for a controller board; a 42 x 30 mm board fits, and
-      // wider boards can overhang it.
-      @cad.BodyPart::box_mm(
-        name + "_controller_pad",
-        3.0,
-        42.0,
-        30.0,
-        x_mm=housing_outer + 1.5,
-        z_mm=(housing_bottom + housing_top) / 2.0,
-        density=@urdf.Density::carbon_fiber(),
-        color=@step_cad.Rgb::black(),
-      ).with_part(pad_part),
-    )
     .add_mate_mm_deg("motor_mount", z=-motor_plate_mm, axis=(0.0, 0.0, -1.0))
     .add_mate_mm_deg("bearing_seat", z=-3.0)
     .add_mate_mm_deg("gearbox_mount")
@@ -1693,13 +1672,6 @@ pub fn planetary_bldc_actuator(
     // Top of the output cover plate: the support base for an external sensor
     // bracket or long standoffs.
     .add_mate_mm_deg("sensor_base", z=housing_top + cover_plate_mm)
-    .add_mate_mm_deg(
-      "controller_mount",
-      x=housing_outer + 3.0,
-      z=(housing_bottom + housing_top) / 2.0,
-      ry_deg=90.0,
-      axis=(1.0, 0.0, 0.0),
-    )
     .add_port(
       @cad.Port::new(
         "power",
