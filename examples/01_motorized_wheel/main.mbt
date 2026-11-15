@@ -20,139 +20,12 @@
 /// ```
 
 ///|
-/// Parses the pipe-separated supplier-link file.
-///
-/// Format: `part_number | supplier | supplier_url | notes | cost`; blank
-/// lines and lines starting with `#` are ignored.
-fn parse_supplier_links(text : String) -> Array[@cad.SupplierLink] {
-  let out : Array[@cad.SupplierLink] = []
-  for raw_line in text.split("\n") {
-    let line = raw_line.to_owned().trim().to_owned()
-    if line == "" || line.has_prefix("#") {
-      continue
-    }
-    let fields : Array[String] = line
-      .split("|")
-      .collect()
-      .map(fn(field) { field.to_owned().trim().to_owned() })
-    if fields.length() < 3 {
-      continue
-    }
-    let cost : Double? = if fields.length() > 4 && fields[4] != "" {
-      Some(@string.parse_double(fields[4])) catch {
-        _ => None
-      }
-    } else {
-      None
-    }
-    out.push(
-      @cad.SupplierLink::new(
-        part_number=fields[0],
-        supplier=if fields.length() > 1 { fields[1] } else { "" },
-        supplier_url=if fields.length() > 2 { fields[2] } else { "" },
-        notes=if fields.length() > 3 { fields[3] } else { "" },
-        unit_cost_usd?=cost,
-      ),
-    )
+/// Unwraps a shared parser result, aborting with a clean message on failure.
+fn[T] cli_or_abort(result : Result[T, String]) -> T {
+  match result {
+    Ok(value) => value
+    Err(message) => abort("error: " + message)
   }
-  out
-}
-
-///|
-/// Parses a comma-separated double list and extends it to `count` entries by
-/// repeating the last value.
-fn parse_double_list(
-  text : String,
-  count : Int32,
-  label : String,
-) -> Array[Double] {
-  let values : Array[Double] = []
-  for raw in text.split(",") {
-    let item = raw.trim().to_owned()
-    if item == "" {
-      continue
-    }
-    values.push(
-      @string.parse_double(item) catch {
-        _ =>
-          abort(
-            "error: --" +
-            label +
-            " expects comma-separated numbers; got '" +
-            item +
-            "'",
-          )
-      },
-    )
-  }
-  if values.length() == 0 {
-    abort("error: --" + label + " needs at least one value")
-  }
-  let out : Array[Double] = []
-  for i in 0..<count {
-    let index = if i < values.length() { i } else { values.length() - 1 }
-    out.push(values[index])
-  }
-  out
-}
-
-///|
-/// Parses a comma-separated integer list and repeats the last value.
-fn parse_int_list(text : String, count : Int32, label : String) -> Array[Int32] {
-  let values : Array[Int32] = []
-  for raw in text.split(",") {
-    let item = raw.trim().to_owned()
-    if item == "" {
-      continue
-    }
-    values.push(
-      @string.parse_int(item) catch {
-        _ =>
-          abort(
-            "error: --" +
-            label +
-            " expects comma-separated integers; got '" +
-            item +
-            "'",
-          )
-      },
-    )
-  }
-  if values.length() == 0 {
-    abort("error: --" + label + " needs at least one value")
-  }
-  let out : Array[Int32] = []
-  for i in 0..<count {
-    let index = if i < values.length() { i } else { values.length() - 1 }
-    out.push(values[index])
-  }
-  out
-}
-
-///|
-/// Parses a comma-separated string list and repeats the last value.
-fn parse_string_list(
-  text : String,
-  count : Int32,
-  label : String,
-) -> Array[String] {
-  let values : Array[String] = []
-  for raw in text.split(",") {
-    let item = raw.trim().to_owned()
-    if item == "" {
-      continue
-    }
-    values.push(item)
-  }
-  if values.length() == 0 {
-    abort("error: --" + label + " needs at least one value")
-  }
-  let out : Array[String] = []
-  for i in 0..<count {
-    let index = if i < values.length() { i } else { values.length() - 1 }
-    out.push(values[index])
-  }
-  out
 }
 
 ///|
@@ -344,40 +217,54 @@ async fn main {
   }
   let stage_count = num_stages
   let preset = args.string_opt("preset").unwrap_or("5010_360kv")
-  let modules = parse_double_list(
-    args.string_opt("module").unwrap_or("2.0"),
-    stage_count,
-    "module",
+  let modules = cli_or_abort(
+    @cad.parse_double_list(
+      args.string_opt("module").unwrap_or("2.0"),
+      stage_count,
+      "module",
+    ),
   )
-  let sun_teeth = parse_int_list(
-    args.string_opt("sunTeeth").unwrap_or("12"),
-    stage_count,
-    "sunTeeth",
+  let sun_teeth = cli_or_abort(
+    @cad.parse_int_list(
+      args.string_opt("sunTeeth").unwrap_or("12"),
+      stage_count,
+      "sunTeeth",
+    ),
   )
-  let planet_teeth = parse_int_list(
-    args.string_opt("planetTeeth").unwrap_or("20"),
-    stage_count,
-    "planetTeeth",
+  let planet_teeth = cli_or_abort(
+    @cad.parse_int_list(
+      args.string_opt("planetTeeth").unwrap_or("20"),
+      stage_count,
+      "planetTeeth",
+    ),
   )
-  let planet_counts = parse_int_list(
-    args.string_opt("numPlanets").unwrap_or("4"),
-    stage_count,
-    "numPlanets",
+  let planet_counts = cli_or_abort(
+    @cad.parse_int_list(
+      args.string_opt("numPlanets").unwrap_or("4"),
+      stage_count,
+      "numPlanets",
+    ),
   )
-  let gear_lengths = parse_double_list(
-    args.string_opt("gearLength").unwrap_or("10"),
-    stage_count,
-    "gearLength",
+  let gear_lengths = cli_or_abort(
+    @cad.parse_double_list(
+      args.string_opt("gearLength").unwrap_or("10"),
+      stage_count,
+      "gearLength",
+    ),
   )
-  let elbows = parse_int_list(
-    args.string_opt("numElbows").unwrap_or("0"),
-    stage_count,
-    "numElbows",
+  let elbows = cli_or_abort(
+    @cad.parse_int_list(
+      args.string_opt("numElbows").unwrap_or("0"),
+      stage_count,
+      "numElbows",
+    ),
   )
-  let bearings = parse_string_list(
-    args.string_opt("planetBearing").unwrap_or("FR8-2RS"),
-    stage_count,
-    "planetBearing",
+  let bearings = cli_or_abort(
+    @cad.parse_string_list(
+      args.string_opt("planetBearing").unwrap_or("FR8-2RS"),
+      stage_count,
+      "planetBearing",
+    ),
   )
   let stage_specs : Array[@components.MotorizedStageSpec] = []
   for i in 0..<stage_count {
@@ -506,7 +393,7 @@ async fn main {
   let links_path = "examples/01_motorized_wheel/supplier-links.txt"
   let links_text = @fs.read_file(links_path).text() catch { _ => "" }
   let assembly = assembly
-    .with_supplier_links(parse_supplier_links(links_text))
+    .with_supplier_links(@cad.parse_supplier_links(links_text))
     .with_param("exploded_view", "exploded.step")
   @common.write_output(assembly, output, joint_positions=positions)
   // The build package always gets an exploded, color-coded view.

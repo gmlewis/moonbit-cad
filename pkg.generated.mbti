@@ -29,6 +29,14 @@ pub fn is_fabricated_part(PartMeta) -> Bool
 
 pub fn parse_detail_level(String) -> @common.DetailLevel?
 
+pub fn parse_double_list(String, Int32, String) -> Result[Array[Double], String]
+
+pub fn parse_int_list(String, Int32, String) -> Result[Array[Int32], String]
+
+pub fn parse_string_list(String, Int32, String) -> Result[Array[String], String]
+
+pub fn parse_supplier_links(String) -> Array[SupplierLink]
+
 pub fn parse_thread_rep(String) -> @common.ThreadRepresentation?
 
 pub fn rgb_to_rgba(@gmlewis/step/cad.Rgb, a? : Double) -> @urdf.Rgba

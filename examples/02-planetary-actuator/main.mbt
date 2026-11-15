@@ -25,45 +25,6 @@
 /// See `examples/02-planetary-actuator/README.md` for the full attribution.
 
 ///|
-/// Parses the pipe-separated supplier-link file.
-///
-/// Format: `part_number | supplier | supplier_url | notes`; blank lines and
-/// lines starting with `#` are ignored.
-fn parse_supplier_links(text : String) -> Array[@cad.SupplierLink] {
-  let out : Array[@cad.SupplierLink] = []
-  for raw_line in text.split("\n") {
-    let line = raw_line.to_owned().trim().to_owned()
-    if line == "" || line.has_prefix("#") {
-      continue
-    }
-    let fields : Array[String] = line
-      .split("|")
-      .collect()
-      .map(fn(field) { field.to_owned().trim().to_owned() })
-    if fields.length() < 3 {
-      continue
-    }
-    let cost : Double? = if fields.length() > 4 && fields[4] != "" {
-      Some(@string.parse_double(fields[4])) catch {
-        _ => None
-      }
-    } else {
-      None
-    }
-    out.push(
-      @cad.SupplierLink::new(
-        part_number=fields[0],
-        supplier=if fields.length() > 1 { fields[1] } else { "" },
-        supplier_url=if fields.length() > 2 { fields[2] } else { "" },
-        notes=if fields.length() > 3 { fields[3] } else { "" },
-        unit_cost_usd?=cost,
-      ),
-    )
-  }
-  out
-}
-
-///|
 /// Display-only offset for the exploded, color-coded view.
 fn explode_offset(node : @step_cad.SceneNode) -> (Double, Double, Double) {
   let name = node.name
@@ -628,7 +589,7 @@ async fn main {
   let links_path = "examples/02-planetary-actuator/supplier-links.txt"
   let links_text = @fs.read_file(links_path).text() catch { _ => "" }
   let comp = comp
-    .with_supplier_links(parse_supplier_links(links_text))
+    .with_supplier_links(@cad.parse_supplier_links(links_text))
     .with_param("exploded_view", "exploded.step")
   @common.write_output(comp, output, joint_positions=positions)
   // The 4-elbow herringbone gear set is print-in-place. Add its single

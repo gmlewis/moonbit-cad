@@ -4,6 +4,7 @@ import {
   "gmlewis/step/components/common" @step_common,
   "gmlewis/urdf",
   "moonbitlang/core/math",
+  "moonbitlang/core/string",
 }
 
 import {
