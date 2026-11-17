@@ -69,6 +69,42 @@ pub fn iso_shcs_screw(
 }
 
 ///|
+/// A countersunk flat-head socket screw (ISO 10642) with its flush head top
+/// at `z = 0`.
+///
+/// Both head and shank extend along `-Z` to `-length_mm`.
+pub fn iso_cs_screw(
+  name~ : String = "cs_screw",
+  size~ : @step_standards.MetricSize = @step_standards.M4,
+  length_mm~ : Double = 8.0,
+  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
+  threads? : @step_common.ThreadRepresentation,
+) -> @cad.Component {
+  let step_comp = match
+    @step_fasteners.iso10642_screw(size, length_mm, detail~, threads?) {
+    Ok(comp) => comp
+    Err(error) => step_error("ISO 10642 screw", error)
+  }
+  let dims = match @step_standards.iso10642_size(size) {
+    Ok(dims) => dims
+    Err(error) => step_error("ISO 10642 dimensions", error)
+  }
+  let part = purchased_part(
+    "ISO10642-\{size.designation()}x\{length_mm}",
+    "ISO 10642 countersunk socket head cap screw \{size.designation()} x \{length_mm} mm",
+    "steel",
+    0.35,
+    supplier_url="https://www.mcmaster.com/screws/flat-head-socket-cap-screws/",
+  )
+  @cad.Component::from_step_component(name, step_comp, part=Some(part))
+  .add_mate_mm_deg("head_top")
+  .add_mate_mm_deg("head_seat", z=-dims.head_height_mm)
+  .add_mate_mm_deg("tip", z=-length_mm)
+  .with_param("thread", size.designation())
+  .with_param("length_mm", length_mm.to_string())
+}
+
+///|
 /// A hex-head bolt (ISO 4017) with the head seat at `z = 0`.
 pub fn iso_hex_bolt(
   name~ : String = "hex_bolt",

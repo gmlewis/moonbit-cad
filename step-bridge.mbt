@@ -154,6 +154,16 @@ fn layer_leaf_name(name : String) -> String {
 
 ///|
 /// Builds one `BodyPart` from an already placed scene node.
+pub fn BodyPart::from_scene_node(
+  node : @step_cad.SceneNode,
+  density~ : @urdf.Density = @urdf.Density::steel_mild(),
+  part~ : PartMeta? = None,
+) -> BodyPart {
+  body_part_from_placed_node(node, density, part)
+}
+
+///|
+/// Builds one `BodyPart` from an already placed scene node.
 fn body_part_from_placed_node(
   placed : @step_cad.SceneNode,
   density : @urdf.Density,
@@ -418,6 +428,77 @@ pub fn step_component_layer_names(
 }
 
 ///|
+/// Builds a CAD `Component` from the layers of a multi-layer STEP component
+/// that match `keep_layer`.
+fn Component::from_step_layers_matching(
+  name : String,
+  step_comp : @step_common.Component,
+  keep_layer : (String) -> Bool,
+  layer_label : String,
+  connector_prefix_filter : String?,
+  density~ : @urdf.Density = @urdf.Density::steel_mild(),
+  part~ : PartMeta? = None,
+  connector_prefix~ : String = "",
+  include_connectors~ : Bool = true,
+  apply_placement~ : Bool = true,
+  x_mm~ : Double = 0.0,
+  y_mm~ : Double = 0.0,
+  z_mm~ : Double = 0.0,
+  rx_deg~ : Double = 0.0,
+  ry_deg~ : Double = 0.0,
+  rz_deg~ : Double = 0.0,
+) -> Component {
+  let xform = urdf_transform_from_mm_deg(
+    x_mm~,
+    y_mm~,
+    z_mm~,
+    rx_deg~,
+    ry_deg~,
+    rz_deg~,
+  )
+  let mut comp = Component::new(name, description=step_comp.description())
+  let mut first = true
+  for layer in step_comp.layers() {
+    let leaf = layer_leaf_name(layer.name)
+    if !keep_layer(layer.name) && !keep_layer(leaf) {
+      continue
+    }
+    let source = if apply_placement {
+      placed_layer_node(layer)
+    } else {
+      layer.shape.with_name(layer.name).with_color(layer.color)
+    }
+    let placed = transform_scene_node_urdf(source, xform)
+    comp = comp.add_body(
+      body_part_from_placed_node(
+        placed,
+        density,
+        if first {
+          part
+        } else {
+          None
+        },
+      ),
+    )
+    first = false
+  }
+  comp = comp
+    .with_param("designation", step_comp.metadata().designation)
+    .with_param("layer", layer_label)
+  if include_connectors {
+    comp = comp.add_step_connectors(
+      step_comp,
+      connector_prefix~,
+      only_prefix=connector_prefix_filter,
+    )
+  }
+  match part {
+    Some(p) => comp.with_part(p)
+    None => comp
+  }
+}
+
+///|
 /// Converts one named layer of a multi-layer STEP component into a CAD
 /// `Component`.
 ///
@@ -442,7 +523,17 @@ pub fn Component::from_step_layer(
   ry_deg~ : Double = 0.0,
   rz_deg~ : Double = 0.0,
 ) -> Component {
-  let xform = urdf_transform_from_mm_deg(
+  Component::from_step_layers_matching(
+    name,
+    step_comp,
+    fn(candidate) { candidate == layer_name },
+    layer_name,
+    Some(layer_name),
+    density~,
+    part~,
+    connector_prefix~,
+    include_connectors~,
+    apply_placement~,
     x_mm~,
     y_mm~,
     z_mm~,
@@ -450,43 +541,46 @@ pub fn Component::from_step_layer(
     ry_deg~,
     rz_deg~,
   )
-  let mut comp = Component::new(name, description=step_comp.description())
-  let mut first = true
-  for layer in step_comp.layers() {
-    if layer.name != layer_name && layer_leaf_name(layer.name) != layer_name {
-      continue
-    }
-    let source = if apply_placement {
-      placed_layer_node(layer)
-    } else {
-      layer.shape.with_name(layer.name).with_color(layer.color)
-    }
-    let placed = transform_scene_node_urdf(source, xform)
-    comp = comp.add_body(
-      body_part_from_placed_node(
-        placed,
-        density,
-        if first {
-          part
-        } else {
-          None
-        },
-      ),
-    )
-    first = false
-  }
-  comp = comp
-    .with_param("designation", step_comp.metadata().designation)
-    .with_param("layer", layer_name)
-  if include_connectors {
-    comp = comp.add_step_connectors(
-      step_comp,
-      connector_prefix~,
-      only_prefix=Some(layer_name),
-    )
-  }
-  match part {
-    Some(p) => comp.with_part(p)
-    None => comp
-  }
+}
+
+///|
+/// Converts a selected subset of named layers from a multi-layer STEP
+/// component into a single CAD `Component` whose bodies move together as one
+/// rigid link.
+pub fn Component::from_step_layers(
+  name : String,
+  step_comp : @step_common.Component,
+  layer_names : Array[String],
+  label~ : String = "",
+  density~ : @urdf.Density = @urdf.Density::steel_mild(),
+  part~ : PartMeta? = None,
+  connector_prefix~ : String = "",
+  include_connectors~ : Bool = false,
+  apply_placement~ : Bool = true,
+  x_mm~ : Double = 0.0,
+  y_mm~ : Double = 0.0,
+  z_mm~ : Double = 0.0,
+  rx_deg~ : Double = 0.0,
+  ry_deg~ : Double = 0.0,
+  rz_deg~ : Double = 0.0,
+) -> Component {
+  let layer_label = if label == "" { layer_names.join(",") } else { label }
+  Component::from_step_layers_matching(
+    name,
+    step_comp,
+    fn(candidate) { layer_names.contains(candidate) },
+    layer_label,
+    None,
+    density~,
+    part~,
+    connector_prefix~,
+    include_connectors~,
+    apply_placement~,
+    x_mm~,
+    y_mm~,
+    z_mm~,
+    rx_deg~,
+    ry_deg~,
+    rz_deg~,
+  )
 }

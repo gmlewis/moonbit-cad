@@ -561,6 +561,1019 @@ fn motorized_last_carrier_name(name : String, stage_count : Int32) -> String {
 }
 
 ///|
+/// Subtracts axial pin drive pockets (and optional SHCS head counterbore) from
+/// a flush gear body without touching its swept gear teeth.
+fn cut_sun_drive_features(
+  body : @cad.BodyPart,
+  name : String,
+  pin_radius_mm : Double,
+  pin_diam_mm : Double,
+  pin_depth_mm : Double,
+  counterbore_diam_mm : Double,
+  counterbore_z0_mm : Double,
+  gear_length_mm : Double,
+  color : @step_cad.Rgb,
+) -> @cad.BodyPart {
+  let cutters : Array[@step_cad.SceneNode] = [
+    @step_cad.Cylinder::new(pin_diam_mm, pin_depth_mm + 0.5)
+    .with_name(name + "_pin_cut_pos")
+    .translate(x=pin_radius_mm, z=-0.5),
+    @step_cad.Cylinder::new(pin_diam_mm, pin_depth_mm + 0.5)
+    .with_name(name + "_pin_cut_neg")
+    .translate(x=-pin_radius_mm, z=-0.5),
+  ]
+  if counterbore_diam_mm > 0.0 && counterbore_z0_mm < gear_length_mm {
+    let cb_h = gear_length_mm - counterbore_z0_mm + 0.5
+    cutters.push(
+      @step_cad.Cylinder::new(counterbore_diam_mm, cb_h)
+      .with_name(name + "_cbore_cut")
+      .translate(z=counterbore_z0_mm),
+    )
+  }
+  {
+    ..body,
+    node: @step_cad.difference(body.node, cutters, name=body.name).with_color(
+      color,
+    ),
+  }
+}
+
+///|
+/// Builds one printed stage casing module (`MG-CASING-{idx}`).
+///
+/// When `stage_flush` is true, the bottom mounting flange sits flush on `z = 0`
+/// (with top-down screw access at `bottom_phase_deg`) and the top flange carries
+/// 6 bolt lugs with 45-deg support slopes staggered at `top_phase_deg`, so a
+/// 4-elbow print-in-place cartridge rests dead flat on the print bed with zero
+/// overhangs and unobstructed top-down hex-key access to every screw.
+fn build_stage_casing_comp(
+  name : String,
+  idx : Int32,
+  part : @cad.PartMeta,
+  ring_body : @cad.BodyPart,
+  gear_length : Double,
+  stage_height : Double,
+  ring_free_bore : Double,
+  smooth_inner : Double,
+  casing_outer : Double,
+  flange_outer_radius : Double,
+  flange_thickness_mm : Double,
+  casing_bolt_radius : Double,
+  stage_flush : Bool,
+  bottom_phase_deg : Double,
+  top_phase_deg : Double,
+  detail : @step_common.DetailLevel,
+  color : @step_cad.Rgb,
+) -> @cad.Component {
+  let mut module_comp = @cad.Component::new(
+      "\{name}_stage\{idx}_casing_module",
+      description="Printed stage casing module with integrated ring gear, carrier bore, and joint flanges",
+    )
+    .with_part(part)
+    .add_body(ring_body)
+  let smooth_height = stage_height - gear_length
+  if !stage_flush {
+    module_comp = module_comp.add_body(
+      @cad.BodyPart::tube_mm(
+        "\{name}_stage\{idx}_casing_sleeve",
+        casing_outer * 2.0,
+        smooth_inner * 2.0,
+        smooth_height,
+        z_mm=gear_length + smooth_height / 2.0,
+        density=@urdf.Density::carbon_fiber(),
+        color~,
+      ).with_part(part),
+    )
+    let bottom_holes : Array[(Double, Double, Double)] = [
+      (0.0, 0.0, ring_free_bore * 2.0 + 0.4),
+    ]
+    for i in 0..<6 {
+      let theta = 2.0 * @math.PI * i.to_double() / 6.0
+      bottom_holes.push(
+        (
+          casing_bolt_radius * @math.cos(theta),
+          casing_bolt_radius * @math.sin(theta),
+          3.4,
+        ),
+      )
+    }
+    module_comp = module_comp.add_body(
+      actuator_plate_body(
+        "\{name}_stage\{idx}_bottom_flange",
+        flange_outer_radius * 2.0,
+        flange_thickness_mm,
+        -flange_thickness_mm,
+        bottom_holes,
+        @urdf.Density::carbon_fiber(),
+        color,
+        detail,
+      ).with_part(part),
+    )
+    let top_holes : Array[(Double, Double, Double)] = [
+      (0.0, 0.0, smooth_inner * 2.0),
+    ]
+    for i in 0..<6 {
+      let theta = 2.0 * @math.PI * i.to_double() / 6.0
+      top_holes.push(
+        (
+          casing_bolt_radius * @math.cos(theta),
+          casing_bolt_radius * @math.sin(theta),
+          3.4,
+        ),
+      )
+    }
+    module_comp = module_comp.add_body(
+      actuator_plate_body(
+        "\{name}_stage\{idx}_top_flange",
+        flange_outer_radius * 2.0,
+        flange_thickness_mm,
+        stage_height,
+        top_holes,
+        @urdf.Density::carbon_fiber(),
+        color,
+        detail,
+      ).with_part(part),
+    )
+    return module_comp
+  }
+  // Flush print-in-place housing shell: bottom flange ring sits on z = [0, ft],
+  // carrier sleeve covers z = [gear_length, stage_height + ft], and 6 top bolt
+  // lugs at `top_phase_deg` flare at 45 deg for support-free printing.
+  let top_z = stage_height + flange_thickness_mm
+  let profile = @step_cad.RevolvedProfile::polyline(
+      [
+        (casing_outer - 0.1, 0.0),
+        (flange_outer_radius, 0.0),
+        (flange_outer_radius, flange_thickness_mm),
+        (casing_outer, flange_thickness_mm),
+        (casing_outer, top_z),
+        (smooth_inner, top_z),
+        (smooth_inner, gear_length),
+        (casing_outer - 0.1, gear_length),
+      ],
+      closed=true,
+    )
+    .as_shape()
+    .with_name("\{name}_stage\{idx}_casing_shell_base")
+  let parts : Array[@step_cad.SceneNode] = [profile]
+  let overhang = flange_outer_radius - casing_outer
+  let z_slope = if stage_height - overhang > gear_length {
+    stage_height - overhang
+  } else {
+    gear_length
+  }
+  let r_in = casing_outer - 2.0
+  let lug_width = 16.0
+  for i in 0..<6 {
+    let angle_deg = top_phase_deg + 60.0 * i.to_double()
+    let angle_rad = angle_deg * @math.PI / 180.0
+    // Rx(90) Rz(a) maps extruded d in [0, lug_width] centered at u=w/2 along
+    // (+w/2*sin(a), -w/2*cos(a)); negate to center each lug radially on a.
+    let lug_prism = @step_cad.ExtrudedProfile::new(
+        [
+          (r_in, z_slope),
+          (flange_outer_radius, stage_height),
+          (flange_outer_radius, top_z),
+          (r_in, top_z),
+        ],
+        lug_width,
+      )
+      .with_name("\{name}_stage\{idx}_top_lug_\{i}")
+      .rotate_x(90.0)
+      .rotate_z(angle_deg)
+      .translate(
+        x=-lug_width / 2.0 * @math.sin(angle_rad),
+        y=lug_width / 2.0 * @math.cos(angle_rad),
+      )
+    parts.push(lug_prism)
+  }
+  let raw_shell = @step_cad.union_all(
+    parts,
+    name="\{name}_stage\{idx}_casing_shell_raw",
+  )
+  let cutters : Array[@step_cad.SceneNode] = []
+  for i in 0..<6 {
+    let b_rad = (bottom_phase_deg + 60.0 * i.to_double()) * @math.PI / 180.0
+    cutters.push(
+      @step_cad.Cylinder::new(3.4, flange_thickness_mm + 2.0)
+      .with_name("bottom_hole_\{i}")
+      .translate(
+        x=casing_bolt_radius * @math.cos(b_rad),
+        y=casing_bolt_radius * @math.sin(b_rad),
+        z=-1.0,
+      ),
+    )
+    let t_rad = (top_phase_deg + 60.0 * i.to_double()) * @math.PI / 180.0
+    cutters.push(
+      @step_cad.Cylinder::new(4.5, flange_thickness_mm + 2.0)
+      .with_name("top_insert_hole_\{i}")
+      .translate(
+        x=casing_bolt_radius * @math.cos(t_rad),
+        y=casing_bolt_radius * @math.sin(t_rad),
+        z=stage_height - 1.0,
+      ),
+    )
+  }
+  let shell_name = "\{name}_stage\{idx}_casing_shell"
+  let shell_node = @step_cad.difference(raw_shell, cutters, name=shell_name).with_color(
+    color,
+  )
+  module_comp.add_body(
+    @cad.BodyPart::from_scene_node(
+      shell_node,
+      density=@urdf.Density::carbon_fiber(),
+      part=Some(part),
+    ),
+  )
+}
+
+///|
+/// Builds the fixed, ventilated stator housing (`MG-MOTOR-HOUSING`) for the
+/// A12 8318 100KV motor.
+///
+/// Local frame matches world frame relative to Stage 1 bottom (`z = 0.0`):
+/// - `z = 0.0`: top flange face meeting Stage 1 with 6x M3 heat-set inserts.
+/// - `z = -14.0 .. -6.0`: 45-deg support-free flange flare (`126.8 -> 142.8 mm`).
+/// - `z = -42.0 .. -14.0`: `98.0 mm` ID barrel with 6 arched cooling windows.
+/// - `z = -45.6 .. -42.0`: stator floor with `28 mm` sensor bore and 4x M4 CSK.
+/// - `z = -46.8 .. -42.0`: flat printer bed ring (`R = 19.2..63.4`) carrying 4x
+///   M3 heat-set inserts at `(±16, ±16)` for the moteus C1 PCB and 4x M5 frame
+///   holes with external wrench pockets.
+fn build_a12_motor_housing(
+  name : String,
+  casing_outer : Double,
+  flange_outer_radius : Double,
+  casing_bolt_radius : Double,
+  frame_bolt_circle_mm : Double,
+  housing_part : @cad.PartMeta,
+  heat_set_inserts : Bool,
+  detail : @step_common.DetailLevel,
+) -> (@cad.Component, Double, Double) {
+  let stator_z = -42.0
+  let floor_bottom_z = -45.6
+  let pcb_standoff_z = -46.8
+  let barrel_inner_r = 49.0
+  let sensor_bore_r = 14.0
+  let relief_r = 19.2
+  let flare_start_z = -14.0
+  let top_flange_bottom_z = -6.0
+  let housing_name = name + "_motor_housing"
+  let shell_profile = @step_cad.RevolvedProfile::polyline(
+      [
+        (sensor_bore_r, floor_bottom_z),
+        (relief_r, floor_bottom_z),
+        (relief_r, pcb_standoff_z),
+        (casing_outer, pcb_standoff_z),
+        (casing_outer, flare_start_z),
+        (flange_outer_radius, top_flange_bottom_z),
+        (flange_outer_radius, 0.0),
+        (barrel_inner_r, 0.0),
+        (barrel_inner_r, stator_z),
+        (sensor_bore_r, stator_z),
+      ],
+      closed=true,
+    )
+    .as_shape()
+    .with_name(housing_name + "_shell")
+  let cutters : Array[@step_cad.SceneNode] = []
+  // 6x top-flange M3 heat-set insert pockets (depth 4.5 mm from z = 0).
+  for i in 0..<6 {
+    let theta = 2.0 * @math.PI * i.to_double() / 6.0
+    cutters.push(
+      @step_cad.Cylinder::new(4.5, 5.2)
+      .with_name("top_insert_cut_\{i}")
+      .translate(
+        x=casing_bolt_radius * @math.cos(theta),
+        y=casing_bolt_radius * @math.sin(theta),
+        z=-4.5,
+      ),
+    )
+  }
+  // 6 arched support-free cooling / inspection / cable windows at 30 + k*60 deg.
+  let win_half_w = 7.0
+  let win_z0 = -36.5
+  let win_z1 = -22.5
+  let win_peak = win_z1 + win_half_w
+  let win_r0 = barrel_inner_r - 4.0
+  let win_radial_len = casing_outer - barrel_inner_r + 12.0
+  for i in 0..<6 {
+    let angle_deg = 30.0 + 60.0 * i.to_double()
+    let angle_rad = angle_deg * @math.PI / 180.0
+    let win = @step_cad.ExtrudedProfile::new(
+        [
+          (-win_half_w, win_z0),
+          (win_half_w, win_z0),
+          (win_half_w, win_z1),
+          (0.0, win_peak),
+          (-win_half_w, win_z1),
+        ],
+        win_radial_len,
+      )
+      .with_name("cooling_win_\{i}")
+      .rotate_x(90.0)
+      .rotate_z(90.0 + angle_deg)
+      .translate(
+        x=win_r0 * @math.cos(angle_rad),
+        y=win_r0 * @math.sin(angle_rad),
+      )
+    cutters.push(win)
+  }
+  // 4x frame M5 mounting holes with external support-free U-wrench pockets.
+  let frame_r = frame_bolt_circle_mm / 2.0
+  let slot_half_w = 5.2
+  let slot_z0 = -40.8
+  let slot_z1 = -20.5
+  let slot_peak = slot_z1 + slot_half_w
+  let slot_r0 = frame_r - 5.2
+  for i in 0..<4 {
+    let theta = 2.0 * @math.PI * (i.to_double() + 0.5) / 4.0
+    let fx = frame_r * @math.cos(theta)
+    let fy = frame_r * @math.sin(theta)
+    cutters.push(
+      @step_cad.Cylinder::new(5.5, 9.0)
+      .with_name("frame_hole_\{i}")
+      .translate(x=fx, y=fy, z=-47.5),
+    )
+    let angle_deg = 45.0 + 90.0 * i.to_double()
+    let pocket = @step_cad.ExtrudedProfile::new(
+        [
+          (-slot_half_w, slot_z0),
+          (slot_half_w, slot_z0),
+          (slot_half_w, slot_z1),
+          (0.0, slot_peak),
+          (-slot_half_w, slot_z1),
+        ],
+        casing_outer - frame_r + 14.0,
+      )
+      .with_name("frame_wrench_slot_\{i}")
+      .rotate_x(90.0)
+      .rotate_z(90.0 + angle_deg)
+      .translate(x=slot_r0 * @math.cos(theta), y=slot_r0 * @math.sin(theta))
+    cutters.push(pocket)
+  }
+  // 4x A12 stator M4 countersunk mounting bores at exact stator-mount-hole-m4 angles.
+  let spec = @step_motors.a12_motor_100kv_spec()
+  let m4_r = spec.mount_m4_circle_diameter_mm / 2.0
+  for i in 0..<spec.mount_m4_count {
+    let angle = (
+        spec.mount_hole_phase_deg +
+        45.0 +
+        360.0 * i.to_double() / spec.mount_m4_count.to_double()
+      ) *
+      @math.PI /
+      180.0
+    let mx = m4_r * @math.sin(angle)
+    let my = m4_r * @math.cos(angle)
+    cutters.push(
+      @step_cad.Cylinder::new(4.5, 5.5)
+      .with_name("a12_m4_through_\{i}")
+      .translate(x=mx, y=my, z=-46.5),
+    )
+    cutters.push(
+      @step_cad.Cylinder::new(9.0, 2.0)
+      .with_name("a12_m4_recess_\{i}")
+      .translate(x=mx, y=my, z=-47.5),
+    )
+    let cone = @step_cad.RevolvedProfile::frustum(4.4, 2.25, 2.15)
+      .as_shape()
+      .with_name("a12_m4_csk_\{i}")
+      .translate(x=mx, y=my, z=-45.7)
+    cutters.push(cone)
+  }
+  // 4x moteus C1 M3 heat-set insert pockets at (±16, ±16).
+  let moteus_xy : Array[(Double, Double)] = [
+    (-16.0, -16.0),
+    (16.0, -16.0),
+    (16.0, 16.0),
+    (-16.0, 16.0),
+  ]
+  for i in 0..<moteus_xy.length() {
+    let (mx, my) = moteus_xy[i]
+    cutters.push(
+      @step_cad.Cylinder::new(4.0, 5.0)
+      .with_name("moteus_insert_cut_\{i}")
+      .translate(x=mx, y=my, z=-47.3),
+    )
+  }
+  let housing_color = @step_cad.Rgb::new(0.20, 0.22, 0.28)
+  let housing_node = @step_cad.difference(
+    shell_profile,
+    cutters,
+    name=housing_name + "_body",
+  ).with_color(housing_color)
+  let mut comp = @cad.Component::new(
+      housing_name,
+      description="Fixed ventilated A12 stator housing with centered moteus C1 sensor mount",
+    )
+    .with_part(housing_part)
+    .add_body(
+      @cad.BodyPart::from_scene_node(
+        housing_node,
+        density=@urdf.Density::carbon_fiber(),
+        part=Some(housing_part),
+      ),
+    )
+    .add_mate_mm_deg("top")
+    .add_mate_mm_deg("motor_mount", z=stator_z, axis=(0.0, 0.0, -1.0))
+    .add_mate_mm_deg("frame_mount", z=pcb_standoff_z, axis=(0.0, 0.0, -1.0))
+  for i in 0..<4 {
+    let theta = 2.0 * @math.PI * (i.to_double() + 0.5) / 4.0
+    comp = comp.add_mate_mm_deg(
+      "frame_mount_\{i}",
+      x=frame_r * @math.cos(theta),
+      y=frame_r * @math.sin(theta),
+      z=pcb_standoff_z,
+      axis=(0.0, 0.0, -1.0),
+    )
+  }
+  // Attach 6x M3 inserts in top flange and 4x M3 inserts on moteus corners.
+  if heat_set_inserts {
+    for i in 0..<6 {
+      let theta = 2.0 * @math.PI * i.to_double() / 6.0
+      comp = comp
+        .add_mate_mm_deg(
+          "top_insert_\{i}",
+          x=casing_bolt_radius * @math.cos(theta),
+          y=casing_bolt_radius * @math.sin(theta),
+          z=0.0,
+          rx_deg=180.0,
+        )
+        .attach(
+          "\{housing_name}_top_insert_merge_\{i}",
+          parent_mate="top_insert_\{i}",
+          heat_set_insert(
+            name="\{housing_name}_top_insert_\{i}",
+            outer_diam_mm=4.5,
+            inner_diam_mm=3.0,
+            length_mm=4.0,
+          ),
+          child_mate="seat",
+          spec=@cad.JointSpec::merge_rigid(),
+        )
+    }
+    for i in 0..<moteus_xy.length() {
+      let (mx, my) = moteus_xy[i]
+      comp = comp
+        .add_mate_mm_deg("moteus_insert_\{i}", x=mx, y=my, z=pcb_standoff_z)
+        .attach(
+          "\{housing_name}_moteus_insert_merge_\{i}",
+          parent_mate="moteus_insert_\{i}",
+          heat_set_insert(
+            name="\{housing_name}_moteus_insert_\{i}",
+            outer_diam_mm=4.0,
+            inner_diam_mm=3.0,
+            length_mm=4.0,
+          ),
+          child_mate="seat",
+          spec=@cad.JointSpec::merge_rigid(),
+        )
+    }
+  }
+  // 4x ISO 10642 M4x8 countersunk stator bolts flush at floor underside.
+  for i in 0..<spec.mount_m4_count {
+    let angle = (
+        spec.mount_hole_phase_deg +
+        45.0 +
+        360.0 * i.to_double() / spec.mount_m4_count.to_double()
+      ) *
+      @math.PI /
+      180.0
+    let mx = m4_r * @math.sin(angle)
+    let my = m4_r * @math.cos(angle)
+    comp = comp
+      .add_mate_mm_deg(
+        "a12_stator_bolt_\{i}",
+        x=mx,
+        y=my,
+        z=floor_bottom_z,
+        rx_deg=180.0,
+      )
+      .attach(
+        "\{housing_name}_stator_screw_merge_\{i}",
+        parent_mate="a12_stator_bolt_\{i}",
+        iso_cs_screw(
+          name="\{name}_motor_stator_screw_\{i}",
+          size=@step_standards.M4,
+          length_mm=8.0,
+          detail~,
+        ),
+        child_mate="head_top",
+        spec=@cad.JointSpec::merge_rigid(),
+      )
+  }
+  // 4x ISO 4762 M3x6 screws securing moteus C1 at (±16, ±16) from below PCB.
+  let moteus_pcb_bottom_z = pcb_standoff_z - 1.6
+  for i in 0..<moteus_xy.length() {
+    let (mx, my) = moteus_xy[i]
+    comp = comp
+      .add_mate_mm_deg(
+        "moteus_bolt_\{i}",
+        x=mx,
+        y=my,
+        z=moteus_pcb_bottom_z,
+        rx_deg=180.0,
+      )
+      .attach(
+        "\{housing_name}_moteus_screw_merge_\{i}",
+        parent_mate="moteus_bolt_\{i}",
+        iso_shcs_screw(
+          name="\{name}_moteus_screw_\{i}",
+          size=@step_standards.M3,
+          length_mm=6.0,
+          detail~,
+        ),
+        child_mate="head_seat",
+        spec=@cad.JointSpec::merge_rigid(),
+      )
+  }
+  (comp, stator_z, pcb_standoff_z)
+}
+
+///|
+/// Builds the bolted coupling (`MG-ROTOR-ADAPTER`) attaching A12's rotating
+/// prop adapter to Stage 1's sun gear (`MG-SUN-1`), complete with 4x M4x8
+/// mounting bolts, 2x 3x12 steel drive pins, and the central M4 insert.
+fn build_a12_rotor_adapter(
+  name : String,
+  heat_set_inserts : Bool,
+  detail : @step_common.DetailLevel,
+) -> @cad.Component {
+  let adapter_part = fabricated_part(
+    "MG-ROTOR-ADAPTER", "Printed rotor-to-sun drive adapter (12.5 mm pilot, 23 mm 4xM4 flange, 15 mm boss with 2x3 mm steel drive pins and central M4 insert)",
+    "carbon fiber nylon", "3D print", 6.0,
+  )
+  let raw_name = name + "_rotor_adapter"
+  let base_profile = @step_cad.RevolvedProfile::polyline(
+      [
+        (2.25, -3.0),
+        (6.25, -3.0),
+        (6.25, 0.0),
+        (15.5, 0.0),
+        (15.5, 4.5),
+        (7.5, 4.5),
+        (7.5, 10.0),
+        (3.0, 10.0),
+        (3.0, 4.0),
+        (2.25, 4.0),
+      ],
+      closed=true,
+    )
+    .as_shape()
+    .with_name(raw_name + "_base")
+  let spec = @step_motors.a12_motor_100kv_spec()
+  let prop_r = spec.prop_hole_circle_diameter_mm / 2.0
+  let cutters : Array[@step_cad.SceneNode] = [
+    @step_cad.Cylinder::new(3.1, 7.0)
+    .with_name("drive_pin_hole_pos")
+    .translate(x=5.0, z=3.5),
+    @step_cad.Cylinder::new(3.1, 7.0)
+    .with_name("drive_pin_hole_neg")
+    .translate(x=-5.0, z=3.5),
+  ]
+  for i in 0..<spec.prop_hole_count {
+    let angle = (
+        spec.prop_hole_phase_deg +
+        360.0 * i.to_double() / spec.prop_hole_count.to_double()
+      ) *
+      @math.PI /
+      180.0
+    cutters.push(
+      @step_cad.Cylinder::new(4.5, 6.0)
+      .with_name("prop_bolt_cut_\{i}")
+      .translate(
+        x=prop_r * @math.sin(angle),
+        y=prop_r * @math.cos(angle),
+        z=-0.5,
+      ),
+    )
+  }
+  let adapter_node = @step_cad.difference(
+    base_profile,
+    cutters,
+    name=raw_name + "_body",
+  ).with_color(@step_cad.Rgb::orange())
+  let pin_part = purchased_part(
+    "DOWEL-3.0x12.0", "Hardened steel dowel pin 3.0 x 12.0 mm (rotor-to-sun torque drive)",
+    "steel", 0.35,
+  )
+  let mut comp = @cad.Component::new(
+      raw_name,
+      description="Bolted rotor-to-sun drive adapter",
+    )
+    .with_part(adapter_part)
+    .add_body(
+      @cad.BodyPart::from_scene_node(
+        adapter_node,
+        density=@urdf.Density::carbon_fiber(),
+        part=Some(adapter_part),
+      ),
+    )
+    .add_mate_mm_deg("rotor_seat")
+    .add_mate_mm_deg("sun_seat", z=10.0)
+  for i in 0..<spec.prop_hole_count {
+    let angle = (
+        spec.prop_hole_phase_deg +
+        360.0 * i.to_double() / spec.prop_hole_count.to_double()
+      ) *
+      @math.PI /
+      180.0
+    let bx = prop_r * @math.sin(angle)
+    let by = prop_r * @math.cos(angle)
+    comp = comp
+      .add_mate_mm_deg("rotor_bolt_\{i}", x=bx, y=by, z=4.5)
+      .attach(
+        "\{raw_name}_rotor_screw_merge_\{i}",
+        parent_mate="rotor_bolt_\{i}",
+        iso_shcs_screw(
+          name="\{raw_name}_screw_\{i}",
+          size=@step_standards.M4,
+          length_mm=8.0,
+          detail~,
+        ),
+        child_mate="head_seat",
+        spec=@cad.JointSpec::merge_rigid(),
+      )
+  }
+  for sign_idx, sx in [5.0, -5.0] {
+    let pin_comp = @cad.Component::new(
+        "\{raw_name}_pin_\{sign_idx}",
+        description="Rotor-to-sun drive dowel pin",
+      )
+      .with_part(pin_part)
+      .add_body(
+        @cad.BodyPart::cylinder_mm(
+          "\{raw_name}_drive_pin_\{sign_idx}",
+          3.0,
+          12.0,
+          z_mm=6.0,
+          density=@urdf.Density::steel_mild(),
+          color=@step_cad.Rgb::grey(),
+        ).with_part(pin_part),
+      )
+      .add_mate_mm_deg("base")
+    comp = comp
+      .add_mate_mm_deg("drive_pin_\{sign_idx}", x=sx, z=4.0)
+      .attach(
+        "\{raw_name}_pin_merge_\{sign_idx}",
+        parent_mate="drive_pin_\{sign_idx}",
+        pin_comp,
+        child_mate="base",
+        spec=@cad.JointSpec::merge_rigid(),
+      )
+  }
+  if heat_set_inserts {
+    comp = comp
+      .add_mate_mm_deg("sun_insert", z=10.0, rx_deg=180.0)
+      .attach(
+        raw_name + "_insert_merge",
+        parent_mate="sun_insert",
+        heat_set_insert(
+          name=raw_name + "_sun_insert",
+          outer_diam_mm=6.0,
+          inner_diam_mm=4.0,
+          length_mm=6.0,
+        ),
+        child_mate="seat",
+        spec=@cad.JointSpec::merge_rigid(),
+      )
+  }
+  comp
+}
+
+///|
+/// Builds the clamped torque coupler (`MG-STAGE2-COUPLER`) linking a flush
+/// print-in-place stage's sun gear down to the previous stage's steel shaft.
+fn build_stage_sun_coupler(
+  name : String,
+  shaft_diam : Double,
+  coupler_height : Double,
+) -> @cad.Component {
+  let part = fabricated_part(
+    "MG-STAGE2-COUPLER", "Printed stage-to-stage sun coupler (8 mm shaft bore, M3 set screw, 2x3x12 mm steel drive pins)",
+    "carbon fiber nylon", "3D print", 4.0,
+  )
+  let bore_diam = shaft_diam + 0.1
+  let set_screw_part = purchased_part(
+    "SET-M3x6.0", "M3 x 6.0 mm socket set screw", "steel", 0.15,
+  )
+  let pin_part = purchased_part(
+    "DOWEL-3.0x12.0", "Hardened steel dowel pin 3.0 x 12.0 mm (inter-stage sun drive)",
+    "steel", 0.35,
+  )
+  let mut comp = @cad.Component::new(
+      name,
+      description="Inter-stage sun drive coupler",
+    )
+    .with_part(part)
+    .add_body(
+      @cad.BodyPart::tube_mm(
+        name + "_body",
+        18.0,
+        bore_diam,
+        coupler_height,
+        z_mm=coupler_height / 2.0,
+        density=@urdf.Density::carbon_fiber(),
+        color=@step_cad.Rgb::orange(),
+      ).with_part(part),
+    )
+    .add_body(
+      @cad.BodyPart::cylinder_mm(
+        name + "_set_screw",
+        3.0,
+        6.0,
+        y_mm=bore_diam / 2.0 + 3.0,
+        z_mm=coupler_height / 2.0,
+        rx_deg=90.0,
+        density=@urdf.Density::steel_mild(),
+        color=@step_cad.Rgb::grey(),
+      ).with_part(set_screw_part),
+    )
+    .add_fastener(
+      @cad.Fastener::new(
+        "stage2_coupler_set_screw",
+        @cad.FastenerKind::Screw,
+        thread="M3",
+        length_mm=6.0,
+        engagement_mm=4.5,
+        quantity=1,
+        torque_nm=0.6,
+        references=[name + "_body"],
+        part=Some(set_screw_part),
+      ),
+    )
+    .add_mate_mm_deg("bottom")
+    .add_mate_mm_deg("top", z=coupler_height)
+  for sign_idx, sx in [6.2, -6.2] {
+    let pin_comp = @cad.Component::new(
+        "\{name}_pin_\{sign_idx}",
+        description="Stage coupler drive dowel pin",
+      )
+      .with_part(pin_part)
+      .add_body(
+        @cad.BodyPart::cylinder_mm(
+          "\{name}_drive_pin_\{sign_idx}",
+          3.0,
+          12.0,
+          z_mm=6.0,
+          density=@urdf.Density::steel_mild(),
+          color=@step_cad.Rgb::grey(),
+        ).with_part(pin_part),
+      )
+      .add_mate_mm_deg("base")
+    comp = comp
+      .add_mate_mm_deg("drive_pin_\{sign_idx}", x=sx)
+      .attach(
+        "\{name}_pin_merge_\{sign_idx}",
+        parent_mate="drive_pin_\{sign_idx}",
+        pin_comp,
+        child_mate="base",
+        spec=@cad.JointSpec::merge_rigid(),
+      )
+  }
+  comp
+}
+
+///|
+/// Builds the single print-in-place STEP assembly (`MG-STAGE{k}-CARTRIDGE`) for
+/// stage `stage_index` (1-based) of a multi-stage `motorized_gearbox` with
+/// casing ring, bottom flange, carrier sleeve, 45-deg top bolt lugs, captive
+/// sun gear, and captive planet gears all resting flat on `z = 0`.
+pub fn motorized_stage_cartridge(
+  name~ : String = "motorized_gearbox",
+  preset~ : String = "5010_360kv",
+  stages~ : Array[MotorizedStageSpec],
+  stage_index~ : Int32 = 1,
+  casing_wall_mm~ : Double = 6.0,
+  flange_thickness_mm~ : Double = 6.0,
+  flange_extra_mm~ : Double = 8.0,
+  carrier_thickness_mm~ : Double = 8.0,
+  carrier_margin_mm~ : Double = 2.0,
+  casing_radial_clearance_mm~ : Double = 1.0,
+  min_smooth_wall_mm~ : Double = 6.0,
+  top_gap_mm~ : Double = 1.0,
+  coupling_shaft_mm~ : Double = 8.0,
+  motor_source~ : String = "preset",
+  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Detailed,
+) -> @cad.Component {
+  if stage_index < 1 || stage_index > stages.length() {
+    abort("invalid motorized_stage_cartridge stage_index \{stage_index}")
+  }
+  let p = if motor_source == "a12" {
+    resolve_bldc_preset("a12_8318_100kv")
+  } else {
+    resolve_bldc_preset(preset)
+  }
+  let clearance = pgb_carrier_clearance_mm
+  let is_a12 = motor_source == "a12"
+  let mut casing_outer = 0.0
+  let stage_entries : Array[
+    (
+      MotorizedStageSpec,
+      FlangedBearingSpec,
+      PlanetaryGearboxParams,
+      @step_planetary.HerringbonePlanetaryLayout,
+      Double,
+      Double,
+      Double,
+      Double,
+    ),
+  ] = []
+  for k in 0..<stages.length() {
+    let spec = stages[k]
+    let bearing = resolve_flanged_bearing(spec.planet_bearing)
+    let input_shaft_diam = if k == 0 {
+      if is_a12 {
+        4.3
+      } else {
+        p.shaft_diameter_mm
+      }
+    } else {
+      coupling_shaft_mm
+    }
+    let trial_outer = 1.0
+    let params : PlanetaryGearboxParams = {
+      gear_module: spec.module_mm,
+      gear_length_mm: spec.gear_length_mm,
+      helix_angle_deg: 30.0,
+      sun_teeth: spec.sun_teeth,
+      planet_teeth: spec.planet_teeth,
+      num_planets: spec.planet_count,
+      pressure_angle_deg: 20.0,
+      num_elbows: spec.num_elbows,
+      resolution: 5,
+      bore_radius_mm: input_shaft_diam / 2.0 + 0.1,
+      planet_bore_radius_mm: bearing.outer_mm / 2.0 - 0.03,
+      carrier_pin_diam_mm: bearing.bore_mm,
+      carrier_bearing_designation: "",
+      output_shaft_diam_mm: coupling_shaft_mm,
+      carrier_thickness_mm,
+      output_shaft_length_mm: 12.0,
+      tolerance_mm: 0.2,
+      outer_thickness_mm: trial_outer,
+      include_carrier: true,
+    }
+    let step_params = pgb_step_params(params, spec.num_elbows == 0, detail)
+    let layout = @step_planetary.herringbone_planetary_layout(step_params)
+    let base_outer = layout.ring_outer_radius_mm - trial_outer
+    let carrier_plate_radius = layout.center_distance_mm +
+      layout.planet.outer_radius_mm +
+      carrier_margin_mm
+    let smooth_inner = carrier_plate_radius + casing_radial_clearance_mm
+    let height = spec.gear_length_mm +
+      clearance +
+      carrier_thickness_mm +
+      top_gap_mm
+    let candidate = if base_outer + casing_wall_mm >
+      smooth_inner + min_smooth_wall_mm {
+      base_outer + casing_wall_mm
+    } else {
+      smooth_inner + min_smooth_wall_mm
+    }
+    if candidate > casing_outer {
+      casing_outer = candidate
+    }
+    stage_entries.push(
+      (
+        spec, bearing, params, layout, base_outer, carrier_plate_radius, smooth_inner,
+        height,
+      ),
+    )
+  }
+  let k = stage_index - 1
+  let (spec, bearing, base_params, _, base_outer, _, smooth_inner, stage_height) = stage_entries[k]
+  let outer_thickness = casing_outer - base_outer
+  let params = { ..base_params, outer_thickness_mm: outer_thickness, }
+  let smooth = spec.num_elbows == 0
+  let step_params = pgb_step_params(params, smooth, detail)
+  let layout = @step_planetary.herringbone_planetary_layout(step_params)
+  let stage_step = expect_step(
+    "cartridge stage \{stage_index}",
+    @step_planetary.herringbone_planetary_gearbox(step_params),
+  )
+  let flange_outer_radius = casing_outer + flange_extra_mm
+  let casing_bolt_radius = casing_outer + flange_extra_mm / 2.0
+  let part = fabricated_part(
+    "MG-STAGE\{stage_index}-CARTRIDGE",
+    "Print-in-place stage \{stage_index} herringbone gear cartridge (casing ring, sun, and \{spec.planet_count} planets); print flat on z = 0",
+    "carbon fiber nylon",
+    "3D print",
+    24.0,
+  )
+  let raw_ring = pgb_gear_part(
+      "\{name}_stage\{stage_index}_ring",
+      stage_step,
+      "ring",
+      "Integrated ring",
+      part.part_number,
+      0.0,
+      spec.gear_length_mm,
+      smooth,
+    ).bodies[0]
+  let ring_body = {
+    ..raw_ring,
+    name: "\{name}_stage\{stage_index}_ring",
+    node: raw_ring.node.with_color(@step_cad.Rgb::black()),
+    part: Some(part),
+  }
+  let bottom_phase = if k % 2 == 0 { 0.0 } else { 30.0 }
+  let top_phase = if k % 2 == 0 { 30.0 } else { 0.0 }
+  let mut comp = build_stage_casing_comp(
+    name,
+    stage_index,
+    part,
+    ring_body,
+    spec.gear_length_mm,
+    stage_height,
+    layout.ring.outer_radius_mm,
+    smooth_inner,
+    casing_outer,
+    flange_outer_radius,
+    flange_thickness_mm,
+    casing_bolt_radius,
+    true,
+    bottom_phase,
+    top_phase,
+    detail,
+    @step_cad.Rgb::black(),
+  )
+  let raw_sun = pgb_gear_part(
+      "\{name}_stage\{stage_index}_sun",
+      stage_step,
+      "sun",
+      "Planetary sun gear",
+      part.part_number,
+      0.0,
+      spec.gear_length_mm,
+      smooth,
+    ).bodies[0]
+  let sun_body = cut_sun_drive_features(
+    {
+      ..raw_sun,
+      name: "\{name}_stage\{stage_index}_sun_gear",
+      node: raw_sun.node
+      .with_name("\{name}_stage\{stage_index}_sun_gear")
+      .with_color(@step_cad.Rgb::orange()),
+      part: Some(part),
+    },
+    "\{name}_stage\{stage_index}_sun",
+    if k == 0 {
+      5.0
+    } else {
+      6.2
+    },
+    3.2,
+    6.2,
+    if k == 0 && is_a12 {
+      8.4
+    } else {
+      0.0
+    },
+    5.5,
+    spec.gear_length_mm,
+    @step_cad.Rgb::orange(),
+  )
+  comp = comp.add_body(sun_body)
+  for i in 0..<layout.planets.length() {
+    let planet = layout.planets[i]
+    let raw_p = pgb_gear_part(
+        "\{name}_stage\{stage_index}_planet_\{i}",
+        stage_step,
+        "planet-\{i + 1}",
+        "Planet gear",
+        part.part_number,
+        0.0,
+        spec.gear_length_mm,
+        smooth,
+      ).bodies[0]
+    let p_node = if bearing.flange_thickness_mm > 0.0 {
+      let pocket_r = bearing.flange_outer_mm / 2.0 + PLANET_POCKET_CLEARANCE_MM
+      let cutter = @step_cad.Cylinder::new(
+        pocket_r * 2.0,
+        bearing.flange_thickness_mm,
+      ).with_name("\{name}_stage\{stage_index}_planet_\{i}_pocket")
+      @step_cad.difference(
+        raw_p.node,
+        [cutter],
+        name="\{name}_stage\{stage_index}_planet_\{i}",
+      )
+    } else {
+      raw_p.node
+    }
+    let placed_p = p_node
+      .with_color(@step_cad.Rgb::blue())
+      .rotate_z(-planet.phi_deg)
+      .translate(x=planet.x, y=-planet.z)
+    comp = comp.add_body({
+      ..raw_p,
+      name: "\{name}_stage\{stage_index}_planet_\{i}",
+      node: placed_p,
+      part: Some(part),
+    })
+  }
+  comp
+}
+
+///|
 /// Builds the multi-stage motorized gearbox.
 ///
 /// `stages` is ordered from the motor (stage 1) to the output (last stage).
@@ -592,7 +1605,7 @@ pub fn motorized_gearbox(
   tire_mount_bolt_phase_deg~ : Double = 30.0,
   /// Printed hole diameter for the tire-mount heat-set inserts.
   tire_mount_bolt_hole_mm~ : Double = 6.0,
-  frame_bolt_circle_mm~ : Double = 90.0,
+  frame_bolt_circle_mm~ : Double = 0.0,
   heat_set_inserts~ : Bool = true,
   detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
   motor_source~ : String = "preset",
@@ -602,7 +1615,25 @@ pub fn motorized_gearbox(
   if stages.length() < 1 {
     abort("motorized_gearbox needs at least one stage")
   }
-  let p = resolve_bldc_preset(preset)
+  let is_a12 = motor_source == "a12"
+  let p = if is_a12 {
+    resolve_bldc_preset("a12_8318_100kv")
+  } else {
+    resolve_bldc_preset(preset)
+  }
+  let eff_frame_bolt_circle = if frame_bolt_circle_mm > 0.0 {
+    frame_bolt_circle_mm
+  } else if is_a12 {
+    114.0
+  } else {
+    90.0
+  }
+  let mut stage_flush = is_a12
+  for spec in stages {
+    if spec.num_elbows > 0 {
+      stage_flush = true
+    }
+  }
   let stage_count = stages.length()
   let clearance = pgb_carrier_clearance_mm
   let rotor_joint = if joint_name == "" {
@@ -612,7 +1643,9 @@ pub fn motorized_gearbox(
   }
   let out_bearing = resolve_flanged_bearing(output_bearing)
   let output_shaft_diam = out_bearing.bore_mm
-  let motor = if motor_source == "brushless" {
+  let mut motor = if is_a12 {
+    step_a12_motor(name=name + "_motor", joint_name=rotor_joint)
+  } else if motor_source == "brushless" {
     step_brushless_motor(
       name=name + "_motor",
       preset~,
@@ -637,7 +1670,11 @@ pub fn motorized_gearbox(
     let bearing = resolve_flanged_bearing(spec.planet_bearing)
     let smooth = spec.num_elbows == 0
     let input_shaft_diam = if k == 0 {
-      p.shaft_diameter_mm
+      if is_a12 {
+        4.3
+      } else {
+        p.shaft_diameter_mm
+      }
     } else {
       coupling_shaft_mm
     }
@@ -716,7 +1753,13 @@ pub fn motorized_gearbox(
         16.0,
       ),
     })
-    z = z + height + 2.0 * flange_thickness_mm
+    z = z +
+      height +
+      (if stage_flush {
+        flange_thickness_mm
+      } else {
+        2.0 * flange_thickness_mm
+      })
   }
   // ---------------------------------------------------------------------
   // Pass 2: pick one casing outside diameter and finalize each ring.
@@ -775,7 +1818,8 @@ pub fn motorized_gearbox(
     let reach = if k + 1 == stage_count {
       output_tip - carrier_z
     } else {
-      finalized[k + 1].z0 + finalized[k + 1].gear_length - carrier_z
+      let end_inset = if stage_flush { 0.5 } else { 0.0 }
+      finalized[k + 1].z0 + finalized[k + 1].gear_length - end_inset - carrier_z
     }
     let shaft_length = reach - carrier_thickness_mm
     if shaft_length < 2.0 {
@@ -785,26 +1829,33 @@ pub fn motorized_gearbox(
     }
     finalized[k] = { ..info, carrier_shaft_length: shaft_length, }
   }
-  // Motor stack: the motor shaft is flush with (or slightly short of) the
-  // stage-1 sun top. The bottom cap thickness absorbs the preset's shaft.
+  // Motor stack: A12 uses its own ventilated stator housing + bolted rotor
+  // adapter; compact presets use the flat motor cap and direct shaft engagement.
   let stage1 = finalized[0]
   let cap_min_thickness = 6.0
-  let ideal_cap = p.shaft_length_mm - stage1.gear_length - flange_thickness_mm
-  let motor_cap_thickness = if ideal_cap > cap_min_thickness {
-    ideal_cap
+  let motor_cap_thickness = if is_a12 {
+    0.0
   } else {
-    cap_min_thickness
+    let cap_offset = if stage_flush { 0.0 } else { flange_thickness_mm }
+    let ideal_cap = p.shaft_length_mm - stage1.gear_length - cap_offset
+    let thickness = if ideal_cap > cap_min_thickness {
+      ideal_cap
+    } else {
+      cap_min_thickness
+    }
+    let shaft_end_z = -cap_offset - thickness + p.shaft_length_mm
+    if shaft_end_z < 0.6 * stage1.gear_length {
+      abort(
+        "motor shaft is too short for stage 1 at gear length \{stage1.gear_length} mm; reduce the stage-1 gear length or choose a longer-shaft preset",
+      )
+    }
+    thickness
   }
-  let shaft_end_z = -flange_thickness_mm -
-    motor_cap_thickness +
-    p.shaft_length_mm
-  if shaft_end_z < 0.6 * stage1.gear_length {
-    abort(
-      "motor shaft is too short for stage 1 at gear length \{stage1.gear_length} mm; reduce the stage-1 gear length or choose a longer-shaft preset",
-    )
-  }
-  let motor_cap_bottom = -flange_thickness_mm - motor_cap_thickness
-  let sun_hub_1 = if flange_thickness_mm - 0.5 > 0.0 {
+  let motor_cap_bottom = (if stage_flush { 0.0 } else { -flange_thickness_mm }) -
+    motor_cap_thickness
+  let sun_hub_1 = if stage_flush {
+    0.0
+  } else if flange_thickness_mm - 0.5 > 0.0 {
     flange_thickness_mm - 0.5
   } else {
     0.0
@@ -859,78 +1910,44 @@ pub fn motorized_gearbox(
       node: raw_ring.node.with_name(ring_name).with_color(color),
       part: Some(part),
     }
-    let mut module_comp = @cad.Component::new(
-        "\{name}_stage\{idx}_casing_module",
-        description="Printed stage casing module with integrated ring gear, carrier bore, and joint flanges",
-      )
-      .with_part(part)
-      .add_body(ring_body)
-    // Smooth carrier bore above the ring.
-    let smooth_height = info.height - info.gear_length
-    module_comp = module_comp.add_body(
-      @cad.BodyPart::tube_mm(
-        "\{name}_stage\{idx}_casing_sleeve",
-        casing_outer * 2.0,
-        info.smooth_inner * 2.0,
-        smooth_height,
-        z_mm=info.gear_length + smooth_height / 2.0,
-        density=@urdf.Density::carbon_fiber(),
-        color~,
-      ).with_part(part),
-    )
-    // Bottom flange ring.
-    let bottom_holes : Array[(Double, Double, Double)] = [
-      (0.0, 0.0, info.ring_free_bore * 2.0 + 0.4),
-    ]
-    for i in 0..<6 {
-      let theta = 2.0 * @math.PI * i.to_double() / 6.0
-      bottom_holes.push(
-        (
-          casing_bolt_radius * @math.cos(theta),
-          casing_bolt_radius * @math.sin(theta),
-          3.4,
-        ),
-      )
+    let bottom_phase_deg = if stage_flush {
+      if k % 2 == 0 {
+        0.0
+      } else {
+        30.0
+      }
+    } else {
+      0.0
     }
-    module_comp = module_comp.add_body(
-      actuator_plate_body(
-        "\{name}_stage\{idx}_bottom_flange",
-        flange_outer_radius * 2.0,
-        flange_thickness_mm,
-        -flange_thickness_mm,
-        bottom_holes,
-        @urdf.Density::carbon_fiber(),
-        color,
-        detail,
-      ).with_part(part),
-    )
-    // Top flange ring.
-    let top_holes : Array[(Double, Double, Double)] = [
-      (0.0, 0.0, info.smooth_inner * 2.0),
-    ]
-    for i in 0..<6 {
-      let theta = 2.0 * @math.PI * i.to_double() / 6.0
-      top_holes.push(
-        (
-          casing_bolt_radius * @math.cos(theta),
-          casing_bolt_radius * @math.sin(theta),
-          3.4,
-        ),
-      )
+    let top_phase_deg = if stage_flush {
+      if k % 2 == 0 {
+        30.0
+      } else {
+        0.0
+      }
+    } else {
+      0.0
     }
+    let module_comp = build_stage_casing_comp(
+      name,
+      idx,
+      part,
+      ring_body,
+      info.gear_length,
+      info.height,
+      info.ring_free_bore,
+      info.smooth_inner,
+      casing_outer,
+      flange_outer_radius,
+      flange_thickness_mm,
+      casing_bolt_radius,
+      stage_flush,
+      bottom_phase_deg,
+      top_phase_deg,
+      detail,
+      color,
+    )
     let top_z = info.z0 + info.height + flange_thickness_mm
-    module_comp = module_comp.add_body(
-      actuator_plate_body(
-        "\{name}_stage\{idx}_top_flange",
-        flange_outer_radius * 2.0,
-        flange_thickness_mm,
-        info.height,
-        top_holes,
-        @urdf.Density::carbon_fiber(),
-        color,
-        detail,
-      ).with_part(part),
-    )
     casing = casing.attach(
       "\{name}_stage\{idx}_casing_module_merge",
       parent_mate="origin",
@@ -945,25 +1962,28 @@ pub fn motorized_gearbox(
         z=info.z0 + info.gear_length + clearance,
       )
     for i in 0..<6 {
-      let theta = 2.0 * @math.PI * i.to_double() / 6.0
-      let bx = casing_bolt_radius * @math.cos(theta)
-      let by = casing_bolt_radius * @math.sin(theta)
+      let t_theta = (top_phase_deg + 60.0 * i.to_double()) * @math.PI / 180.0
+      let b_theta = (bottom_phase_deg + 60.0 * i.to_double()) * @math.PI / 180.0
       casing = casing
         .add_mate_mm_deg(
           "\{name}_stage\{idx}_top_bolt_\{i}",
-          x=bx,
-          y=by,
+          x=casing_bolt_radius * @math.cos(t_theta),
+          y=casing_bolt_radius * @math.sin(t_theta),
           z=top_z,
           rx_deg=180.0,
         )
         .add_mate_mm_deg(
           "\{name}_stage\{idx}_bottom_bolt_\{i}",
-          x=bx,
-          y=by,
-          z=info.z0 - flange_thickness_mm,
+          x=casing_bolt_radius * @math.cos(b_theta),
+          y=casing_bolt_radius * @math.sin(b_theta),
+          z=if stage_flush {
+            info.z0 + flange_thickness_mm
+          } else {
+            info.z0 - flange_thickness_mm
+          },
         )
     }
-    // Sun gear and its integral input hub.
+    // Sun gear and its input coupling.
     let sun_bore = info.input_shaft_diam + 0.2
     let sun_root = info.spec.module_mm *
       (info.spec.sun_teeth.to_double() / 2.0 - 1.25)
@@ -977,7 +1997,9 @@ pub fn motorized_gearbox(
     } else {
       hub_diam
     }
-    let hub_length = if k == 0 {
+    let hub_length = if stage_flush {
+      0.0
+    } else if k == 0 {
       sun_hub_1
     } else {
       // Keep the hub above the previous carrier's output hub.
@@ -1003,26 +2025,117 @@ pub fn motorized_gearbox(
       info.gear_length,
       info.smooth,
     )
-    let sun = motorized_sun(
+    let sun_raw_body = if stage_flush {
+      cut_sun_drive_features(
+        sun_comp.bodies[0],
+        "\{name}_stage\{idx}_sun",
+        if k == 0 {
+          5.0
+        } else {
+          6.2
+        },
+        3.2,
+        6.2,
+        if k == 0 && is_a12 {
+          8.4
+        } else {
+          0.0
+        },
+        5.5,
+        info.gear_length,
+        @step_cad.Rgb::orange(),
+      )
+    } else {
+      sun_comp.bodies[0]
+    }
+    let mut sun = motorized_sun(
       "\{name}_stage\{idx}_sun",
       "MG-SUN-\{idx}",
-      sun_comp.bodies[0],
+      sun_raw_body,
       sun_bore,
       hub_diam,
       hub_length,
       info.gear_length,
       "M3",
     )
-    casing = casing.attach(
-      info.sun_joint,
-      parent_mate=info.sun_mount,
-      sun,
-      child_mate="bottom",
-      spec=@cad.JointSpec::continuous(
-        limit=Some(@urdf.JointLimit::new(effort=15.0, velocity=30.0)),
-        dynamics=Some(@urdf.JointDynamics::new(damping=0.02, friction=0.01)),
-      ),
-    )
+    let driver_joint = if k == 0 && is_a12 {
+      // Physically attach Stage 1 sun to A12's bolted rotor adapter and clamp
+      // it with an axial M4 SHCS from the open top face before installing
+      // Stage 1 carrier.
+      sun = sun
+        .add_mate_mm_deg("clamp_seat", z=5.5)
+        .attach(
+          name + "_stage1_sun_bolt_merge",
+          parent_mate="clamp_seat",
+          iso_shcs_screw(
+            name=name + "_stage1_sun_bolt",
+            size=@step_standards.M4,
+            length_mm=12.0,
+            detail~,
+          ),
+          child_mate="head_seat",
+          spec=@cad.JointSpec::merge_rigid(),
+        )
+      motor = motor.attach_to(
+        name + "_motor_rotor",
+        name + "_rotor_magnet_merge",
+        parent_mate="shaft_rear",
+        encoder_magnet(
+          name=name + "_rotor_magnet",
+          diameter_mm=8.0,
+          thickness_mm=2.0,
+        ),
+        child_mate="top",
+        spec=@cad.JointSpec::merge_rigid(),
+      )
+      motor = motor.attach_to(
+        name + "_motor_rotor",
+        name + "_rotor_adapter_merge",
+        parent_mate="output_face",
+        build_a12_rotor_adapter(name, heat_set_inserts, detail),
+        child_mate="rotor_seat",
+        spec=@cad.JointSpec::merge_rigid(),
+      )
+      motor = motor.attach_to(
+        name + "_rotor_adapter",
+        info.sun_joint,
+        parent_mate="sun_seat",
+        sun,
+        child_mate="bottom",
+        spec=@cad.JointSpec::fixed(),
+      )
+      rotor_joint
+    } else {
+      casing = casing.attach(
+        info.sun_joint,
+        parent_mate=info.sun_mount,
+        sun,
+        child_mate="bottom",
+        spec=@cad.JointSpec::continuous(
+          limit=Some(@urdf.JointLimit::new(effort=15.0, velocity=30.0)),
+          dynamics=Some(@urdf.JointDynamics::new(damping=0.02, friction=0.01)),
+        ),
+      )
+      info.sun_joint
+    }
+    if k > 0 && stage_flush {
+      // Add the clamped inter-stage coupler above the previous stage carrier.
+      let prev_carrier = "\{name}_stage\{k}_carrier"
+      let coupler_height = flange_thickness_mm
+      let coupler = build_stage_sun_coupler(
+        "\{name}_stage\{idx}_coupler",
+        coupling_shaft_mm,
+        coupler_height,
+      )
+      casing = casing.attach_to(
+        prev_carrier,
+        "\{name}_stage\{idx}_coupler_merge",
+        parent_mate="output_flange",
+        coupler,
+        child_mate="bottom",
+        spec=@cad.JointSpec::merge_rigid(offset_mm=top_gap_mm),
+      )
+    }
     // Carrier.
     let carrier_z = info.z0 + info.gear_length + clearance
     let hub_seat = if k + 1 == stage_count && output_hub {
@@ -1072,10 +2185,6 @@ pub fn motorized_gearbox(
         "3D print",
         3.0,
       )
-      // Cut a counterbore for the flanged bearing into the lower face, so the
-      // flange seats flush with the gear face and cannot walk out axially.
-      // The gear body spans z in [0, gear_length]; the pocket is cut from
-      // just below the face to the flange thickness.
       let planet_body0 = {
         ..raw_planet,
         name: "\{name}_stage\{idx}_planet_\{i}",
@@ -1136,7 +2245,7 @@ pub fn motorized_gearbox(
           limit=Some(@urdf.JointLimit::new(effort=10.0, velocity=30.0)),
           dynamics=Some(@urdf.JointDynamics::new(damping=0.02, friction=0.01)),
           mimic=Some(
-            @urdf.JointMimic::new(info.sun_joint, multiplier=planet_multiplier),
+            @urdf.JointMimic::new(driver_joint, multiplier=planet_multiplier),
           ),
         ),
       )
@@ -1150,156 +2259,193 @@ pub fn motorized_gearbox(
         limit=Some(@urdf.JointLimit::new(effort=10.0, velocity=30.0)),
         dynamics=Some(@urdf.JointDynamics::new(damping=0.02, friction=0.01)),
         mimic=Some(
-          @urdf.JointMimic::new(info.sun_joint, multiplier=carrier_multiplier),
+          @urdf.JointMimic::new(driver_joint, multiplier=carrier_multiplier),
         ),
       ),
     )
-    // Sun coupling: stage 1 follows the motor rotor; later stages follow the
-    // previous carrier directly.
-    let sun_source = if k == 0 {
-      rotor_joint
-    } else {
-      finalized[k - 1].carrier_joint
+    // Sun coupling for non-A12 Stage 1 or subsequent continuous sun stages.
+    if !(k == 0 && is_a12) {
+      let sun_source = if k == 0 {
+        rotor_joint
+      } else {
+        finalized[k - 1].carrier_joint
+      }
+      set_joint_mimic(
+        casing,
+        info.sun_joint,
+        @urdf.JointMimic::new(sun_source, multiplier=1.0),
+      )
     }
-    set_joint_mimic(
-      casing,
-      info.sun_joint,
-      @urdf.JointMimic::new(sun_source, multiplier=1.0),
-    )
   }
   // ---------------------------------------------------------------------
-  // Motor cap: the motor's fixed side bolts to this plate, which is part of
-  // the outer casing.
+  // Motor cap or ventilated A12 housing: fixed stator mount on casing.
   // ---------------------------------------------------------------------
-  let motor_cap_part = fabricated_part(
-    "MG-MOTOR-CAP", "Printed motor end cap with motor bolt pattern, motor-bearing clearance bore, casing screws, and frame mounting holes",
-    "carbon fiber nylon", "3D print", 12.0,
-  )
-  let motor_bolt_radius = p.bolt_circle_mm / 2.0
-  let bearing_bore = bldc_front_bearing_outer(p.name) + 0.2
-  let bolt_clear = 2.0 * (p.bolt_circle_mm / 2.0 - p.mount_hole_mm / 2.0 - 0.5)
-  let motor_cap_bore = if bearing_bore < bolt_clear {
-    bearing_bore
+  if is_a12 {
+    let housing_part = fabricated_part(
+      "MG-MOTOR-HOUSING", "Printed ventilated A12 stator housing (126.8 mm barrel, 6 cooling windows, 28 mm sensor bore, M4 CSK stator mount, and centered M3 moteus C1 standoffs)",
+      "carbon fiber nylon", "3D print", 28.0,
+    )
+    let (housing_comp, _, _) = build_a12_motor_housing(
+      name, casing_outer, flange_outer_radius, casing_bolt_radius, eff_frame_bolt_circle,
+      housing_part, heat_set_inserts, detail,
+    )
+    casing = casing
+      .attach(
+        name + "_motor_housing_merge",
+        parent_mate="origin",
+        housing_comp,
+        child_mate="top",
+        spec=@cad.JointSpec::merge_rigid(),
+      )
+      .attach_to(
+        name + "_motor_housing",
+        name + "_motor_mount_joint",
+        parent_mate="motor_mount",
+        motor,
+        child_mate="mount",
+        spec=@cad.JointSpec::fixed(),
+      )
   } else {
-    bolt_clear
-  }
-  let motor_cap_holes : Array[(Double, Double, Double)] = [
-    (0.0, 0.0, motor_cap_bore),
-  ]
-  for i in 0..<4 {
-    let theta = 2.0 * @math.PI * i.to_double() / 4.0
-    motor_cap_holes.push(
-      (
-        motor_bolt_radius * @math.cos(theta),
-        motor_bolt_radius * @math.sin(theta),
-        p.mount_hole_mm,
-      ),
+    let motor_cap_part = fabricated_part(
+      "MG-MOTOR-CAP", "Printed motor end cap with motor bolt pattern, motor-bearing clearance bore, casing screws, and frame mounting holes",
+      "carbon fiber nylon", "3D print", 12.0,
     )
-  }
-  for i in 0..<6 {
-    let theta = 2.0 * @math.PI * i.to_double() / 6.0
-    motor_cap_holes.push(
-      (
-        casing_bolt_radius * @math.cos(theta),
-        casing_bolt_radius * @math.sin(theta),
-        3.4,
-      ),
-    )
-  }
-  for i in 0..<4 {
-    let theta = 2.0 * @math.PI * (i.to_double() + 0.5) / 4.0
-    motor_cap_holes.push(
-      (
-        frame_bolt_circle_mm / 2.0 * @math.cos(theta),
-        frame_bolt_circle_mm / 2.0 * @math.sin(theta),
-        5.5,
-      ),
-    )
-  }
-  let phase_radius = p.diameter_mm * 0.5 + 3.0
-  let phase_angle = @math.PI / 4.0
-  motor_cap_holes.push(
-    (
-      phase_radius * @math.cos(phase_angle),
-      phase_radius * @math.sin(phase_angle),
-      5.0,
-    ),
-  )
-  let motor_cap_comp = @cad.Component::new(
-      name + "_motor_cap_component",
-      description="Printed motor end cap",
-    )
-    .with_part(motor_cap_part)
-    .add_body(
-      actuator_plate_body(
-        name + "_motor_cap",
-        flange_outer_radius * 2.0,
-        motor_cap_thickness,
-        0.0,
-        motor_cap_holes,
-        @urdf.Density::carbon_fiber(),
-        @step_cad.Rgb::black(),
-        detail,
-      ).with_part(motor_cap_part),
-    )
-  casing = casing
-    .attach(
-      name + "_motor_cap_merge",
-      parent_mate="origin",
-      motor_cap_comp,
-      child_mate="origin",
-      spec=@cad.JointSpec::merge_rigid(offset_mm=motor_cap_bottom),
-    )
-    .add_mate_mm_deg("motor_mount", z=motor_cap_bottom, axis=(0.0, 0.0, -1.0))
-    .add_mate_mm_deg("frame_mount", z=motor_cap_bottom, axis=(0.0, 0.0, -1.0))
-  for i in 0..<4 {
-    let theta = 2.0 * @math.PI * (i.to_double() + 0.5) / 4.0
-    casing = casing.add_mate_mm_deg(
-      "frame_mount_\{i}",
-      x=frame_bolt_circle_mm / 2.0 * @math.cos(theta),
-      y=frame_bolt_circle_mm / 2.0 * @math.sin(theta),
-      z=motor_cap_bottom,
-      axis=(0.0, 0.0, -1.0),
-    )
-  }
-  // Motor stator fixed to the casing; its rotor joint is the command input.
-  casing = casing.attach(
-    name + "_motor_mount_joint",
-    parent_mate="motor_mount",
-    motor,
-    child_mate="mount",
-    spec=@cad.JointSpec::fixed(),
-  )
-  // The motor is a purchased solid, so its mounting screws are a schedule.
-  let motor_m4 = p.mount_hole_mm > 3.5
-  let motor_screw_thread = if motor_m4 { "M4" } else { "M3" }
-  let motor_screw_length = standard_shcs_len(motor_cap_thickness + 4.0)
-  let motor_screw_part = purchased_part(
-    "ISO4762-\{motor_screw_thread}x\{fmt_mm(motor_screw_length)}",
-    "ISO 4762 socket head cap screw \{motor_screw_thread} x \{fmt_mm(motor_screw_length)} mm",
-    "steel",
-    if motor_m4 {
-      0.50
+    let motor_bolt_radius = p.bolt_circle_mm / 2.0
+    let bearing_bore = bldc_front_bearing_outer(p.name) + 0.2
+    let bolt_clear = 2.0 *
+      (p.bolt_circle_mm / 2.0 - p.mount_hole_mm / 2.0 - 0.5)
+    let motor_cap_bore = if bearing_bore < bolt_clear {
+      bearing_bore
     } else {
-      0.35
-    },
-  )
-  casing = casing.add_fastener(
-    @cad.Fastener::new(
-      "motor_mount_screws",
-      @cad.FastenerKind::Screw,
-      thread=motor_screw_thread,
-      length_mm=motor_screw_length,
-      engagement_mm=5.0,
-      quantity=4,
-      torque_nm=if motor_m4 { 2.0 } else { 0.8 },
-      references=[name + "_motor_cap"],
-      part=Some(motor_screw_part),
-    ),
-  )
+      bolt_clear
+    }
+    let motor_cap_holes : Array[(Double, Double, Double)] = [
+      (0.0, 0.0, motor_cap_bore),
+    ]
+    for i in 0..<4 {
+      let theta = 2.0 * @math.PI * i.to_double() / 4.0
+      motor_cap_holes.push(
+        (
+          motor_bolt_radius * @math.cos(theta),
+          motor_bolt_radius * @math.sin(theta),
+          p.mount_hole_mm,
+        ),
+      )
+    }
+    for i in 0..<6 {
+      let theta = 2.0 * @math.PI * i.to_double() / 6.0
+      motor_cap_holes.push(
+        (
+          casing_bolt_radius * @math.cos(theta),
+          casing_bolt_radius * @math.sin(theta),
+          3.4,
+        ),
+      )
+    }
+    for i in 0..<4 {
+      let theta = 2.0 * @math.PI * (i.to_double() + 0.5) / 4.0
+      motor_cap_holes.push(
+        (
+          eff_frame_bolt_circle / 2.0 * @math.cos(theta),
+          eff_frame_bolt_circle / 2.0 * @math.sin(theta),
+          5.5,
+        ),
+      )
+    }
+    let phase_radius = p.diameter_mm * 0.5 + 3.0
+    let phase_angle = @math.PI / 4.0
+    motor_cap_holes.push(
+      (
+        phase_radius * @math.cos(phase_angle),
+        phase_radius * @math.sin(phase_angle),
+        5.0,
+      ),
+    )
+    let motor_cap_comp = @cad.Component::new(
+        name + "_motor_cap_component",
+        description="Printed motor end cap",
+      )
+      .with_part(motor_cap_part)
+      .add_body(
+        actuator_plate_body(
+          name + "_motor_cap",
+          flange_outer_radius * 2.0,
+          motor_cap_thickness,
+          0.0,
+          motor_cap_holes,
+          @urdf.Density::carbon_fiber(),
+          @step_cad.Rgb::black(),
+          detail,
+        ).with_part(motor_cap_part),
+      )
+    casing = casing
+      .attach(
+        name + "_motor_cap_merge",
+        parent_mate="origin",
+        motor_cap_comp,
+        child_mate="origin",
+        spec=@cad.JointSpec::merge_rigid(offset_mm=motor_cap_bottom),
+      )
+      .add_mate_mm_deg("motor_mount", z=motor_cap_bottom, axis=(0.0, 0.0, -1.0))
+      .add_mate_mm_deg("frame_mount", z=motor_cap_bottom, axis=(0.0, 0.0, -1.0))
+    for i in 0..<4 {
+      let theta = 2.0 * @math.PI * (i.to_double() + 0.5) / 4.0
+      casing = casing.add_mate_mm_deg(
+        "frame_mount_\{i}",
+        x=eff_frame_bolt_circle / 2.0 * @math.cos(theta),
+        y=eff_frame_bolt_circle / 2.0 * @math.sin(theta),
+        z=motor_cap_bottom,
+        axis=(0.0, 0.0, -1.0),
+      )
+    }
+    // Motor stator fixed to the casing; its rotor joint is the command input.
+    casing = casing.attach(
+      name + "_motor_mount_joint",
+      parent_mate="motor_mount",
+      motor,
+      child_mate="mount",
+      spec=@cad.JointSpec::fixed(),
+    )
+    // The motor is a purchased solid, so its mounting screws are a schedule.
+    let motor_m4 = p.mount_hole_mm > 3.5
+    let motor_screw_thread = if motor_m4 { "M4" } else { "M3" }
+    let motor_screw_length = standard_shcs_len(motor_cap_thickness + 4.0)
+    let motor_screw_part = purchased_part(
+      "ISO4762-\{motor_screw_thread}x\{fmt_mm(motor_screw_length)}",
+      "ISO 4762 socket head cap screw \{motor_screw_thread} x \{fmt_mm(motor_screw_length)} mm",
+      "steel",
+      if motor_m4 {
+        0.50
+      } else {
+        0.35
+      },
+    )
+    casing = casing.add_fastener(
+      @cad.Fastener::new(
+        "motor_mount_screws",
+        @cad.FastenerKind::Screw,
+        thread=motor_screw_thread,
+        length_mm=motor_screw_length,
+        engagement_mm=5.0,
+        quantity=4,
+        torque_nm=if motor_m4 { 2.0 } else { 0.8 },
+        references=[name + "_motor_cap"],
+        part=Some(motor_screw_part),
+      ),
+    )
+  }
   // ---------------------------------------------------------------------
   // Output cap with the output bearing and static mounting interface.
   // ---------------------------------------------------------------------
+  let last_top_phase_deg = if stage_flush {
+    if (stage_count - 1) % 2 == 0 {
+      30.0
+    } else {
+      0.0
+    }
+  } else {
+    0.0
+  }
   let output_cap_part = fabricated_part(
     "MG-OUTPUT-CAP", "Printed output end cap with the output bearing seat, casing screws, and frame mounting holes",
     "carbon fiber nylon", "3D print", 12.0,
@@ -1308,7 +2454,7 @@ pub fn motorized_gearbox(
     (0.0, 0.0, out_bearing.outer_mm - 0.1),
   ]
   for i in 0..<6 {
-    let theta = 2.0 * @math.PI * i.to_double() / 6.0
+    let theta = (last_top_phase_deg + 60.0 * i.to_double()) * @math.PI / 180.0
     output_cap_holes.push(
       (
         casing_bolt_radius * @math.cos(theta),
@@ -1321,8 +2467,8 @@ pub fn motorized_gearbox(
     let theta = 2.0 * @math.PI * (i.to_double() + 0.5) / 4.0
     output_cap_holes.push(
       (
-        frame_bolt_circle_mm / 2.0 * @math.cos(theta),
-        frame_bolt_circle_mm / 2.0 * @math.sin(theta),
+        eff_frame_bolt_circle / 2.0 * @math.cos(theta),
+        eff_frame_bolt_circle / 2.0 * @math.sin(theta),
         5.5,
       ),
     )
@@ -1360,8 +2506,8 @@ pub fn motorized_gearbox(
     let theta = 2.0 * @math.PI * (i.to_double() + 0.5) / 4.0
     casing = casing.add_mate_mm_deg(
       "frame_mount_out_\{i}",
-      x=frame_bolt_circle_mm / 2.0 * @math.cos(theta),
-      y=frame_bolt_circle_mm / 2.0 * @math.sin(theta),
+      x=eff_frame_bolt_circle / 2.0 * @math.cos(theta),
+      y=eff_frame_bolt_circle / 2.0 * @math.sin(theta),
       z=output_cap_top,
     )
   }
@@ -1380,6 +2526,7 @@ pub fn motorized_gearbox(
   // ---------------------------------------------------------------------
   // Casing joint and cap screws, and their heat-set inserts.
   // ---------------------------------------------------------------------
+  let insert_len = if stage_flush { 4.0 } else { 6.0 }
   if heat_set_inserts {
     for k in 0..<stage_count {
       let idx = k + 1
@@ -1391,70 +2538,107 @@ pub fn motorized_gearbox(
             name="\{name}_stage\{idx}_top_insert_\{i}",
             outer_diam_mm=4.5,
             inner_diam_mm=3.0,
-            length_mm=6.0,
+            length_mm=insert_len,
           ),
           child_mate="seat",
           spec=@cad.JointSpec::merge_rigid(),
         )
       }
     }
-    // Stage 1 bottom flange receives the motor-cap screws.
-    for i in 0..<6 {
-      let theta = 2.0 * @math.PI * i.to_double() / 6.0
-      casing = casing
-        .add_mate_mm_deg(
-          "\{name}_stage1_bottom_insert_\{i}",
-          x=casing_bolt_radius * @math.cos(theta),
-          y=casing_bolt_radius * @math.sin(theta),
-          z=-flange_thickness_mm,
-        )
-        .attach(
-          "\{name}_stage1_bottom_insert_merge_\{i}",
-          parent_mate="\{name}_stage1_bottom_insert_\{i}",
-          heat_set_insert(
-            name="\{name}_stage1_bottom_insert_\{i}",
-            outer_diam_mm=4.5,
-            inner_diam_mm=3.0,
-            length_mm=6.0,
-          ),
-          child_mate="seat",
-          spec=@cad.JointSpec::merge_rigid(),
-        )
+    if !is_a12 {
+      // Compact preset motor cap screws thread up into Stage 1 bottom flange.
+      for i in 0..<6 {
+        let theta = 2.0 * @math.PI * i.to_double() / 6.0
+        casing = casing
+          .add_mate_mm_deg(
+            "\{name}_stage1_bottom_insert_\{i}",
+            x=casing_bolt_radius * @math.cos(theta),
+            y=casing_bolt_radius * @math.sin(theta),
+            z=if stage_flush { 0.0 } else { -flange_thickness_mm },
+          )
+          .attach(
+            "\{name}_stage1_bottom_insert_merge_\{i}",
+            parent_mate="\{name}_stage1_bottom_insert_\{i}",
+            heat_set_insert(
+              name="\{name}_stage1_bottom_insert_\{i}",
+              outer_diam_mm=4.5,
+              inner_diam_mm=3.0,
+              length_mm=insert_len,
+            ),
+            child_mate="seat",
+            spec=@cad.JointSpec::merge_rigid(),
+          )
+      }
     }
   }
-  // Motor cap screws: heads at the cap's lower face, shanks up into inserts.
+  // Stage 1 to motor housing/cap screws.
   for i in 0..<6 {
     let theta = 2.0 * @math.PI * i.to_double() / 6.0
     let bx = casing_bolt_radius * @math.cos(theta)
     let by = casing_bolt_radius * @math.sin(theta)
-    casing = casing
-      .add_mate_mm_deg(
-        name + "_motor_cap_bolt_\{i}",
-        x=bx,
-        y=by,
-        z=motor_cap_bottom,
-        rx_deg=180.0,
-      )
-      .attach(
-        name + "_motor_cap_screw_merge_\{i}",
-        parent_mate=name + "_motor_cap_bolt_\{i}",
-        iso_shcs_screw(
-          name="\{name}_motor_cap_screw_\{i}",
-          size=@step_standards.M3,
-          length_mm=standard_shcs_len(motor_cap_thickness + 6.0),
-          detail~,
-        ),
-        child_mate="head_seat",
-        spec=@cad.JointSpec::merge_rigid(),
-      )
+    if is_a12 {
+      // Bolt downward from Stage 1 bottom flange into MG-MOTOR-HOUSING inserts.
+      casing = casing
+        .add_mate_mm_deg(
+          name + "_motor_cap_bolt_\{i}",
+          x=bx,
+          y=by,
+          z=flange_thickness_mm,
+        )
+        .attach(
+          name + "_motor_cap_screw_merge_\{i}",
+          parent_mate=name + "_motor_cap_bolt_\{i}",
+          iso_shcs_screw(
+            name="\{name}_motor_cap_screw_\{i}",
+            size=@step_standards.M3,
+            length_mm=standard_shcs_len(flange_thickness_mm + 4.0),
+            detail~,
+          ),
+          child_mate="head_seat",
+          spec=@cad.JointSpec::merge_rigid(),
+        )
+    } else {
+      casing = casing
+        .add_mate_mm_deg(
+          name + "_motor_cap_bolt_\{i}",
+          x=bx,
+          y=by,
+          z=motor_cap_bottom,
+          rx_deg=180.0,
+        )
+        .attach(
+          name + "_motor_cap_screw_merge_\{i}",
+          parent_mate=name + "_motor_cap_bolt_\{i}",
+          iso_shcs_screw(
+            name="\{name}_motor_cap_screw_\{i}",
+            size=@step_standards.M3,
+            length_mm=standard_shcs_len(motor_cap_thickness + insert_len),
+            detail~,
+          ),
+          child_mate="head_seat",
+          spec=@cad.JointSpec::merge_rigid(),
+        )
+    }
   }
   // Stage-to-stage screws: heads on the upper bottom flange, shanks down into
   // the lower top-flange inserts.
+  let stage_screw_len = standard_shcs_len(
+    flange_thickness_mm + (if stage_flush { 4.0 } else { 6.0 }),
+  )
   for k in 1..<stage_count {
     let idx = k + 1
     let info = finalized[k]
+    let b_phase_deg = if stage_flush {
+      if k % 2 == 0 {
+        0.0
+      } else {
+        30.0
+      }
+    } else {
+      0.0
+    }
     for i in 0..<6 {
-      let theta = 2.0 * @math.PI * i.to_double() / 6.0
+      let theta = (b_phase_deg + 60.0 * i.to_double()) * @math.PI / 180.0
       let bx = casing_bolt_radius * @math.cos(theta)
       let by = casing_bolt_radius * @math.sin(theta)
       casing = casing
@@ -1462,7 +2646,7 @@ pub fn motorized_gearbox(
           "\{name}_stage\{idx}_joint_bolt_\{i}",
           x=bx,
           y=by,
-          z=info.z0,
+          z=if stage_flush { info.z0 + flange_thickness_mm } else { info.z0 },
         )
         .attach(
           "\{name}_stage\{idx}_joint_screw_merge_\{i}",
@@ -1470,7 +2654,7 @@ pub fn motorized_gearbox(
           iso_shcs_screw(
             name="\{name}_stage\{idx}_joint_screw_\{i}",
             size=@step_standards.M3,
-            length_mm=standard_shcs_len(flange_thickness_mm + 6.0),
+            length_mm=stage_screw_len,
             detail~,
           ),
           child_mate="head_seat",
@@ -1481,7 +2665,7 @@ pub fn motorized_gearbox(
   // Output cap screws: heads on the cap top, shanks down into the final top
   // flange inserts.
   for i in 0..<6 {
-    let theta = 2.0 * @math.PI * i.to_double() / 6.0
+    let theta = (last_top_phase_deg + 60.0 * i.to_double()) * @math.PI / 180.0
     let bx = casing_bolt_radius * @math.cos(theta)
     let by = casing_bolt_radius * @math.sin(theta)
     casing = casing
@@ -1658,7 +2842,7 @@ pub fn motorized_gearbox(
     current_rated_a=p.current_rated_a,
     current_stall_a=p.current_peak_a,
     torque_rated_nm=output_torque,
-    driver="VESC / SimpleFOC",
+    driver=if is_a12 { "moteus C1 / FOC" } else { "VESC / SimpleFOC" },
     interface="CAN",
     encoder="rotor magnet read by a rear-mounted moteus C1 (AS5047P); 1:1 with the input sun gear",
   )

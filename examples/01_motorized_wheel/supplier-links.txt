@@ -11,21 +11,29 @@
 #
 # Research workflow and the full source list: .claude/skills/sourcing-parts.
 
+ISO4762-M3x6 | Amazon | https://www.amazon.com/NIULUNBAO-Socket-Machine-Threaded-Assortment/dp/B0BJQ6M8XW | Same 250-piece M3 socket-head kit (4/6/8/10/12 mm); covers M3 x 6 mm (4 needed for moteus C1) | 0.05
+ISO4762-M3x10 | Amazon | https://www.amazon.com/NIULUNBAO-Socket-Machine-Threaded-Assortment/dp/B0BJQ6M8XW | 250-piece M3 socket-head kit (4/6/8/10/12 mm); covers M3 x 10 mm (12 needed) | 0.05
 ISO4762-M3x10.0 | Amazon | https://www.amazon.com/NIULUNBAO-Socket-Machine-Threaded-Assortment/dp/B0BJQ6M8XW | 250-piece M3 socket-head kit (4/6/8/10/12 mm); covers M3 x 10 mm | 0.05
-SET-M3x6.0 | Amazon | https://www.amazon.com/HanTof-Set-Screws-Grub/dp/B07CKFJ8GY | M3-M8 grub-screw kit; use M3 x 6 mm (2 needed) | 0.05
+SET-M3x6.0 | Amazon | https://www.amazon.com/HanTof-Set-Screws-Grub/dp/B07CKFJ8GY | M3-M8 grub-screw kit; use M3 x 6 mm (1 needed for MG-STAGE2-COUPLER) | 0.05
 SET-M4x12.0 | Amazon | https://www.amazon.com/Point-Assortment-Stainless-Metric-Thread/dp/B01FH8CP3E | 76-piece M4 set-screw kit (4-25 mm); covers M4 x 12 mm | 0.10
+SHAFT-8.0x24.5 | McMaster-Carr | https://www.mcmaster.com/4143N17/ | 8 mm x 100 mm 303 stainless rotary shaft; cut to 24.5 mm | 12.00
 SHAFT-8.0x31.0 | McMaster-Carr | https://www.mcmaster.com/4143N17/ | 8 mm x 100 mm 303 stainless rotary shaft; cut to 31 mm | 12.00
+DOWEL-3.0x12.0 | McMaster-Carr | https://www.mcmaster.com/products/dowel-pins/metric-dowel-pins/ | 3 x 12 mm DIN 7 / ISO 2338 hardened steel dowel pins; 4 needed (2 rotor-to-sun + 2 inter-stage coupler) | 0.35
 DOWEL-12.7x18.5 | Amazon | https://www.amazon.com/Dowel-Pin-Alloy-STL-Pk10/dp/B083H48859 | 1/2 x 3/4 in hardened dowel pins, 10-pack; 0.55 mm longer than modeled, clears the planet flange | 1.50
 BEARING-FR8-2RS | Amazon | https://www.amazon.com/METERXITY-Flanged-Shielded-Bearings-Wheelbarrow/dp/B0F4QR9XYQ | FR8-2RS 10-pack (9 needed), exact 1/2 x 1-1/8 x 5/16 in flanged sealed bearing. VXB also stocks the exact bearing: https://vxb.com/products/flanged-sealed-bearing-fr8-2rs-1-2-x-1-1-8-x-5-16 | 1.55
 SET-M4x10.0 | Amazon | https://www.amazon.com/Point-Assortment-Stainless-Metric-Thread/dp/B01FH8CP3E | Same 76-piece M4 set-screw kit; covers M4 x 10 mm | 0.10
 SHAFT-12.7x45.9 | OnlineMetals | https://www.onlinemetals.com/en/buy/stainless-steel/1-2-dia-round-stainless-steel-rod-303-12-long-1-piece/pid/mp-00000673 | 1/2 in x 12 in 303 stainless rod; cut to 45.9 mm | 19.99
 COLLAR-12.7-25.4 | McMaster-Carr | https://www.mcmaster.com/6432K16/ | 1/2 in bore x 1 in OD x 7/16 in wide zinc-plated set-screw collar; 2 needed | 3.00
 WHEEL-7IN | Amazon | https://www.amazon.com/budrash-72-107-Replaces-Universal-Utility/dp/B09XMGXFDN | budrash 72-107 7 x 1.5 in wheel, 2-pack; 1/2 in bore, 1-3/8 in hard-plastic hub; drill 3 x 4.5 mm holes at 55.85 mm BCD to match the printed tire mount | 9.50
-INSERT-4 | Amazon | https://www.amazon.com/Ktehloy-Threaded-Assortment-Printing-Components/dp/B0DK1FGWZ5 | 120-piece M4 heat-set insert kit (M4x4x6 and M4x6x6); use the M4x6x6 size at the output hub's 55.85 mm bolt circle | 0.08
+INSERT-4 | Amazon | https://www.amazon.com/Ktehloy-Threaded-Assortment-Printing-Components/dp/B0DK1FGWZ5 | 120-piece M4 heat-set insert kit (M4x4x6 and M4x6x6); use M4x6x6 in MG-OUTPUT-HUB and MG-ROTOR-ADAPTER | 0.08
+ISO10642-M4x8 | McMaster-Carr | https://www.mcmaster.com/screws/flat-head-socket-cap-screws/ | ISO 10642 M4 x 8 mm flat countersunk socket head cap screw; 4 needed for A12 stator mount | 0.35
+ISO4762-M4x8 | McMaster-Carr | https://www.mcmaster.com/screws/socket-head-cap-screws/ | ISO 4762 M4 x 8 mm socket head cap screw; 4 needed for MG-ROTOR-ADAPTER to A12 prop adapter | 0.35
+ISO4762-M4x12 | McMaster-Carr | https://www.mcmaster.com/screws/socket-head-cap-screws/ | ISO 4762 M4 x 12 mm socket head cap screw; 1 needed for Stage 1 sun clamp bolt | 0.35
 ISO4762-M4x30 | Amazon | https://www.amazon.com/Socket-Screws-Stainless-Thread-Spanner/dp/B0DJP83447 | 100-set M4 x 30 mm 304 stainless socket-head cap screw kit (with nuts, washers, hex key); 3 needed for the tire mount | 0.09
+BLDC-A12-8318 | FreeRcHobby | https://www.freerchobby.cc/ | A12 / 8318 100KV brushless outrunner motor (91 mm OD, 12 mm shaft, 32 mm M4 mount, 23 mm M4 prop adapter) | 159.00
 BLDC-5010_360kv | Amazon | https://www.amazon.com/GoolRC-Brushless-MultiCopter-Quadcopter-Multi-axis/dp/B0C2YRNX1Z | GoolRC 5010 360KV outrunner, 4 mm shaft, 19 mm bolt circle | 27.98
-MOTEUS-C1-R1.2 | mjbots | https://mjbots.com/products/moteus-c1 | moteus C1 r1.2 controller; the on-board AS5047P faces the rotor magnet through the rear endbell to read the input (sun) shaft 1:1. The exact vendor STEP is vendored at components/vendor/20240305-moteus-c1-r1_2.step | 69.00
-MAG-8x2-DIA | mjbots | https://mjbots.com/products/diametric-disc-magnet | 8 x 2 mm diametric disc sense magnet (same product family as the 6 x 2.5 mm one); bond to the rotor shaft end behind the rear endbell | 2.00
-INSERT-3 | Amazon | https://www.amazon.com/Vibit-Threaded-Soldering-Printing-Component/dp/B0FWWW8VP1 | 152-piece M3 heat-set insert kit with tips; choose the size closest to the modeled 4.5 mm OD x 6 mm insert | 0.05
-ISO4762-M3x12 | Amazon | https://www.amazon.com/NIULUNBAO-Socket-Machine-Threaded-Assortment/dp/B0BJQ6M8XW | Same 250-piece M3 socket-head kit; covers M3 x 12 mm (12 needed) | 0.05
+MOTEUS-C1-R1.2 | mjbots | https://mjbots.com/products/moteus-c1 | moteus C1 r1.2 controller; the on-board AS5047P faces the rotor magnet through the housing sensor bore to read the input (sun) shaft 1:1. The exact vendor STEP is vendored at components/vendor/20240305-moteus-c1-r1_2.step | 69.00
+MAG-8x2-DIA | mjbots | https://mjbots.com/products/diametric-disc-magnet | 8 x 2 mm diametric disc sense magnet (same product family as the 6 x 2.5 mm one); epoxy dead-center to the exposed 12 mm rotor shaft end on the stator side | 2.00
+INSERT-3 | Amazon | https://www.amazon.com/Vibit-Threaded-Soldering-Printing-Component/dp/B0FWWW8VP1 | 152-piece M3 heat-set insert kit with tips; use M3 x 4 mm short inserts in casing flanges and housing corner bosses | 0.05
+ISO4762-M3x12 | Amazon | https://www.amazon.com/NIULUNBAO-Socket-Machine-Threaded-Assortment/dp/B0BJQ6M8XW | Same 250-piece M3 socket-head kit; covers M3 x 12 mm | 0.05
 ISO4762-M3x16 | Amazon | https://www.amazon.com/Socket-Screws-Metric-Stainless-Machine/dp/B07KRRG8HT | MewuDecor M3 x 16 mm 100-pack, 304 stainless (6 needed) | 0.10

@@ -14,37 +14,32 @@ purchased 7-inch wheel.
 
 ## What is different from the example-2 actuator
 
-- **The ring is the casing.** Each stage's internal ring gear is printed as
-  part of that stage's casing module. There is no separate ring pressed into an
-  outer housing and no separate housing wall around it. The modules bolt
-  flange-to-flange, so the outer surface of the whole gearbox is the sum of the
-  stage casings plus the motor and output caps.
-- **The default gear set is print-in-place.** Both stages use the 4-elbow
-  herringbone (`--numElbows 4`). The sun and planets interlock with the
-  casing's integrated ring and cannot be inserted after printing, following the
-  same principle as the example-2 cartridge. Use `--numElbows 0` for straight
-  teeth that can be assembled axially.
-- **Any number of stages.** Stage 1's sun sits directly on the motor shaft;
-  every later stage's sun sits directly on the previous stage's carrier output
-  shaft. Every stage parameter is independent.
-- **The motor's fixed side is bolted to the casing.** The stator mounts on the
-  motor end cap, which is part of the outer casing; the rotor shaft is the only
-  moving input.
-- **The final carrier is the output interface.** It drives a 1/2" output shaft
-  through a flanged bearing in the output cap, and a printed flange hub carries
-  both a 40 mm bolt circle and the three-hole, 55.85 mm tire-mount interface. A
-  clamp collar retains the hub on the shaft.
-- **The moteus C1 r1.2 is the motor controller and the input-shaft sensor.**
-  The exact vendor board (`components/vendor/20240305-moteus-c1-r1_2.step`)
-  hangs off the back of the motor with its AS5047P facing the rotor magnet, so
-  it reads the high-speed rotation of the input (sun) shaft 1:1 for FOC and
-  odometry.
-- **Flanged planet bearings.** The default planet bearing is a sealed, flanged
-  `FR8-2RS` (1/2" x 1 1/8" x 5/16"). Each planet is printed with a counterbore
-  sized to the bearing flange; the bearing presses in from the lower face and
-  the flange seats flush with the gear face, so the bearing cannot walk out of
-  the bore. Bearing pockets are part of the printed gear, and the printed gear
-  STEP is exported through OCCT so the pocket is a true counterbore.
+- **The default motor is the A12 8318 100KV (`--motorSource a12`).**
+  `MG-MOTOR-HOUSING` encloses the 91 mm outrunner in a 98 mm ID, 126.8 mm OD
+  ventilated barrel with six support-free cooling windows and four 114 mm BCD
+  M5 frame mounting holes. Four flush `ISO 10642 M4 x 8` countersunk screws bolt
+  the A12 stator plate to the housing floor, and `MG-ROTOR-ADAPTER` bolts directly
+  onto the A12 rotor's 23 mm 4xM4 prop adapter and drives Stage 1's sun gear
+  through two 3 x 12 mm hardened dowel pins and an axial `M4 x 12` bolt.
+- **The ring is the casing, printed flat in-place.** Both stages use 4-elbow
+  herringbone teeth (`--numElbows 4`) with flush `z = 0` bottom flanges and
+  staggered 45°-gusseted top lugs (`MG-STAGE1-CARTRIDGE.step` and
+  `MG-STAGE2-CARTRIDGE.step`), so each print-in-place cartridge sits flat on the
+  printer bed without supports and leaves straight-down hex-key access to every
+  M3 screw. Use `--numElbows 0` for straight teeth that assemble axially.
+- **Driven sun stages.** Stage 1's sun is physically bolted and pinned to the A12
+  rotor adapter; Stage 2's sun is driven by Stage 1's 8 mm carrier shaft through
+  `MG-STAGE2-COUPLER` and two 3 x 12 mm dowel pins.
+- **The moteus C1 r1.2 is dead-center over the shaft magnet.** An 8 x 2 mm
+  diametric magnet epoxies onto the exposed 12 mm stator-side rotor shaft end;
+  four M3 heat-set inserts in the housing floor hold `moteus C1` with its on-board
+  AS5047P centered directly below the magnet (~2.4 mm air gap) through the 28 mm
+  sensor bore.
+- **Flanged planet bearings need no washers.** The default planet bearing is a
+  sealed, flanged `FR8-2RS` (1/2" x 1 1/8" x 5/16"). Each captive planet prints
+  with a bottom counterbore so the bearing presses in from below until flush; the
+  flange stops axial migration in one direction while the 4-elbow herringbone
+  teeth lock each planet relative to the ring and sun, so no washers are needed.
 
 ## Stage parameters
 

@@ -517,8 +517,18 @@ pub async fn write_output(
     Some(dir) => {
       @fs.mkdir(dir, recursive=true, allow_exist=true)
       @fs.mkdir(dir + "/printable", recursive=true, allow_exist=true)
+      let written : Array[String] = []
       for file in comp.build_package_files() {
         @step_cad.write_text_file(file.content, Some(dir + "/" + file.path))
+        written.push(file.path)
+      }
+      for part in comp.printable_parts() {
+        let rel = "printable/" +
+          @cad.sanitize_part_number(part.part_number) +
+          ".step"
+        if written.contains(rel) && design_has_boolean(part.design) {
+          write_print_part(part.design, dir + "/" + rel)
+        }
       }
       design.write_step_file(Some(dir + "/assembly.step"))
       comp.to_urdf_bundle().write_to_dir(dir + "/bundle", checked=true)

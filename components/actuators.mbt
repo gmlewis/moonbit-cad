@@ -631,6 +631,24 @@ pub fn bldc_preset(name : String) -> BldcPreset? {
         mount_hole_mm: 4.2,
         bearing_designation: "6000",
       })
+    "a12_8318_100kv" | "a12" =>
+      Some({
+        name: "A12-8318-100KV",
+        diameter_mm: 91.0,
+        body_length_mm: 32.0,
+        kv: 100.0,
+        pole_pairs: 21,
+        voltage_v: 48.0,
+        current_rated_a: 60.0,
+        current_peak_a: 120.0,
+        shaft_diameter_mm: 12.0,
+        shaft_length_mm: 0.0,
+        mass_g: 510.0,
+        cost_usd: 159.0,
+        bolt_circle_mm: 32.0,
+        mount_hole_mm: 4.5,
+        bearing_designation: "6901",
+      })
     _ => None
   }
 }
@@ -1393,6 +1411,170 @@ pub fn step_brushless_motor(
         ),
       ),
       dynamics=Some(@urdf.JointDynamics::new(damping=0.01, friction=0.005)),
+      transmission_reduction=Some(1.0),
+    ),
+    bom_external=false,
+  )
+}
+
+///|
+/// Wraps the measured Tier-1 A12 8318 100KV brushless outrunner (`a12_motor`)
+/// into the fixed-stator / rotating-rotor CAD component interface.
+///
+/// The Tier-1 model is built on `+X` with its rotating prop adapter at `-X`
+/// and fixed stator plate at `+X`. Rotating by `+90` deg about `+Y` maps
+/// `stator-mount-face` onto `z = 0` facing `-Z` and places `rotor-output-face`
+/// at `z = +32.0` mm facing `+Z` toward the gearbox sun gear. The `rotor` link
+/// carries a `shaft_rear` mate at `z = 0` on the exposed `12 mm` stator-side
+/// rotor shaft so an on-axis encoder magnet rides with the rotor.
+pub fn step_a12_motor(
+  name~ : String = "a12_motor",
+  joint_name~ : String = "",
+) -> @cad.Component {
+  let spec = @step_motors.a12_motor_100kv_spec()
+  let step_comp = expect_step(
+    "A12 8318 100KV motor",
+    @step_motors.a12_motor(spec),
+  )
+  let p = resolve_bldc_preset("a12_8318_100kv")
+  let stator_name = name + "_stator"
+  let rotor_name = name + "_rotor"
+  let rotor_joint = if joint_name == "" {
+    name + "_rotor_joint"
+  } else {
+    joint_name
+  }
+  let mount_x = spec.stator_plate_start_mm + spec.stator_plate_thickness_mm
+  let output_x = -spec.prop_adapter_thickness_mm
+  let body_len = mount_x - output_x
+  let frame_ry = 90.0
+  let frame_z = mount_x
+  let stator_layers : Array[String] = [
+    "stator-lamination", "stator-plate-neck", "stator-plate", "bearing-tube", "pcb-insulator",
+  ]
+  for i in 0..<spec.stator_tooth_count {
+    stator_layers.push("stator-coil-\{i + 1}")
+  }
+  let rotor_layers : Array[String] = [
+    "bell-face", "bell-skirt", "bell-hub-boss", "prop-adapter", "shaft",
+  ]
+  for i in 0..<spec.prop_screw_count {
+    rotor_layers.push("prop-adapter-screw-\{i + 1}")
+  }
+  for i in 0..<spec.magnet_count {
+    rotor_layers.push("rotor-magnet-\{i + 1}")
+  }
+  let stator_part = purchased_part(
+    "BLDC-A12-8318",
+    "A12 8318 100KV brushless outrunner motor (91 mm OD, 12 mm shaft, 32 mm M4 / 30 mm M3 mount, 23 mm M4 prop adapter)",
+    "mixed",
+    p.cost_usd,
+    supplier_url="https://www.amazon.com/s?k=8318+100KV+brushless+motor",
+  )
+  let mut stator = @cad.Component::from_step_layers(
+    stator_name,
+    step_comp,
+    stator_layers,
+    label="stator",
+    density=@urdf.Density::aluminum_6061(),
+    ry_deg=frame_ry,
+    z_mm=frame_z,
+  )
+  stator = stator
+    .add_mate_mm_deg("mount", axis=(0.0, 0.0, -1.0))
+    .add_mate_mm_deg("front_face", z=body_len)
+    .add_mate_mm_deg("rear", axis=(0.0, 0.0, -1.0))
+    .add_mate_mm_deg("sensor_boss", axis=(0.0, 0.0, -1.0))
+    .add_mate_mm_deg("encoder_mount", z=-5.6)
+    .with_param("preset", p.name)
+    .with_param("kv", p.kv.to_string())
+    .with_param("pole_pairs", p.pole_pairs.to_string())
+    .with_param("voltage_v", p.voltage_v.to_string())
+    .with_param("phase_resistance_ohm", "0.045")
+    .with_param("thermal_resistance_c_per_w", "1.5")
+    .with_param("rated_current_a", p.current_rated_a.to_string())
+    .with_param("peak_current_a", p.current_peak_a.to_string())
+    .with_param("poles", (p.pole_pairs * 2).to_string())
+    .with_param("rotor_encoder", "AS5047P (moteus C1 r1.2), SPI")
+    .with_param("rotor_encoder_air_gap_mm", "2.4")
+    .with_param("motor_envelope", "Tier-1 A12 8318 100KV (measured)")
+    .add_port(@cad.Port::new("power", @cad.PortKind::Power, spec="48 V, 60 A"))
+    .add_port(@cad.Port::new("phases", @cad.PortKind::Power, spec="3-phase"))
+    .add_port(@cad.Port::new("can", @cad.PortKind::Bus, spec="CAN 2.0B"))
+    .add_port(@cad.Port::new("ground", @cad.PortKind::Ground, spec="0 V"))
+    .with_actuator(
+      @cad.ActuatorSpec::new(
+        @cad.ActuatorKind::Bldc,
+        model="A12 8318 100KV",
+        voltage_v=p.voltage_v,
+        current_rated_a=p.current_rated_a,
+        current_stall_a=p.current_peak_a,
+        torque_rated_nm=bldc_rated_torque(p),
+        driver="moteus C1 / FOC",
+        interface="CAN",
+        encoder="AS5047P",
+      ),
+    )
+    .with_part(stator_part)
+  let m4_radius = spec.mount_m4_circle_diameter_mm / 2.0
+  for i in 0..<spec.mount_m4_count {
+    let angle = (
+        spec.mount_hole_phase_deg +
+        45.0 +
+        360.0 * i.to_double() / spec.mount_m4_count.to_double()
+      ) *
+      @math.PI /
+      180.0
+    // Ry(+90 deg) maps STEP (x, y, z) -> (z, y, -x + mount_x).
+    stator = stator.add_mate_mm_deg(
+      "m4_hole_\{i}",
+      x=m4_radius * @math.sin(angle),
+      y=m4_radius * @math.cos(angle),
+      axis=(0.0, 0.0, -1.0),
+    )
+  }
+  let mut rotor = @cad.Component::from_step_layers(
+    rotor_name,
+    step_comp,
+    rotor_layers,
+    label="rotor",
+    density=@urdf.Density::aluminum_6061(),
+    ry_deg=frame_ry,
+    z_mm=frame_z,
+  )
+  rotor = rotor
+    .add_mate_mm_deg("base")
+    .add_mate_mm_deg("output_face", z=body_len)
+    .add_mate_mm_deg("shaft", z=body_len)
+    .add_mate_mm_deg("shaft_rear", axis=(0.0, 0.0, -1.0))
+  let prop_radius = spec.prop_hole_circle_diameter_mm / 2.0
+  for i in 0..<spec.prop_hole_count {
+    let angle = (
+        spec.prop_hole_phase_deg +
+        360.0 * i.to_double() / spec.prop_hole_count.to_double()
+      ) *
+      @math.PI /
+      180.0
+    rotor = rotor.add_mate_mm_deg(
+      "output_hole_\{i}",
+      x=prop_radius * @math.sin(angle),
+      y=prop_radius * @math.cos(angle),
+      z=body_len,
+    )
+  }
+  stator.attach(
+    rotor_joint,
+    parent_mate="origin",
+    rotor,
+    child_mate="base",
+    spec=@cad.JointSpec::continuous(
+      limit=Some(
+        @urdf.JointLimit::new(
+          effort=bldc_rated_torque(p) * 4.0,
+          velocity=p.kv * 0.1,
+        ),
+      ),
+      dynamics=Some(@urdf.JointDynamics::new(damping=0.02, friction=0.01)),
       transmission_reduction=Some(1.0),
     ),
     bom_external=false,

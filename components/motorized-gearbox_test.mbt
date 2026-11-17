@@ -131,3 +131,44 @@ test "each stage keeps its own gear parameters" {
   assert_true(parts.contains("MG-CASING-1"))
   assert_true(parts.contains("MG-CASING-2"))
 }
+
+///|
+test "A12 motorized gearbox attaches rotor to stage1 sun with ventilated housing" {
+  let stage = @components.MotorizedStageSpec::new(
+    module_mm=2.0,
+    sun_teeth=12,
+    planet_teeth=20,
+    planet_count=4,
+    gear_length_mm=10.0,
+    num_elbows=4,
+  )
+  let comp = @components.motorized_gearbox(
+    stages=[stage, stage],
+    motor_source="a12",
+  )
+  let robot = check_motorized_gearbox(comp)
+  let parts : Array[String] = comp
+    .printable_parts()
+    .map(fn(part) { part.part_number })
+  assert_true(parts.contains("MG-MOTOR-HOUSING"))
+  assert_true(parts.contains("MG-ROTOR-ADAPTER"))
+  assert_true(parts.contains("MG-STAGE2-COUPLER"))
+  assert_false(parts.contains("MG-MOTOR-CAP"))
+  match robot.get_joint("motorized_gearbox_stage1_sun_joint") {
+    Some(j) => {
+      assert_true(j.joint_type == @urdf.JointType::Fixed)
+      assert_eq(j.parent, "motorized_gearbox_motor_rotor")
+      assert_eq(j.child, "motorized_gearbox_stage1_sun")
+    }
+    None => fail("missing stage1 sun attachment joint")
+  }
+  let cart = @components.motorized_stage_cartridge(
+    stages=[stage, stage],
+    stage_index=1,
+    motor_source="a12",
+  )
+  let cart_parts : Array[String] = cart
+    .printable_parts()
+    .map(fn(part) { part.part_number })
+  assert_true(cart_parts.contains("MG-STAGE1-CARTRIDGE"))
+}

@@ -49,6 +49,56 @@ fn prefix_body_names(comp : @cad.Component, prefix : String) -> @cad.Component {
 }
 
 ///|
+/// True if a `SceneNode` shape tree contains an unevaluated CSG boolean or
+/// edge modifier that should be evaluated by OCCT once up front.
+fn shape_has_boolean(shape : @step_cad.Shape) -> Bool {
+  match shape {
+    @step_cad.Shape::Difference(_)
+    | @step_cad.Shape::Union(_)
+    | @step_cad.Shape::Fillet(_)
+    | @step_cad.Shape::Chamfer(_) => true
+    _ => false
+  }
+}
+
+///|
+/// Evaluates only the boolean / edge-modified bodies of `comp` (recursing into
+/// attached child components) with OCCT once, keeping non-boolean swept/STEP
+/// bodies untouched so `assembled.step`, `exploded.step`, `--posed-parts`, and
+/// `printable/*.step` all share crisp trimmed B-Rep solids quickly.
+async fn eval_boolean_component(comp : @cad.Component) -> @cad.Component {
+  let bodies : Array[@cad.BodyPart] = []
+  for body in comp.bodies {
+    if shape_has_boolean(body.node.shape) {
+      let design = @step_cad.Design::new(name=body.name).add(body.node)
+      let evaluated = Some(design.to_step_evaluated()) catch { _ => None }
+      match evaluated {
+        Some(step_text) =>
+          match
+            @step_cad.ImportedStep::from_string(step_text, source=body.name) {
+            Ok(imported) => {
+              let node = imported
+                .as_shape()
+                .with_name(body.name)
+                .with_color(body.node.color)
+              bodies.push({ ..body, node, })
+              continue
+            }
+            Err(_) => ()
+          }
+        None => ()
+      }
+    }
+    bodies.push(body)
+  }
+  let attachments : Array[@cad.Attachment] = []
+  for att in comp.attachments {
+    attachments.push({ ..att, child: eval_boolean_component(att.child), })
+  }
+  { ..comp, bodies, attachments, }
+}
+
+///|
 /// Radial unit vector of a node's position, for sliding radial-axis parts
 /// (set screws) outward along their own insertion axis.
 fn radial_offset(
@@ -72,84 +122,130 @@ fn radial_offset(
 /// ring gears, and the output stack, mount, and tire stack above — so every
 /// part stays coaxial with its mounting hole and can be traced straight
 /// along its insertion axis. Radial set screws slide along their own radial
-/// axis instead. A bearing travels with its flange, and a planet's bearing
-/// hovers just below the planet, so the press fit stays readable.
+/// axis instead. A bearing travels with its flange, a print-in-place stage
+/// cartridge (`MG-STAGE*-CARTRIDGE`) keeps its casing ring, sun, and planets
+/// together, and each planet's flanged bearing hovers directly below the planet
+/// to show its press-fit insertion direction.
 fn explode_offset(node : @step_cad.SceneNode) -> (Double, Double, Double) {
   let name = node.name
   let (_, _, _, _, z0, z1) = node.bounding_box()
   let zc = (z0 + z1) / 2.0
-  // The tire and the mount bolts that clamp it.
+  // Set screws travel radially outward from their parent subassembly's
+  // exploded Z station.
+  if name.contains("set_screw") || name.contains("set-screw") {
+    let (rx, ry, _) = radial_offset(node, 24.0)
+    let parent_z = if name.contains("stage2_coupler") {
+      88.0
+    } else if name.contains("stage2_carrier") {
+      245.0
+    } else if name.contains("stage1_carrier") {
+      72.0
+    } else if name.contains("collar") {
+      455.0
+    } else {
+      0.0
+    }
+    return (rx, ry, parent_z)
+  }
+  // Upper stack above Stage 2 (+Z upward in assembly order).
   if name.contains("tire_bolt") {
-    (0.0, 0.0, 360.0)
+    (0.0, 0.0, 605.0)
   } else if name.contains("tire_mount") || name.contains("tire-mount") {
-    (0.0, 0.0, 262.0)
+    (0.0, 0.0, 495.0)
   } else if name.contains("tire") {
-    (0.0, 0.0, 298.0)
-  } else if name.contains("moteus") {
-    // The controller rides with the motor; it reads the rotor magnet.
-    (0.0, 0.0, -55.0)
-  } else if name.contains("motor_cap") {
-    (0.0, 0.0, -28.0)
-  } else if name.contains("_motor") || name.contains("_rotor") {
-    (0.0, 0.0, -55.0)
+    (0.0, 0.0, 545.0)
   } else if name.contains("collar") {
-    // The clamp collar slides over the output hub.
-    (0.0, 0.0, 250.0)
+    (0.0, 0.0, 455.0)
   } else if name.contains("output_hub_insert") {
-    // Heat-set inserts hover just above the hub they press into.
-    (0.0, 0.0, 240.0)
+    (0.0, 0.0, 438.0)
   } else if name.contains("output_hub") {
-    (0.0, 0.0, 225.0)
-  } else if name.contains("ISO4762-M3-16") {
-    // Output-cap screws hover just above the cap.
-    (0.0, 0.0, 195.0)
+    (0.0, 0.0, 415.0)
+  } else if name.contains("output_cap_screw") {
+    (0.0, 0.0, 352.0)
   } else if (
       name.contains("output_bearing") ||
       name.contains("deep-groove-bearing") ||
       name.contains("bearing-FR8")
     ) &&
     !name.contains("planet") {
-    // Output bearing: races, balls and flange travel together.
-    (0.0, 0.0, 190.0)
+    (0.0, 0.0, 382.0)
   } else if name.contains("output_cap") {
-    (0.0, 0.0, 175.0)
-  } else if name.contains("ISO4762-M3-12") {
-    // M3x12 flange screws: the lower ones hold the motor cap, the rest
-    // join the stage flanges. They hover past the flange they thread into.
-    if zc < 5.0 {
-      (0.0, 0.0, -45.0)
-    } else {
-      (0.0, 0.0, 40.0)
-    }
-  } else if name.contains("HEATSET") {
-    // Heat-set inserts hover just past the flange they are pressed into.
-    // The stage-1 bottom-flange row drops below the casing; the rest lift.
-    if zc < 10.0 {
-      (0.0, 0.0, -22.0)
-    } else {
-      (0.0, 0.0, 14.0)
-    }
-  } else if name.contains("set_screw") || name.contains("set-screw") {
-    // Radial clamp screws slide out along their own axis.
-    radial_offset(node, 22.0)
+    (0.0, 0.0, 325.0)
+  } else if name.contains("stage2_carrier") {
+    (0.0, 0.0, 258.0)
+  } else if name.contains("stage2_top_insert") {
+    (0.0, 0.0, 180.0)
+  } else if name.contains("stage2_joint_screw") {
+    (0.0, 0.0, 218.0)
+  } else if name.contains("stage2") &&
+    (name.contains("bearing") || name.contains("bearing_flange")) {
+    // Press-fit FR8-2RS planet bearings hover directly below Stage 2 planets.
+    (0.0, 0.0, 135.0)
+  } else if name.contains("stage2_coupler") {
+    (0.0, 0.0, 88.0)
   } else if name.contains("stage2") {
-    if name.contains("casing") {
-      (0.0, 0.0, 0.0)
-    } else if name.contains("bearing") {
-      (0.0, 0.0, 105.0) // bearing and flange hover below their planet
+    // Print-in-place Stage 2 cartridge (casing, ring, sun, planets) moves together.
+    (0.0, 0.0, 170.0)
+  } else if name.contains("stage1_carrier") {
+    (0.0, 0.0, 72.0)
+  } else if name.contains("stage1_sun_bolt") {
+    // Center M4 bolt clamps Stage 1 sun down into MG-ROTOR-ADAPTER.
+    (0.0, 0.0, 42.0)
+  } else if name.contains("motor_cap_screw") {
+    (0.0, 0.0, 38.0)
+  } else if name.contains("stage1_top_insert") {
+    (0.0, 0.0, 30.0)
+  } else if name.contains("ISO4762-M3") {
+    if zc < 0.0 {
+      (0.0, 0.0, -345.0)
+    } else if zc < 15.0 {
+      (0.0, 0.0, 38.0)
     } else {
-      (0.0, 0.0, 128.0)
+      (0.0, 0.0, 218.0)
     }
-  } else if name.contains("stage1") {
-    if name.contains("casing") {
-      (0.0, 0.0, 0.0)
-    } else if name.contains("bearing") {
-      (0.0, 0.0, 55.0) // bearing and flange hover below their planet
+  } else if name.contains("stage1") &&
+    (name.contains("bearing") || name.contains("bearing_flange")) {
+    // Press-fit FR8-2RS planet bearings hover directly below Stage 1 planets.
+    (0.0, 0.0, -32.0)
+  } else if name.contains("motor_stator_screw") {
+    // Countersunk M4 bolts enter from the bottom of MG-MOTOR-HOUSING.
+    (0.0, 0.0, -345.0)
+  } else if name.contains("moteus_screw") {
+    (0.0, 0.0, -405.0)
+  } else if name.contains("motor_housing_moteus_insert") {
+    (0.0, 0.0, -335.0)
+  } else if name.contains("motor_housing_top_insert") {
+    (0.0, 0.0, -262.0)
+  } else if name.contains("moteus") {
+    (0.0, 0.0, -375.0)
+  } else if name.contains("motor_housing") {
+    (0.0, 0.0, -315.0)
+  } else if name.contains("rotor_adapter") && name.contains("screw") {
+    (0.0, 0.0, -62.0)
+  } else if name.contains("rotor_adapter") {
+    (0.0, 0.0, -95.0)
+  } else if name.contains("_rotor_magnet") {
+    // 8 x 2 mm magnet epoxied to the exposed stator-side rotor shaft end.
+    (0.0, 0.0, -245.0)
+  } else if name.contains("_motor_rotor") {
+    // Keeps A12 bell, shaft, magnets, and prop-adapter screws together.
+    (0.0, 0.0, -140.0)
+  } else if name.contains("_motor_stator") {
+    (0.0, 0.0, -205.0)
+  } else if name.contains("motor_cap") {
+    (0.0, 0.0, -28.0)
+  } else if name.contains("_motor") || name.contains("_rotor") {
+    (0.0, 0.0, -65.0)
+  } else if name.contains("HEATSET") {
+    if zc < -10.0 {
+      (0.0, 0.0, -335.0)
+    } else if zc < 10.0 {
+      (0.0, 0.0, -262.0)
     } else {
-      (0.0, 0.0, 78.0)
+      (0.0, 0.0, 30.0)
     }
   } else {
-    // The casing rings, sleeves, and flanges are the fixed reference frame.
+    // Stage 1 print-in-place cartridge (casing, ring, sun, planets) is the fixed reference.
     (0.0, 0.0, 0.0)
   }
 }
@@ -159,12 +255,20 @@ fn explode_offset(node : @step_cad.SceneNode) -> (Double, Double, Double) {
 fn explode_color(name : String) -> @step_cad.Rgb {
   if name.contains("tire_bolt") {
     @step_cad.Rgb::new(0.40, 0.75, 0.95)
+  } else if name.contains("screw") || name.contains("sun_bolt") {
+    @step_cad.Rgb::new(0.40, 0.75, 0.95)
   } else if name.contains("moteus") {
     @step_cad.Rgb::new(0.10, 0.60, 0.25)
   } else if name.contains("tire_mount") || name.contains("tire-mount") {
     @step_cad.Rgb::new(0.68, 0.42, 0.12)
   } else if name.contains("tire") {
     @step_cad.Rgb::new(0.08, 0.08, 0.08)
+  } else if name.contains("motor_housing") {
+    @step_cad.Rgb::new(0.20, 0.24, 0.34)
+  } else if name.contains("rotor_adapter") || name.contains("coupler") {
+    @step_cad.Rgb::new(0.88, 0.45, 0.14)
+  } else if name.contains("_rotor_magnet") {
+    @step_cad.Rgb::new(0.58, 0.22, 0.78)
   } else if name.contains("casing") || name.contains("_ring") {
     @step_cad.Rgb::new(0.12, 0.12, 0.14)
   } else if name.contains("motor_cap") {
@@ -185,8 +289,8 @@ fn explode_color(name : String) -> @step_cad.Rgb {
     @step_cad.Rgb::new(0.20, 0.80, 0.40)
   } else if name.contains("insert") {
     @step_cad.Rgb::new(0.95, 0.75, 0.10)
-  } else if name.contains("screw") {
-    @step_cad.Rgb::new(0.40, 0.75, 0.95)
+  } else if name.contains("_motor_stator") && name.contains("coil") {
+    @step_cad.Rgb::new(0.82, 0.42, 0.16)
   } else if name.contains("_motor") {
     @step_cad.Rgb::new(0.55, 0.55, 0.60)
   } else {
@@ -339,7 +443,7 @@ async fn main {
     "noOutputHub": @cli.flag(help="Omit the output bolt-circle hub"),
     "noTire": @cli.flag(help="Build the bare gearbox without the tier-1 tire"),
     "motorSource": @cli.opt_string(
-      help="Motor geometry: preset (compact) or brushless (measured tier-1 envelope); default preset",
+      help="Motor geometry: a12 (measured A12 8318 100KV + housing), preset (compact), or brushless (measured 5010 tier-1 envelope); default a12",
     ),
     "motorDeg": @cli.opt_double(0.0, help="Motor shaft angle in degrees"),
     "explode": @cli.flag(
@@ -363,7 +467,16 @@ async fn main {
     abort("")
   }
   let stage_count = num_stages
-  let preset = args.string_opt("preset").unwrap_or("5010_360kv")
+  let motor_source = args.string_opt("motorSource").unwrap_or("a12")
+  let preset = args
+    .string_opt("preset")
+    .unwrap_or(
+      if motor_source == "a12" {
+        "a12_8318_100kv"
+      } else {
+        "5010_360kv"
+      },
+    )
   let modules = cli_or_abort(
     @cad.parse_double_list(
       args.string_opt("module").unwrap_or("2.0"),
@@ -490,8 +603,20 @@ async fn main {
     tire_mount_bolt_phase_deg=mount_spec.bolt_hole_phase_deg,
     tire_mount_bolt_hole_mm=tire_mount_insert_hole_mm,
     detail~,
-    motor_source=args.string_opt("motorSource").unwrap_or("preset"),
+    motor_source~,
   )
+  let pip_cartridges : Array[String] = []
+  for i in 0..<stage_count {
+    if stage_specs[i].num_elbows >= 4 {
+      pip_cartridges.push("MG-STAGE\{i + 1}-CARTRIDGE")
+    }
+  }
+  if pip_cartridges.length() > 0 {
+    assembly = assembly.with_param(
+      "print_in_place_gearset",
+      pip_cartridges.join(","),
+    )
+  }
   let hub_name = gearbox_name + "_output_hub"
   if include_tire {
     let tire_part = @cad.PartMeta::new(
@@ -661,10 +786,38 @@ async fn main {
   positions.set(command_joint, args.double("motorDeg") * @math.PI / 180.0)
   let links_path = "examples/01_motorized_wheel/supplier-links.txt"
   let links_text = @fs.read_file(links_path).text() catch { _ => "" }
-  let assembly = assembly
+  let assembly = eval_boolean_component(assembly)
     .with_supplier_links(@cad.parse_supplier_links(links_text))
     .with_param("exploded_view", "exploded.step")
   @common.write_output(assembly, output, joint_positions=positions)
+  // Export print-in-place cartridge STEPs for every stage with num_elbows >= 4,
+  // evaluating only boolean bodies (housing shell, sun, planets) via OCCT.
+  match output.build_package {
+    Some(dir) =>
+      for k in 0..<stage_count {
+        if stage_specs[k].num_elbows >= 4 {
+          let raw_cart = @components.motorized_stage_cartridge(
+            name=gearbox_name,
+            preset~,
+            stages=stage_specs,
+            stage_index=k + 1,
+            casing_wall_mm=args.double("casingWall"),
+            flange_thickness_mm=args.double("flangeThickness"),
+            flange_extra_mm=args.double("flangeExtra"),
+            carrier_thickness_mm=args.double("carrierThickness"),
+            coupling_shaft_mm=args.double("couplingShaft"),
+            motor_source~,
+            detail~,
+          )
+          let cart_comp = eval_boolean_component(raw_cart)
+          @step_cad.write_text_file(
+            cart_comp.to_design().to_step_file(),
+            Some(dir + "/printable/MG-STAGE\{k + 1}-CARTRIDGE.step"),
+          )
+        }
+      }
+    None => ()
+  }
   // The build package always gets an exploded, color-coded view.
   let explode = args.flag("explode")
   let exploded_target = match output.build_package {

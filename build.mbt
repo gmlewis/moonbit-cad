@@ -259,13 +259,12 @@ pub fn Component::print_list_csv(self : Component) -> String {
     "layer_height_mm", "infill_percent", "support", "notes",
   ]
   let rows : Array[String] = [csv_row(header.map(fn(v) { csv_field(v) }))]
-  let cartridge_name = match self.parameters.get("print_in_place_gearset") {
-    Some(cartridge) => cartridge
-    None => ""
-  }
+  let cartridges = parse_cartridges(
+    self.parameters.get("print_in_place_gearset").unwrap_or(""),
+  )
   for line in self.bom().lines {
     if line.process != "purchased" {
-      if cartridge_name != "" && is_gearset_layer(line.part_number) {
+      if is_gearset_layer_for(line.part_number, cartridges) {
         continue
       }
       rows.push(
@@ -284,10 +283,10 @@ pub fn Component::print_list_csv(self : Component) -> String {
       )
     }
   }
-  if cartridge_name != "" {
+  for cartridge in cartridges {
     rows.push(
       csv_row([
-        csv_field(cartridge_name),
+        csv_field(cartridge),
         csv_field("Print-in-place herringbone gear set (sun, planets, ring)"),
         "1",
         csv_field("PETG / carbon fiber nylon"),
@@ -559,12 +558,59 @@ fn md_cell(text : String) -> String {
 }
 
 ///|
+/// Splits a comma-separated `print_in_place_gearset` parameter into trimmed
+/// cartridge part numbers.
+fn parse_cartridges(raw : String) -> Array[String] {
+  let out : Array[String] = []
+  if raw == "" {
+    return out
+  }
+  for entry in raw.split(",") {
+    let trimmed = entry.trim().to_owned()
+    if trimmed != "" {
+      out.push(trimmed)
+    }
+  }
+  out
+}
+
+///|
 /// True for the sun/ring/planet layers that are replaced by a single
 /// print-in-place cartridge when the gearbox requests it.
 fn is_gearset_layer(part_number : String) -> Bool {
   part_number == "PGB-SUN" ||
   part_number == "PGB-RING" ||
   part_number.has_prefix("PGB-PLANET")
+}
+
+///|
+/// True when `part_number` is printed inside one of `cartridges` instead of as
+/// an individual piece.
+fn is_gearset_layer_for(
+  part_number : String,
+  cartridges : Array[String],
+) -> Bool {
+  if cartridges.length() == 0 {
+    return false
+  }
+  if cartridges.contains("PGB-CARTRIDGE") && is_gearset_layer(part_number) {
+    return true
+  }
+  for cartridge in cartridges {
+    if cartridge.has_prefix("MG-STAGE") && cartridge.has_suffix("-CARTRIDGE") {
+      let stage_tag = String::unsafe_substring(
+        cartridge,
+        start=8,
+        end=cartridge.length() - 10,
+      )
+      if part_number == "MG-CASING-" + stage_tag ||
+        part_number == "MG-SUN-" + stage_tag ||
+        part_number == "MG-PLANET-" + stage_tag {
+        return true
+      }
+    }
+  }
+  false
 }
 
 ///|
@@ -646,10 +692,9 @@ pub fn Component::start_here_text(
   let printable_files : Array[String] = printable.map(fn(part) {
     sanitize_part_number(part.part_number)
   })
-  let cartridge_name = match self.parameters.get("print_in_place_gearset") {
-    Some(cartridge) => cartridge
-    None => ""
-  }
+  let cartridges = parse_cartridges(
+    self.parameters.get("print_in_place_gearset").unwrap_or(""),
+  )
   let mut out = "# Start here — " + package_name + "\n\n"
   out = out +
     "This folder contains everything you need. Do these three steps in order.\n\n"
@@ -661,11 +706,14 @@ pub fn Component::start_here_text(
       "` in a STEP viewer for the exploded, color-coded view.\n\n"
   }
   out = out + "## 1. 3D-print these files\n\n"
-  if cartridge_name != "" {
+  if cartridges.contains("PGB-CARTRIDGE") {
     out = out +
-      "> **Important — the gear set is print-in-place.** Print `printable/" +
-      cartridge_name +
-      ".step` as one job. Do not print the separate PGB-SUN, PGB-RING, or PGB-PLANET files, and do not try to assemble the gears afterward — the 4-elbow herringbone teeth cannot be inserted into the ring. You can still press the planet bearings into the captive planets from above, and skip the step that attaches the sun to the ring housing (the sun is already captive).\n\n"
+      "> **Important — the gear set is print-in-place.** Print `printable/PGB-CARTRIDGE.step` as one job. Do not print the separate PGB-SUN, PGB-RING, or PGB-PLANET files, and do not try to assemble the gears afterward — the 4-elbow herringbone teeth cannot be inserted into the ring. You can still press the planet bearings into the captive planets from above, and skip the step that attaches the sun to the ring housing (the sun is already captive).\n\n"
+  }
+  let mg_cartridges = cartridges.filter(fn(c) { c.has_prefix("MG-STAGE") })
+  if mg_cartridges.length() > 0 {
+    out = out +
+      "> **Important — the planetary stages are print-in-place.** Print each `MG-STAGE*-CARTRIDGE.step` file flat on the build plate (`z = 0`) as one job — do not separate the `MG-CASING-*`, `MG-SUN-*`, or `MG-PLANET-*` files, because the 4-elbow herringbone teeth interlock inside the ring. After printing, press the `FR8-2RS` flanged bearings into each captive planet from below until flush; no washers are needed because the flanged bearings seat against their counterbores and the herringbone teeth lock each planet axially.\n\n"
   }
   out = out +
     "Open the `printable/` folder. Print one copy of each file unless the Qty column says more. " +
@@ -675,7 +723,7 @@ pub fn Component::start_here_text(
   out = out + "| --- | --- | --- | --- | --- | --- | --- |\n"
   let mut printed_count = 0
   for line in bom.lines {
-    if cartridge_name != "" && is_gearset_layer(line.part_number) {
+    if is_gearset_layer_for(line.part_number, cartridges) {
       continue
     }
     if line.process != "purchased" &&
@@ -700,11 +748,11 @@ pub fn Component::start_here_text(
         " |\n"
     }
   }
-  if cartridge_name != "" {
+  for cartridge in cartridges {
     printed_count = printed_count + 1
     out = out +
       "| `printable/" +
-      cartridge_name +
+      cartridge +
       ".step` | Print-in-place herringbone gear set (sun + planets + ring) | 1 | PETG / carbon fiber nylon | 3D print | 40% | flat on the build plate, gears already in place |\n"
   }
   out = out +
@@ -754,7 +802,7 @@ pub fn Component::start_here_text(
     "Check that all printed pieces are cleaned up and all purchased parts are on the bench. " +
     "You will need a 3D printer (step 1), a clean bench, and these hex keys: "
   let procedure = self.build_procedure_text()
-  let display_procedure = if cartridge_name == "" {
+  let display_procedure = if !cartridges.contains("PGB-CARTRIDGE") {
     procedure
   } else {
     let lines : Array[String] = procedure
@@ -948,12 +996,11 @@ pub fn Component::build_package_files(
     BuildFile::new("link-parts.csv", self.link_parts_csv()),
     BuildFile::new("firmware.h", self.firmware_header()),
   ]
-  let cartridge_name = match self.parameters.get("print_in_place_gearset") {
-    Some(cartridge) => cartridge
-    None => ""
-  }
+  let cartridges = parse_cartridges(
+    self.parameters.get("print_in_place_gearset").unwrap_or(""),
+  )
   for part in self.printable_parts() {
-    if cartridge_name != "" && is_gearset_layer(part.part_number) {
+    if is_gearset_layer_for(part.part_number, cartridges) {
       continue
     }
     files.push(

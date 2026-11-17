@@ -388,3 +388,29 @@ test "output magnet is parameterized and the printed sensor can be omitted" {
   assert_true(has_magnet)
   assert_false(has_fake_sensor)
 }
+
+///|
+test "Tier-1 A12 8318 motor adapts cleanly to the two-link motor interface" {
+  let motor = @components.step_a12_motor()
+  let robot = motor.to_robot()
+  assert_true(!robot.has_errors())
+  assert_eq(robot.links.length(), 2)
+  assert_eq(robot.joints.length(), 1)
+  assert_eq(motor.bom().unassigned, 0)
+  match robot.get_joint("a12_motor_rotor_joint") {
+    Some(j) => {
+      assert_true(j.joint_type == @urdf.JointType::Continuous)
+      assert_eq(j.parent, "a12_motor_stator")
+      assert_eq(j.child, "a12_motor_rotor")
+    }
+    None => fail("missing a12_motor_rotor_joint")
+  }
+  assert_true(motor.get_mate("mount") is Some(_))
+  assert_true(motor.get_mate("encoder_mount") is Some(_))
+  assert_true(motor.get_mate("m4_hole_0") is Some(_))
+  let design = motor.to_design()
+  let names : Array[String] = design.nodes().map(fn(node) { node.name })
+  assert_true(names.contains("a12_motor_stator_stator-plate"))
+  assert_true(names.contains("a12_motor_rotor_bell-skirt"))
+  assert_true(names.contains("a12_motor_rotor_shaft"))
+}

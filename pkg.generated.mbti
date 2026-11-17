@@ -122,6 +122,7 @@ pub fn BodyPart::box_mm(String, Double, Double, Double, density? : @urdf.Density
 pub fn BodyPart::custom(String, @gmlewis/step/cad.SceneNode, @urdf.Inertial, collisions? : Array[@urdf.Collision], density? : @urdf.Density, part? : PartMeta?) -> Self
 pub fn BodyPart::cylinder_mm(String, Double, Double, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb, x_mm? : Double, y_mm? : Double, z_mm? : Double, rx_deg? : Double, ry_deg? : Double, rz_deg? : Double) -> Self
 pub fn BodyPart::extruded_profile_mm(String, Array[(Double, Double)], Double, holes? : Array[Array[(Double, Double)]], density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb, x_mm? : Double, y_mm? : Double, z_mm? : Double, rx_deg? : Double, ry_deg? : Double, rz_deg? : Double) -> Self
+pub fn BodyPart::from_scene_node(@gmlewis/step/cad.SceneNode, density? : @urdf.Density, part? : PartMeta?) -> Self
 pub fn BodyPart::from_step_component(@common.Component, density? : @urdf.Density, part? : PartMeta?, x_mm? : Double, y_mm? : Double, z_mm? : Double, rx_deg? : Double, ry_deg? : Double, rz_deg? : Double) -> Array[Self]
 pub fn BodyPart::imported_step(String, String, source? : String, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb, part? : PartMeta?, x_mm? : Double, y_mm? : Double, z_mm? : Double, rx_deg? : Double, ry_deg? : Double, rz_deg? : Double) -> Self
 pub fn BodyPart::transform_by(Self, @urdf.Transform) -> Self
@@ -229,6 +230,7 @@ pub fn Component::firmware_header(Self) -> String
 pub fn Component::format_documentation(Self) -> String
 pub fn Component::from_step_component(String, @common.Component, density? : @urdf.Density, part? : PartMeta?, connector_prefix? : String, include_connectors? : Bool, x_mm? : Double, y_mm? : Double, z_mm? : Double, rx_deg? : Double, ry_deg? : Double, rz_deg? : Double) -> Self
 pub fn Component::from_step_layer(String, @common.Component, String, density? : @urdf.Density, part? : PartMeta?, connector_prefix? : String, include_connectors? : Bool, apply_placement? : Bool, x_mm? : Double, y_mm? : Double, z_mm? : Double, rx_deg? : Double, ry_deg? : Double, rz_deg? : Double) -> Self
+pub fn Component::from_step_layers(String, @common.Component, Array[String], label? : String, density? : @urdf.Density, part? : PartMeta?, connector_prefix? : String, include_connectors? : Bool, apply_placement? : Bool, x_mm? : Double, y_mm? : Double, z_mm? : Double, rx_deg? : Double, ry_deg? : Double, rz_deg? : Double) -> Self
 pub fn Component::get_mate(Self, String) -> @common.MateConnector?
 pub fn Component::harness_checks(Self) -> Array[String]
 pub fn Component::link_design(Self, String) -> @gmlewis/step/cad.Design?
