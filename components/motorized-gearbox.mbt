@@ -296,7 +296,7 @@ fn motorized_carrier(
   detail : @step_common.DetailLevel,
 ) -> @cad.Component {
   let plate_part = fabricated_part(
-    part_number, "Printed planetary carrier plate and hub; press the steel pins into the plate and the output shaft into the hub",
+    part_number, "Printed planetary carrier plate with full-thickness shaft bore; press the steel dowel pins and bond/press-fit the steel output shaft",
     "carbon fiber nylon", "3D print", 8.0,
   )
   let pin_diam = if params.carrier_pin_diam_mm > 0.0 {
@@ -320,35 +320,13 @@ fn motorized_carrier(
     "steel",
     2.50,
   )
-  // The central clearance hole must clear the sun end face and stay clear of
-  // the pin holes. Cap it so small modules remain printable.
-  let central_hole = 2.0 *
-    (layout.center_distance_mm - (pin_diam + 0.1) / 2.0 - 0.5)
-  let central_diameter = if central_hole < 22.0 { central_hole } else { 22.0 }
-  let central_diameter = if central_diameter < 12.0 {
-    12.0
-  } else {
-    central_diameter
-  }
+  let bore_diam = shaft_diam + 0.05
   let plate_holes : Array[(Double, Double, Double)] = []
-  plate_holes.push((0.0, 0.0, central_diameter))
+  plate_holes.push((0.0, 0.0, bore_diam))
   for i in 0..<layout.planets.length() {
     let planet = layout.planets[i]
     plate_holes.push((planet.x, -planet.z, pin_diam - 0.1))
   }
-  let hub_diam = if shaft_diam + 14.0 > 32.0 { shaft_diam + 14.0 } else { 32.0 }
-  let hub_height = 4.0
-  let bore_diam = shaft_diam + 0.1
-  let set_screw_len = standard_set_screw_len(
-    hub_diam / 2.0 - bore_diam / 2.0 + 0.5,
-  )
-  let set_screw_center = bore_diam / 2.0 + set_screw_len / 2.0
-  let set_screw_part = purchased_part(
-    "SET-M4x\{fmt_mm(set_screw_len)}",
-    "M4 x \{fmt_mm(set_screw_len)} socket set screw",
-    "steel",
-    0.25,
-  )
   let mut comp = @cad.Component::new(
       name,
       description="Printed planetary carrier with steel pins and output shaft",
@@ -368,56 +346,10 @@ fn motorized_carrier(
         detail,
       ).with_part(plate_part),
     )
-    .add_body(
-      @cad.BodyPart::from_scene_node(
-        @step_cad.difference(
-          @step_cad.Cylinder::new(hub_diam, hub_height).with_name(name + "_hub"),
-          [
-            @step_cad.Cylinder::new(bore_diam, hub_height + 1.0)
-            .with_name(name + "_hub_bore")
-            .translate(z=-0.5),
-            @step_cad.Cylinder::new(3.5, hub_diam / 2.0)
-            .with_name(name + "_hub_set_screw_bore")
-            .rotate_y(90.0)
-            .translate(x=bore_diam / 2.0 - 1.0, z=hub_height / 2.0),
-          ],
-          name=name + "_hub",
-        )
-        .with_color(@step_cad.Rgb::green())
-        .translate(z=thickness - hub_height),
-        density=@urdf.Density::carbon_fiber(),
-        part=Some(plate_part),
-      ),
-    )
-    .add_body(
-      @cad.BodyPart::cylinder_mm(
-        name + "_set_screw",
-        4.0,
-        set_screw_len,
-        x_mm=set_screw_center,
-        z_mm=thickness - hub_height / 2.0,
-        ry_deg=90.0,
-        density=@urdf.Density::steel_mild(),
-        color=@step_cad.Rgb::grey(),
-      ).with_part(set_screw_part),
-    )
     .add_mate_mm_deg("bottom")
     .add_mate_mm_deg("output_flange", z=thickness)
     .add_mate_mm_deg("output_shaft", z=shaft_total)
     .with_part(plate_part)
-    .add_fastener(
-      @cad.Fastener::new(
-        "carrier_hub_set_screw",
-        @cad.FastenerKind::Screw,
-        thread="M4",
-        length_mm=set_screw_len,
-        engagement_mm=4.0,
-        quantity=1,
-        torque_nm=1.5,
-        references=[name + "_hub"],
-        part=Some(set_screw_part),
-      ),
-    )
   match output_hub_seat {
     Some(z) => comp = comp.add_mate_mm_deg("output_hub_seat", z~)
     None => ()
