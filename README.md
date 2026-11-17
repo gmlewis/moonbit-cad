@@ -120,6 +120,12 @@ tree, so a load can be snapped onto a motor's nested rotor link.
   frames, compression springs, shaft couplers, flange plates, L/U brackets, and
   heat-set inserts. Each carries `PartMeta` so it can flow into a bill of
   materials and the printable-part export.
+- **`makerpipe.mbt`** — Maker Pipe-compatible structural EMT connectors and
+  accessories imported from the STEP component package, with the STEP bodies,
+  named mates, and feature records preserved and Maker Pipe supplier/SKU/price
+  metadata attached. The sibling `gmlewis/step` repo's
+  `components/examples/makerpipe_frame` provides a table-frame cut list and
+  connector BOM.
 - **`components/actuators`** — NEMA steppers, quasi-direct-drive BLDC actuator
   pods, hub-motor wheels, and the integrated low-KV `planetary_bldc_actuator`
   / `bldc_actuator_pod`. At `Detailed`/`FullyModeled` the low-KV outrunner adds

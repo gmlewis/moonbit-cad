@@ -27,6 +27,10 @@ pub fn gltf_safe_node(@gmlewis/step/cad.SceneNode) -> @gmlewis/step/cad.SceneNod
 
 pub fn is_fabricated_part(PartMeta) -> Bool
 
+pub fn makerpipe_accessory(String, String) -> Result[Component, String]
+
+pub fn makerpipe_connector(String, String) -> Result[Component, String]
+
 pub fn parse_detail_level(String) -> @common.DetailLevel?
 
 pub fn parse_double_list(String, Int32, String) -> Result[Array[Double], String]
