@@ -184,10 +184,10 @@ fn standard_shcs_len(value : Double) -> Double {
 ///|
 /// A flanged ball bearing component.
 ///
-/// Local frame: the flange top is `z = 0`; the flange occupies
-/// `-flange_thickness_mm .. 0` and the bearing body occupies
-/// `0 .. width_mm`. Attach `flange_top` to the planet's lower face so the body
-/// extends up into the planet bore and the flange seats flush on the face.
+/// Local frame: the flange shoulder (`flange_top`) is `z = 0`; the outer-race
+/// flange rim occupies `-flange_thickness_mm .. 0` and the bearing body occupies
+/// `0 .. width_mm`. Attach `flange_top_reversed` at the planet counterbore
+/// floor (inserted from above) or at the output cap top face.
 fn flanged_bearing_component(
   name : String,
   spec : FlangedBearingSpec,
@@ -195,7 +195,7 @@ fn flanged_bearing_component(
 ) -> @cad.Component {
   let part = purchased_part(
     "BEARING-\{spec.designation}",
-    "Flanged sealed ball bearing \{spec.designation} (\{spec.bore_mm} x \{spec.outer_mm} x \{spec.width_mm} mm, flange \{spec.flange_outer_mm} mm); friction-press into the gear, flange flush with the face",
+    "Flanged sealed ball bearing \{spec.designation} (\{spec.bore_mm} x \{spec.outer_mm} x \{spec.width_mm} mm, flange \{spec.flange_outer_mm} mm); friction-press into the gear from above, flange flush with the top face",
     "steel",
     3.50,
     supplier_url="https://www.mcmaster.com/ball-bearings/",
@@ -221,11 +221,13 @@ fn flanged_bearing_component(
     part=Some(part),
   )
   if spec.flange_thickness_mm > 0.0 {
+    // Rim the outer race only so the flange does not render as a full-face washer.
+    let flange_inner = spec.outer_mm - 0.8
     comp = comp.add_body(
       @cad.BodyPart::tube_mm(
         name + "_flange",
         spec.flange_outer_mm,
-        spec.bore_mm,
+        flange_inner,
         spec.flange_thickness_mm,
         z_mm=-spec.flange_thickness_mm / 2.0,
         density=@urdf.Density::steel_mild(),
@@ -237,6 +239,11 @@ fn flanged_bearing_component(
   .add_mate_mm_deg("flange_top")
   .add_mate_mm_deg("flange_top_reversed", rx_deg=180.0)
   .add_mate_mm_deg("flange_bottom", z=-spec.flange_thickness_mm)
+  .add_mate_mm_deg(
+    "flange_bottom_reversed",
+    z=-spec.flange_thickness_mm,
+    rx_deg=180.0,
+  )
   .add_mate_mm_deg("bottom", z=-spec.flange_thickness_mm)
   .with_param("bore_mm", spec.bore_mm.to_string())
   .with_param("outer_mm", spec.outer_mm.to_string())
@@ -362,15 +369,25 @@ fn motorized_carrier(
       ).with_part(plate_part),
     )
     .add_body(
-      @cad.BodyPart::tube_mm(
-        name + "_hub",
-        hub_diam,
-        bore_diam,
-        hub_height,
-        z_mm=thickness - hub_height / 2.0,
+      @cad.BodyPart::from_scene_node(
+        @step_cad.difference(
+          @step_cad.Cylinder::new(hub_diam, hub_height).with_name(name + "_hub"),
+          [
+            @step_cad.Cylinder::new(bore_diam, hub_height + 1.0)
+            .with_name(name + "_hub_bore")
+            .translate(z=-0.5),
+            @step_cad.Cylinder::new(3.5, hub_diam / 2.0)
+            .with_name(name + "_hub_set_screw_bore")
+            .rotate_y(90.0)
+            .translate(x=bore_diam / 2.0 - 1.0, z=hub_height / 2.0),
+          ],
+          name=name + "_hub",
+        )
+        .with_color(@step_cad.Rgb::green())
+        .translate(z=thickness - hub_height),
         density=@urdf.Density::carbon_fiber(),
-        color=@step_cad.Rgb::green(),
-      ).with_part(plate_part),
+        part=Some(plate_part),
+      ),
     )
     .add_body(
       @cad.BodyPart::cylinder_mm(
@@ -795,7 +812,10 @@ fn build_stage_casing_comp(
 /// - `z = 0.0`: top flange face meeting Stage 1 with 6x M3 heat-set inserts.
 /// - `z = -14.0 .. -6.0`: 45-deg support-free flange flare (`126.8 -> 142.8 mm`).
 /// - `z = -42.0 .. -14.0`: `98.0 mm` ID barrel with 6 arched cooling windows.
-/// - `z = -45.6 .. -42.0`: stator floor with `28 mm` sensor bore and 4x M4 CSK.
+/// - `z = -45.6 .. -42.0`: strong stator floor (`3.6 mm` solid around 4x M4 CSK)
+///   with a `15 mm` central sensor through-bore (`R = 7.5 mm`) and localized
+///   `R = 10.5 mm` underside chip pocket (`z = -44.8`) leaving `4.2 mm` inward
+///   margin around every M4 stator hole.
 /// - `z = -46.8 .. -42.0`: flat printer bed ring (`R = 19.2..63.4`) carrying 4x
 ///   M3 heat-set inserts at `(±16, ±16)` for the moteus C1 PCB and 4x M5 frame
 ///   holes with external wrench pockets.
@@ -811,16 +831,20 @@ fn build_a12_motor_housing(
 ) -> (@cad.Component, Double, Double) {
   let stator_z = -42.0
   let floor_bottom_z = -45.6
+  let center_pocket_z = -44.8
   let pcb_standoff_z = -46.8
   let barrel_inner_r = 49.0
-  let sensor_bore_r = 14.0
+  let sensor_bore_r = 7.5
+  let chip_pocket_r = 10.5
   let relief_r = 19.2
   let flare_start_z = -14.0
   let top_flange_bottom_z = -6.0
   let housing_name = name + "_motor_housing"
   let shell_profile = @step_cad.RevolvedProfile::polyline(
       [
-        (sensor_bore_r, floor_bottom_z),
+        (sensor_bore_r, center_pocket_z),
+        (chip_pocket_r, center_pocket_z),
+        (chip_pocket_r, floor_bottom_z),
         (relief_r, floor_bottom_z),
         (relief_r, pcb_standoff_z),
         (casing_outer, pcb_standoff_z),
@@ -930,7 +954,7 @@ fn build_a12_motor_housing(
       .translate(x=mx, y=my, z=-46.5),
     )
     cutters.push(
-      @step_cad.Cylinder::new(9.0, 2.0)
+      @step_cad.Cylinder::new(8.6, 2.0)
       .with_name("a12_m4_recess_\{i}")
       .translate(x=mx, y=my, z=-47.5),
     )
@@ -1260,21 +1284,36 @@ fn build_stage_sun_coupler(
     "DOWEL-3.0x12.0", "Hardened steel dowel pin 3.0 x 12.0 mm (inter-stage sun drive)",
     "steel", 0.35,
   )
+  let coupler_shell = @step_cad.difference(
+    @step_cad.Cylinder::new(18.0, coupler_height).with_name(name + "_blank"),
+    [
+      @step_cad.Cylinder::new(bore_diam, coupler_height + 1.0)
+      .with_name(name + "_center_bore")
+      .translate(z=-0.5),
+      @step_cad.Cylinder::new(3.1, coupler_height + 1.0)
+      .with_name(name + "_pin_bore_pos")
+      .translate(x=6.2, z=-0.5),
+      @step_cad.Cylinder::new(3.1, coupler_height + 1.0)
+      .with_name(name + "_pin_bore_neg")
+      .translate(x=-6.2, z=-0.5),
+      @step_cad.Cylinder::new(2.7, 9.0)
+      .with_name(name + "_set_screw_bore")
+      .rotate_x(-90.0)
+      .translate(y=bore_diam / 2.0 - 1.0, z=coupler_height / 2.0),
+    ],
+    name=name + "_body",
+  ).with_color(@step_cad.Rgb::orange())
   let mut comp = @cad.Component::new(
       name,
       description="Inter-stage sun drive coupler",
     )
     .with_part(part)
     .add_body(
-      @cad.BodyPart::tube_mm(
-        name + "_body",
-        18.0,
-        bore_diam,
-        coupler_height,
-        z_mm=coupler_height / 2.0,
+      @cad.BodyPart::from_scene_node(
+        coupler_shell,
         density=@urdf.Density::carbon_fiber(),
-        color=@step_cad.Rgb::orange(),
-      ).with_part(part),
+        part=Some(part),
+      ),
     )
     .add_body(
       @cad.BodyPart::cylinder_mm(
@@ -1506,6 +1545,7 @@ pub fn motorized_stage_cartridge(
       spec.gear_length_mm,
       smooth,
     ).bodies[0]
+  let pin_depth_mm = if k == 0 { 5.4 } else { spec.gear_length_mm + 1.0 }
   let sun_body = cut_sun_drive_features(
     {
       ..raw_sun,
@@ -1522,7 +1562,7 @@ pub fn motorized_stage_cartridge(
       6.2
     },
     3.2,
-    6.2,
+    pin_depth_mm,
     if k == 0 && is_a12 {
       8.4
     } else {
@@ -1548,9 +1588,11 @@ pub fn motorized_stage_cartridge(
     let p_node = if bearing.flange_thickness_mm > 0.0 {
       let pocket_r = bearing.flange_outer_mm / 2.0 + PLANET_POCKET_CLEARANCE_MM
       let cutter = @step_cad.Cylinder::new(
-        pocket_r * 2.0,
-        bearing.flange_thickness_mm,
-      ).with_name("\{name}_stage\{stage_index}_planet_\{i}_pocket")
+          pocket_r * 2.0,
+          bearing.flange_thickness_mm + 0.5,
+        )
+        .with_name("\{name}_stage\{stage_index}_planet_\{i}_pocket")
+        .translate(z=spec.gear_length_mm - bearing.flange_thickness_mm)
       @step_cad.difference(
         raw_p.node,
         [cutter],
@@ -2035,7 +2077,11 @@ pub fn motorized_gearbox(
           6.2
         },
         3.2,
-        6.2,
+        if k == 0 {
+          5.4
+        } else {
+          info.gear_length + 1.0
+        },
         if k == 0 && is_a12 {
           8.4
         } else {
@@ -2180,7 +2226,7 @@ pub fn motorized_gearbox(
       let raw_planet = planet_comp.bodies[0]
       let planet_part = fabricated_part(
         "MG-PLANET-\{idx}",
-        "Printed planetary planet gear; press the flanged bearing into the counterbore from the lower face until it seats flush",
+        "Printed planetary planet gear; press the flanged bearing into the counterbore from the top face until it seats flush",
         "carbon fiber nylon",
         "3D print",
         3.0,
@@ -2197,9 +2243,11 @@ pub fn motorized_gearbox(
         let pocket_radius = info.bearing.flange_outer_mm / 2.0 +
           PLANET_POCKET_CLEARANCE_MM
         let pocket_cutter = @step_cad.Cylinder::new(
-          pocket_radius * 2.0,
-          info.bearing.flange_thickness_mm,
-        ).with_name("\{name}_stage\{idx}_planet_\{i}_pocket_cutter")
+            pocket_radius * 2.0,
+            info.bearing.flange_thickness_mm + 0.5,
+          )
+          .with_name("\{name}_stage\{idx}_planet_\{i}_pocket_cutter")
+          .translate(z=info.gear_length - info.bearing.flange_thickness_mm)
         {
           ..planet_body0,
           node: @step_cad.difference(
@@ -2229,11 +2277,11 @@ pub fn motorized_gearbox(
       )
       planet = planet.attach(
         "\{name}_stage\{idx}_planet_\{i}_bearing_merge",
-        parent_mate="bottom",
+        parent_mate="top",
         bearing,
-        child_mate="flange_top",
+        child_mate="flange_top_reversed",
         spec=@cad.JointSpec::merge_rigid(
-          offset_mm=info.bearing.flange_thickness_mm,
+          offset_mm=-info.bearing.flange_thickness_mm,
         ),
       )
       carrier = carrier.attach(
@@ -2282,7 +2330,7 @@ pub fn motorized_gearbox(
   // ---------------------------------------------------------------------
   if is_a12 {
     let housing_part = fabricated_part(
-      "MG-MOTOR-HOUSING", "Printed ventilated A12 stator housing (126.8 mm barrel, 6 cooling windows, 28 mm sensor bore, M4 CSK stator mount, and centered M3 moteus C1 standoffs)",
+      "MG-MOTOR-HOUSING", "Printed ventilated A12 stator housing (126.8 mm barrel, 6 cooling windows, 15 mm sensor bore, strong M4 CSK stator mount, and centered M3 moteus C1 standoffs)",
       "carbon fiber nylon", "3D print", 28.0,
     )
     let (housing_comp, _, _) = build_a12_motor_housing(

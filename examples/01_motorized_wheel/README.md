@@ -33,13 +33,15 @@ purchased 7-inch wheel.
 - **The moteus C1 r1.2 is dead-center over the shaft magnet.** An 8 x 2 mm
   diametric magnet epoxies onto the exposed 12 mm stator-side rotor shaft end;
   four M3 heat-set inserts in the housing floor hold `moteus C1` with its on-board
-  AS5047P centered directly below the magnet (~2.4 mm air gap) through the 28 mm
-  sensor bore.
+  AS5047P centered directly below the magnet (~2.4 mm air gap) through the 15 mm
+  sensor bore (leaving thick solid floor around all four M4 stator CSK mounts).
 - **Flanged planet bearings need no washers.** The default planet bearing is a
   sealed, flanged `FR8-2RS` (1/2" x 1 1/8" x 5/16"). Each captive planet prints
-  with a bottom counterbore so the bearing presses in from below until flush; the
-  flange stops axial migration in one direction while the 4-elbow herringbone
-  teeth lock each planet relative to the ring and sun, so no washers are needed.
+  with a top counterbore (`z = 8.5..10.0 mm`) so the bearing presses in from
+  above until flush (with a flat support-free print bed at `z = 0`); the
+  flange seats against the counterbore while the carrier plate traps it from
+  above and the 4-elbow herringbone teeth lock each planet axially, so no
+  washers are needed.
 
 ## Stage parameters
 

@@ -713,7 +713,7 @@ pub fn Component::start_here_text(
   let mg_cartridges = cartridges.filter(fn(c) { c.has_prefix("MG-STAGE") })
   if mg_cartridges.length() > 0 {
     out = out +
-      "> **Important — the planetary stages are print-in-place.** Print each `MG-STAGE*-CARTRIDGE.step` file flat on the build plate (`z = 0`) as one job — do not separate the `MG-CASING-*`, `MG-SUN-*`, or `MG-PLANET-*` files, because the 4-elbow herringbone teeth interlock inside the ring. After printing, press the `FR8-2RS` flanged bearings into each captive planet from below until flush; no washers are needed because the flanged bearings seat against their counterbores and the herringbone teeth lock each planet axially.\n\n"
+      "> **Important — the planetary stages are print-in-place.** Print each `MG-STAGE*-CARTRIDGE.step` file flat on the build plate (`z = 0`) as one job — do not separate the `MG-CASING-*`, `MG-SUN-*`, or `MG-PLANET-*` files, because the 4-elbow herringbone teeth interlock inside the ring. After printing, press the `FR8-2RS` flanged bearings into each captive planet from above until flush in the top counterbore (trapped from above by `MG-CARRIER-*`); no washers are needed because the flanged bearings seat against their top counterbores and the herringbone teeth lock each planet axially.\n\n"
   }
   out = out +
     "Open the `printable/` folder. Print one copy of each file unless the Qty column says more. " +

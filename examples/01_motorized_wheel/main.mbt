@@ -62,6 +62,252 @@ fn shape_has_boolean(shape : @step_cad.Shape) -> Bool {
 }
 
 ///|
+/// Splits a comma-separated STEP argument list at top-level parentheses and outside strings.
+fn split_step_top_args(s : String) -> Array[String] {
+  let out : Array[String] = []
+  let mut depth = 0
+  let mut in_str = false
+  let mut start = 0
+  let n = s.length()
+  let mut i = 0
+  while i < n {
+    let ch = s.unsafe_get(i)
+    if in_str {
+      if ch == '\'' {
+        if i + 1 < n && s.unsafe_get(i + 1) == '\'' {
+          i += 2
+          continue
+        }
+        in_str = false
+      }
+    } else if ch == '\'' {
+      in_str = true
+    } else if ch == '(' {
+      depth += 1
+    } else if ch == ')' {
+      if depth > 0 {
+        depth -= 1
+      }
+    } else if ch == ',' && depth == 0 {
+      out.push(s.exact_view(start~, end=i).to_owned().trim().to_owned())
+      start = i + 1
+    }
+    i += 1
+  }
+  out.push(s.exact_view(start~, end=n).to_owned().trim().to_owned())
+  out
+}
+
+///|
+/// Rewrites standalone 13-arg `B_SPLINE_SURFACE_WITH_KNOTS(...)` statements
+/// written by OCCT into standard ISO 10303-21 AP214 complex entity instances so
+/// `ImportedStep::from_string` parses trimmed swept gear solids cleanly.
+fn normalize_bspline_surface_entities(text : String) -> String {
+  let out = StringBuilder()
+  let n = text.length()
+  let mut pos = 0
+  let needle = "B_SPLINE_SURFACE_WITH_KNOTS("
+  while pos < n {
+    let tail = text.exact_view(start=pos, end=n)
+    match tail.find(needle) {
+      None => {
+        out.write_string(tail.to_owned())
+        break
+      }
+      Some(rel) => {
+        let idx = pos + rel
+        // Check that it's preceded by `=` (possibly with spaces), not already inside a complex `(...)`.
+        let mut back = idx - 1
+        while back >= pos &&
+              (
+                text.unsafe_get(back) == ' ' ||
+                text.unsafe_get(back) == '\n' ||
+                text.unsafe_get(back) == '\r'
+              ) {
+          back -= 1
+        }
+        if back < pos || text.unsafe_get(back) != '=' {
+          out.write_string(
+            text.exact_view(start=pos, end=idx + needle.length()).to_owned(),
+          )
+          pos = idx + needle.length()
+          continue
+        }
+        let args_start = idx + needle.length()
+        let mut depth = 1
+        let mut in_str = false
+        let mut p = args_start
+        while p < n && depth > 0 {
+          let ch = text.unsafe_get(p)
+          if in_str {
+            if ch == '\'' {
+              if p + 1 < n && text.unsafe_get(p + 1) == '\'' {
+                p += 2
+                continue
+              }
+              in_str = false
+            }
+          } else if ch == '\'' {
+            in_str = true
+          } else if ch == '(' {
+            depth += 1
+          } else if ch == ')' {
+            depth -= 1
+          }
+          p += 1
+        }
+        let args_end = p - 1
+        let args_str = text
+          .exact_view(start=args_start, end=args_end)
+          .to_owned()
+        let parts = split_step_top_args(args_str)
+        out.write_string(text.exact_view(start=pos, end=idx).to_owned())
+        if parts.length() == 13 {
+          let s_args = [
+            parts[1],
+            parts[2],
+            parts[3],
+            parts[4],
+            parts[5],
+            parts[6],
+            parts[7],
+          ].join(",")
+          let k_args = [parts[8], parts[9], parts[10], parts[11], parts[12]].join(
+            ",",
+          )
+          out.write_string(
+            "(\nBOUNDED_SURFACE()\nB_SPLINE_SURFACE(\{s_args})\nB_SPLINE_SURFACE_WITH_KNOTS(\{k_args})\nGEOMETRIC_REPRESENTATION_ITEM()\nREPRESENTATION_ITEM(\{parts[0]})\nSURFACE()\n)",
+          )
+        } else {
+          out.write_string(
+            text.exact_view(start=idx, end=args_end + 1).to_owned(),
+          )
+        }
+        pos = args_end + 1
+      }
+    }
+  }
+  out.to_string()
+}
+
+///|
+/// Evaluates a `Difference` whose base is an `ImportedStep` or `SweptProfile`
+/// (e.g. swept herringbone planetary sun/planet gears) via OCCT DRAWEXE,
+/// because `Design::to_csg_step` / `csg_eval.py` does not evaluate cuts on
+/// those shapes.
+async fn eval_imported_difference(
+  node : @step_cad.SceneNode,
+) -> @step_cad.SceneNode? {
+  let diff = match node.shape {
+    @step_cad.Shape::Difference(d) =>
+      match d.base.shape {
+        @step_cad.Shape::ImportedStep(_) | @step_cad.Shape::SweptProfile(_) => d
+        _ => return None
+      }
+    _ => return None
+  }
+  if diff.cutters.is_empty() {
+    return None
+  }
+  let temp_dir = @fs.tmpdir(prefix="occt-imp-diff-") catch {
+    err => {
+      @cli.eprintln("eval_imported_difference tmpdir failed: \{err}")
+      return None
+    }
+  }
+  let base_path = temp_dir + "/base.step"
+  let cut_path = temp_dir + "/cut.step"
+  let out_path = temp_dir + "/out.step"
+  let tcl_path = temp_dir + "/script.tcl"
+  let base_design = @step_cad.Design::new(name="base").add(
+    diff.base.with_name("base"),
+  )
+  let mut cut_design = @step_cad.Design::new(name="cut")
+  for idx, cutter in diff.cutters {
+    cut_design = cut_design.add(cutter.with_name("cutter_\{idx}"))
+  }
+  let base_step = base_design.to_step_file()
+  @step_cad.write_text_file(base_step, Some(base_path))
+  @step_cad.write_text_file(cut_design.to_step_file(), Some(cut_path))
+  let tcl = [
+    "pload ALL",
+    "testreadstep \"\{base_path}\" b",
+    "testreadstep \"\{cut_path}\" c",
+    "bcut r b c",
+    "testwritestep \"\{out_path}\" r",
+    "",
+  ].join("\n")
+  @step_cad.write_text_file(tcl, Some(tcl_path))
+  let (code, proc_out) = @process.collect_output_merged("sh", [
+    "-c",
+    "DRAWEXE -b < \"\{tcl_path}\"",
+  ]) catch {
+    err => {
+      @cli.eprintln("eval_imported_difference DRAWEXE spawn failed: \{err}")
+      @fs.rmdir(temp_dir, recursive=true) catch {
+        _ => ()
+      }
+      return None
+    }
+  }
+  let res = if code == 0 && @fs.exists(out_path) {
+    let raw_out = @fs.read_file(out_path).text() catch { _ => "" }
+    // Normalize CRLF and replace OCCT's multi-line header with our single-line header.
+    let norm_out = raw_out.replace(old="\r\n", new="\n")
+    let out_text = match
+      (
+        base_step.find("HEADER;"),
+        base_step.find("ENDSEC;"),
+        norm_out.find("HEADER;"),
+        norm_out.find("ENDSEC;"),
+      ) {
+      (Some(bs), Some(be), Some(os), Some(oe)) if be > bs && oe > os => {
+        let base_hdr = base_step.exact_view(start=bs, end=be + 7).to_owned()
+        let prefix = norm_out.exact_view(start=0, end=os).to_owned()
+        let suffix = norm_out
+          .exact_view(start=oe + 7, end=norm_out.length())
+          .to_owned()
+        normalize_bspline_surface_entities(prefix + base_hdr + suffix)
+      }
+      _ => normalize_bspline_surface_entities(norm_out)
+    }
+    if out_text != "" {
+      match @step_cad.ImportedStep::from_string(out_text, source=node.name) {
+        Ok(imported) =>
+          Some(
+            imported
+            .as_shape()
+            .with_name(node.name)
+            .with_color(node.color)
+            .rotate_x(node.rx)
+            .rotate_y(node.ry)
+            .rotate_z(node.rz)
+            .translate(x=node.tx, y=node.ty, z=node.tz),
+          )
+        Err(e) => {
+          @cli.eprintln(
+            "eval_imported_difference parse failed for \{node.name}: \{e.message}",
+          )
+          None
+        }
+      }
+    } else {
+      @cli.eprintln("eval_imported_difference empty out.step for \{node.name}")
+      None
+    }
+  } else {
+    @cli.eprintln(
+      "eval_imported_difference failed code=\{code} exists=\{@fs.exists(out_path)} out=\{proc_out.text()}",
+    )
+    None
+  }
+  @fs.rmdir(temp_dir, recursive=true) catch {
+    _ => ()
+  }
+  res
+}
+
+///|
 /// Evaluates only the boolean / edge-modified bodies of `comp` (recursing into
 /// attached child components) with OCCT once, keeping non-boolean swept/STEP
 /// bodies untouched so `assembled.step`, `exploded.step`, `--posed-parts`, and
@@ -70,6 +316,13 @@ async fn eval_boolean_component(comp : @cad.Component) -> @cad.Component {
   let bodies : Array[@cad.BodyPart] = []
   for body in comp.bodies {
     if shape_has_boolean(body.node.shape) {
+      match eval_imported_difference(body.node) {
+        Some(node) => {
+          bodies.push({ ..body, node, })
+          continue
+        }
+        None => ()
+      }
       let design = @step_cad.Design::new(name=body.name).add(body.node)
       let evaluated = Some(design.to_step_evaluated()) catch { _ => None }
       match evaluated {
@@ -124,24 +377,28 @@ fn radial_offset(
 /// along its insertion axis. Radial set screws slide along their own radial
 /// axis instead. A bearing travels with its flange, a print-in-place stage
 /// cartridge (`MG-STAGE*-CARTRIDGE`) keeps its casing ring, sun, and planets
-/// together, and each planet's flanged bearing hovers directly below the planet
-/// to show its press-fit insertion direction.
+/// together, each planet's flanged bearing hovers directly above the planet
+/// (showing top-down press-fit insertion), and the A12 brushless motor stays
+/// assembled as one purchased solid unit.
 fn explode_offset(node : @step_cad.SceneNode) -> (Double, Double, Double) {
   let name = node.name
   let (_, _, _, _, z0, z1) = node.bounding_box()
   let zc = (z0 + z1) / 2.0
+  // Purchased shaft collar stays on-axis above MG-OUTPUT-HUB even though its
+  // node name (`set-screw-shaft-collar`) contains `set-screw` and `stage2_carrier`.
+  if name.contains("collar") || name.contains("shaft-collar") {
+    return (0.0, 0.0, 505.0)
+  }
   // Set screws travel radially outward from their parent subassembly's
   // exploded Z station.
   if name.contains("set_screw") || name.contains("set-screw") {
     let (rx, ry, _) = radial_offset(node, 24.0)
     let parent_z = if name.contains("stage2_coupler") {
-      88.0
+      145.0
     } else if name.contains("stage2_carrier") {
-      245.0
+      305.0
     } else if name.contains("stage1_carrier") {
-      72.0
-    } else if name.contains("collar") {
-      455.0
+      92.0
     } else {
       0.0
     }
@@ -149,100 +406,96 @@ fn explode_offset(node : @step_cad.SceneNode) -> (Double, Double, Double) {
   }
   // Upper stack above Stage 2 (+Z upward in assembly order).
   if name.contains("tire_bolt") {
-    (0.0, 0.0, 605.0)
+    (0.0, 0.0, 645.0)
   } else if name.contains("tire_mount") || name.contains("tire-mount") {
-    (0.0, 0.0, 495.0)
+    (0.0, 0.0, 535.0)
   } else if name.contains("tire") {
-    (0.0, 0.0, 545.0)
-  } else if name.contains("collar") {
-    (0.0, 0.0, 455.0)
+    (0.0, 0.0, 585.0)
   } else if name.contains("output_hub_insert") {
-    (0.0, 0.0, 438.0)
+    (0.0, 0.0, 492.0)
   } else if name.contains("output_hub") {
-    (0.0, 0.0, 415.0)
+    (0.0, 0.0, 470.0)
   } else if name.contains("output_cap_screw") {
-    (0.0, 0.0, 352.0)
+    (0.0, 0.0, 405.0)
   } else if (
       name.contains("output_bearing") ||
       name.contains("deep-groove-bearing") ||
       name.contains("bearing-FR8")
     ) &&
     !name.contains("planet") {
-    (0.0, 0.0, 382.0)
+    (0.0, 0.0, 435.0)
   } else if name.contains("output_cap") {
-    (0.0, 0.0, 325.0)
+    (0.0, 0.0, 380.0)
   } else if name.contains("stage2_carrier") {
-    (0.0, 0.0, 258.0)
+    (0.0, 0.0, 305.0)
   } else if name.contains("stage2_top_insert") {
-    (0.0, 0.0, 180.0)
+    (0.0, 0.0, 260.0)
   } else if name.contains("stage2_joint_screw") {
-    (0.0, 0.0, 218.0)
+    (0.0, 0.0, 162.0)
   } else if name.contains("stage2") &&
     (name.contains("bearing") || name.contains("bearing_flange")) {
-    // Press-fit FR8-2RS planet bearings hover directly below Stage 2 planets.
-    (0.0, 0.0, 135.0)
+    // Press-fit FR8-2RS planet bearings hover directly above Stage 2 planets.
+    (0.0, 0.0, 240.0)
   } else if name.contains("stage2_coupler") {
-    (0.0, 0.0, 88.0)
+    (0.0, 0.0, 145.0)
   } else if name.contains("stage2") {
     // Print-in-place Stage 2 cartridge (casing, ring, sun, planets) moves together.
-    (0.0, 0.0, 170.0)
+    (0.0, 0.0, 195.0)
   } else if name.contains("stage1_carrier") {
-    (0.0, 0.0, 72.0)
+    (0.0, 0.0, 92.0)
   } else if name.contains("stage1_sun_bolt") {
     // Center M4 bolt clamps Stage 1 sun down into MG-ROTOR-ADAPTER.
-    (0.0, 0.0, 42.0)
+    (0.0, 0.0, 66.0)
   } else if name.contains("motor_cap_screw") {
-    (0.0, 0.0, 38.0)
+    (0.0, 0.0, -30.0)
   } else if name.contains("stage1_top_insert") {
-    (0.0, 0.0, 30.0)
+    (0.0, 0.0, 32.0)
   } else if name.contains("ISO4762-M3") {
     if zc < 0.0 {
-      (0.0, 0.0, -345.0)
+      (0.0, 0.0, -350.0)
     } else if zc < 15.0 {
-      (0.0, 0.0, 38.0)
+      (0.0, 0.0, -30.0)
     } else {
-      (0.0, 0.0, 218.0)
+      (0.0, 0.0, 162.0)
     }
   } else if name.contains("stage1") &&
     (name.contains("bearing") || name.contains("bearing_flange")) {
-    // Press-fit FR8-2RS planet bearings hover directly below Stage 1 planets.
-    (0.0, 0.0, -32.0)
+    // Press-fit FR8-2RS planet bearings hover directly above Stage 1 planets.
+    (0.0, 0.0, 42.0)
   } else if name.contains("motor_stator_screw") {
     // Countersunk M4 bolts enter from the bottom of MG-MOTOR-HOUSING.
-    (0.0, 0.0, -345.0)
+    (0.0, 0.0, -295.0)
   } else if name.contains("moteus_screw") {
-    (0.0, 0.0, -405.0)
+    (0.0, 0.0, -350.0)
   } else if name.contains("motor_housing_moteus_insert") {
-    (0.0, 0.0, -335.0)
+    (0.0, 0.0, -280.0)
   } else if name.contains("motor_housing_top_insert") {
-    (0.0, 0.0, -262.0)
+    (0.0, 0.0, -238.0)
   } else if name.contains("moteus") {
-    (0.0, 0.0, -375.0)
+    (0.0, 0.0, -320.0)
   } else if name.contains("motor_housing") {
-    (0.0, 0.0, -315.0)
+    (0.0, 0.0, -260.0)
   } else if name.contains("rotor_adapter") && name.contains("screw") {
-    (0.0, 0.0, -62.0)
+    (0.0, 0.0, -48.0)
   } else if name.contains("rotor_adapter") {
-    (0.0, 0.0, -95.0)
+    (0.0, 0.0, -78.0)
   } else if name.contains("_rotor_magnet") {
     // 8 x 2 mm magnet epoxied to the exposed stator-side rotor shaft end.
-    (0.0, 0.0, -245.0)
-  } else if name.contains("_motor_rotor") {
-    // Keeps A12 bell, shaft, magnets, and prop-adapter screws together.
+    (0.0, 0.0, -198.0)
+  } else if name.contains("_motor_rotor") || name.contains("_motor_stator") {
+    // Purchased A12 motor stays intact as one single solid unit.
     (0.0, 0.0, -140.0)
-  } else if name.contains("_motor_stator") {
-    (0.0, 0.0, -205.0)
   } else if name.contains("motor_cap") {
     (0.0, 0.0, -28.0)
   } else if name.contains("_motor") || name.contains("_rotor") {
-    (0.0, 0.0, -65.0)
+    (0.0, 0.0, -140.0)
   } else if name.contains("HEATSET") {
     if zc < -10.0 {
-      (0.0, 0.0, -335.0)
+      (0.0, 0.0, -280.0)
     } else if zc < 10.0 {
-      (0.0, 0.0, -262.0)
+      (0.0, 0.0, -238.0)
     } else {
-      (0.0, 0.0, 30.0)
+      (0.0, 0.0, 32.0)
     }
   } else {
     // Stage 1 print-in-place cartridge (casing, ring, sun, planets) is the fixed reference.
