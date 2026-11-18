@@ -81,20 +81,23 @@ golden file.
    - section area/perimeter at feature planes (`measure_step_mesh.py`);
    - bidirectional surface deviation where the nominal shapes should match.
 
-4. **Look at the pair in SolidCraft, never the four-pane PNG.**
+4. **Look at the pair from multiple SolidCraft 3D viewpoints, never the four-pane PNG or quad view.**
 
    ```bash
    ./compare-golden.sh 4 --headless   # generate without opening anything
    ```
 
-   Inspect both files with the headless `mcp__solidcraft__open` /
-   `screenshot` tools (see the `solidcraft-inspect` skill): an isometric
-   three-quarter view plus a straight-on shot of each differing side,
-   `up: "z"`, absolute paths under an allowed root. `render_step.py` /
-   `--png` output is OCCT's four-view image — a smoke test only, never
-   evidence that a part looks right or matches its golden. Only open the GUI
-   (`./compare-golden.sh 4`, or `--helper` to skip the up-axis dialog) when
-   the user asks to see it; never open windows on the user's behalf.
+   Inspect both files with headless `mcp__solidcraft__open` / `screenshot` or
+   `solidcraft-cli snapshot` (see the `solidcraft-inspect` skill): capture
+   straight-on orthographic shots, multiple angled 3/4 views, **zoomed
+   close-ups (`--camera`)** of every differing feature edge (tooth ends,
+   fillets, chamfers, threads), and `--section` cutaways for internal geometry,
+   with `up: "z"` and absolute paths under an allowed root. `render_step.py` /
+   `--png` four-view images and small quad previews have poor shading contrast
+   and hide fine seam defects — use full-resolution SolidCraft 3D camera views
+   instead. Only open the GUI (`./compare-golden.sh 4`, or `--helper` to skip
+   the up-axis dialog) when the user asks to see it; never open windows on the
+   user's behalf.
 
    A visual difference is a finding; the numbers are the acceptance criterion.
 

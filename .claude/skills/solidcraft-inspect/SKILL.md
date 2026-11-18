@@ -9,14 +9,43 @@ description: Inspect generated CAD geometry in SolidCraft instead of trusting OC
 
 `scripts/render_step.py` and `./run-example.sh <example> --png` produce a
 four-view PNG from OCCT `DRAWEXE`. It is a smoke test ("did it render at all?"),
-**never** acceptance evidence and never a basis for visual judgments. It has no
-real shading, hides small features, and misrepresents curved/silhouette detail.
-When you need to judge whether geometry looks right — silhouette, window and
-slot shapes, feature scale, connector placement, color intent — inspect it in
-SolidCraft, which renders lit, shaded views from any angle.
+**never** acceptance evidence and never a basis for visual judgments. Its
+flat/quad shading hides small defects, edge mismatches, and surface seams, and
+misrepresents curved/silhouette detail. Even `render_solidcraft.py` quad-view
+composites are too small for fine defect analysis. When you need to judge
+whether geometry looks right — silhouette, tooth/edge alignment, window and
+slot shapes, feature scale, connector placement, internal bores, color intent —
+inspect full-resolution SolidCraft 3D screenshots from multiple camera angles
+(`solidcraft-cli snapshot` or `mcp__solidcraft__screenshot`), which render lit,
+shaded B-Reps at arbitrary zoom levels.
 
 If the user asks you to "look at" or "fix how it looks", they mean SolidCraft.
-Never justify keeping a wrong-looking model because "the 4-pane looks fine".
+Never justify keeping a wrong-looking model because "the 4-pane or quad view looks fine".
+
+## No single-view or quad-view acceptance
+
+An isometric view (or quad isometric composite) is for **orientation only**. It
+has poor local contrast on shallow cones/bevels, hides gaps, half-size offsets,
+detached layers, sliver faces, and internal bore obstructions, and is the worst
+possible basis for a "looks right" judgment.
+
+Never accept, report, or hand off a model after one iso render or a quad view.
+The minimum inspection set for any changed part is:
+
+- **Six orthographic views** (`front`, `back`, `left`, `right`, `top`, `bottom`
+  or functional equivalents) to expose silhouette, symmetry, hole spacing, and
+  gaps.
+- **Angled 3/4 views from each functional side**, for lighting/shading contrast
+  across sloped faces and fillets.
+- **Zoomed close-ups** (`--camera` aimed directly at seams, tooth outer ends,
+  chamfers, threads, and layer junctions) of every changed feature.
+- **Section cutaways (`--section x=0` / `y=0` / `z=0`)** whenever the part has
+  internal bores, sockets, hubs, or fluid passages.
+- **A numeric layer-connection check**: use `measure` / `body_topology` and
+  confirm adjacent layer bounding boxes actually overlap cleanly with zero
+  unintended steps.
+
+If you cannot name the views and close-ups you inspected, you have not inspected the model.
 
 ## Who drives SolidCraft
 
@@ -68,12 +97,15 @@ solidcraft-cli snapshot --in target/part.step --out target/front.png \
 solidcraft-cli snapshot --in target/part.step --out target/rotor_iso.png \
   --camera '{"target":[12,0,0],"yaw":-2.3,"pitch":0.4,"distance":175}' \
   --no-grid --no-axes --width 1024 --height 1024
+solidcraft-cli snapshot --in target/part.step --out target/section.png \
+  --view iso --section y=0 --no-grid --no-axes --width 1024 --height 1024
 solidcraft-cli eval --in target/part.step
 ```
 
 Always inspect **both** opposite functional faces (e.g., `left` and `right`
-along ±X), the side silhouette (`front`), and at least one 3/4 view per side
-using `read_file` on the PNGs, then delete scratch PNGs/STEPs when done.
+along ±X), the side silhouette (`front`), angled 3/4 views, zoomed close-ups of
+changed edges/teeth/seams, and `--section` cutaways for internal bores using
+`read_file` on the PNGs, then delete scratch PNGs/STEPs when done.
 
 Notes:
 
@@ -139,11 +171,32 @@ the bore opening). Verify that hole connectors sit solidly on open mounting
 holes or spokes — never inside air gaps or screw-filled counterbores. All
 motors and sub-assemblies in this repo follow that convention.
 
+## Avoid tessellation by default
+
+Every new or repaired example, component, and CAD primitive must avoid surface
+tessellation whenever an analytic or smooth representation exists (unless an EM
+or FEA solver explicitly requires piecewise-linear discretization):
+
+- **Circular cylinders, tubes, bosses, and bores**: use `@cad.Cylinder`,
+  `@cad.Cone`, `@cad.RevolvedProfile`, or `@cad.ExtrudedProfile(..., round_bore=...)`
+  — never approximate circles or holes as N-gon polylines.
+- **Arc bends and elbows**: use `@cad.ToroidalBend` (`TOROIDAL_SURFACE`) or
+  `@cad.RevolvedProfile` (`Arc`) — never sweep an N-gon circle along a polyline.
+- **2D profiles with circular arcs or corner fillets**: use
+  `@cad.ExtrudedArcProfile` with `@cad.ArcSegment::Arc(...)`.
+- **Helices, springs, and freeform circular tubes**: use `@cad.SweptProfile`
+  with `smooth_sides=true, smooth_profile=true` (or `smooth_helix=true`).
+
 ## Acceptance checklist
 
-1. `scripts/validate_step.py <file.step>` passes (checkshape authoritative).
-2. SolidCraft renders show the intended silhouette, feature counts, and colors
-   from at least three angles including each functional face.
+1. `scripts/validate_step.py <file.step>` passes (checkshape authoritative), and
+   the STEP surface inventory uses analytic surfaces or seamless B-splines
+   rather than faceted strip faces on curved features.
+2. Full-resolution SolidCraft 3D renders show the intended silhouette, feature
+   counts, edge alignment, and colors across the full orthographic set, angled
+   3/4 views from each side, zoomed close-ups of changed features, and
+   `--section` cutaways for internal cavities. Never rely on a quad view or
+   single iso render.
 3. The user can run `./run-example.sh <example> --view` to review interactively.
-4. You report which angles you inspected and what you changed — never "looks
-   good" without saying how you looked.
+4. You report which views, close-ups, and sections you inspected and what you
+   changed — never "looks good" without saying how you looked.

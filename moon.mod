@@ -1,11 +1,11 @@
 name = "gmlewis/cad"
 
-version = "0.2.7"
+version = "0.2.9"
 
 import {
-  "gmlewis/step@0.2.7",
-  "gmlewis/urdf@0.2.7",
-  "moonbitlang/async@0.22.9",
+  "gmlewis/step@0.2.9",
+  "gmlewis/urdf@0.2.9",
+  "moonbitlang/async@0.22.10",
 }
 
 readme = "README.md"
