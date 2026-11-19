@@ -4,7 +4,7 @@ import {
   "gmlewis/cad/examples/common",
   "gmlewis/step/cad" @step_cad,
   "gmlewis/step/cli",
-  "gmlewis/step/components/profiles" @step_profiles,
+  "gmlewis/step/components/common" @step_common,
   "gmlewis/urdf",
   "moonbitlang/async",
   "moonbitlang/core/math",
