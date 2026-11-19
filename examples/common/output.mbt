@@ -9,6 +9,7 @@
 pub(all) struct OutputPaths {
   step : String?
   assembly : String?
+  assembly_instanced : String?
   eval : String?
   gltf : String?
   bpy : String?
@@ -86,6 +87,12 @@ pub fn with_output_args(spec : Map[String, @cli.Arg]) -> Map[String, @cli.Arg] {
   spec.set(
     "assembly",
     @cli.opt_string(help="Write hierarchical assembly STEP file to path"),
+  )
+  spec.set(
+    "assembly-instanced",
+    @cli.opt_string(
+      help="Write a deduplicated, instanced hierarchical assembly STEP to path",
+    ),
   )
   spec.set(
     "eval",
@@ -206,6 +213,7 @@ pub fn output_paths(args : @cli.Args) -> OutputPaths {
   {
     step: args.string_opt("out"),
     assembly: args.string_opt("assembly"),
+    assembly_instanced: args.string_opt("assembly-instanced"),
     eval: args.string_opt("eval"),
     gltf: args.string_opt("gltf"),
     bpy: args.string_opt("bpy"),
@@ -287,6 +295,7 @@ pub fn OutputPaths::thread_rep(
 fn any_output(output : OutputPaths) -> Bool {
   output.step is Some(_) ||
   output.assembly is Some(_) ||
+  output.assembly_instanced is Some(_) ||
   output.eval is Some(_) ||
   output.gltf is Some(_) ||
   output.bpy is Some(_) ||
@@ -476,6 +485,14 @@ pub async fn write_output(
       @step_cad.write_text_file(
         design.to_assembly_step(assembly_name=comp.display_name()),
         stdout_path(output.assembly),
+      )
+    None => ()
+  }
+  match output.assembly_instanced {
+    Some(_) =>
+      @step_cad.write_text_file(
+        design.to_instanced_step_string(assembly_name=comp.display_name()),
+        stdout_path(output.assembly_instanced),
       )
     None => ()
   }

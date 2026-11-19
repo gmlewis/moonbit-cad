@@ -69,6 +69,7 @@ pub fn GearboxConfig::new(prog? : String, description? : String, gearbox_name? :
 pub(all) struct OutputPaths {
   step : String?
   assembly : String?
+  assembly_instanced : String?
   eval : String?
   gltf : String?
   bpy : String?
