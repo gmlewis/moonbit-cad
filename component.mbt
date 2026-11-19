@@ -339,6 +339,36 @@ pub fn JointSpec::revolute(
 }
 
 ///|
+/// Creates a revolute joint from degree-based limits, converting each bound to
+/// radians for the URDF joint limit.
+pub fn JointSpec::revolute_deg(
+  lower_deg~ : Double,
+  upper_deg~ : Double,
+  effort~ : Double,
+  velocity~ : Double,
+) -> JointSpec {
+  let deg_to_rad = @math.PI / 180.0
+  JointSpec::revolute(
+    @urdf.JointLimit::new(
+      effort~,
+      velocity~,
+      lower=Some(lower_deg * deg_to_rad),
+      upper=Some(upper_deg * deg_to_rad),
+    ),
+  )
+}
+
+///|
+/// Creates a continuous joint limited only by effort and velocity (no angular
+/// bounds).
+pub fn JointSpec::continuous_limit(
+  effort~ : Double,
+  velocity~ : Double,
+) -> JointSpec {
+  JointSpec::continuous(limit=Some(@urdf.JointLimit::new(effort~, velocity~)))
+}
+
+///|
 /// Creates a continuous joint with an optional limit.
 pub fn JointSpec::continuous(
   limit~ : @urdf.JointLimit? = None,

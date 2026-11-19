@@ -291,12 +291,47 @@ fn stdout_path(path : String?) -> String? {
 }
 
 ///|
+/// Loads the shared supplier catalog and overlays the example's own
+/// `supplier-links.txt` when one is present.
+///
+/// The catalog lives at `catalog/suppliers.txt` relative to the repository
+/// root, so examples keep one shared default mapping while still being able to
+/// override a supplier, URL, note, or cost locally.
+pub async fn load_supplier_links(
+  example_dir : String,
+) -> Array[@cad.SupplierLink] {
+  let catalog_text = @fs.read_file("catalog/suppliers.txt").text() catch {
+    _ => ""
+  }
+  let example_text = if example_dir == "" {
+    ""
+  } else {
+    @fs.read_file(example_dir + "/supplier-links.txt").text() catch {
+      _ => ""
+    }
+  }
+  @cad.merge_supplier_links(
+    @cad.parse_supplier_links(catalog_text),
+    @cad.parse_supplier_links(example_text),
+  )
+}
+
+///|
 /// Validates the component's robot, then writes every requested output.
+///
+/// When `example_dir` is given, the shared supplier catalog and that example's
+/// `supplier-links.txt` are applied before any output is written.
 pub async fn write_output(
   comp : @cad.Component,
   output : OutputPaths,
   joint_positions~ : Map[String, Double] = Map([]),
+  example_dir~ : String = "",
 ) -> Unit {
+  let comp = if example_dir == "" {
+    comp
+  } else {
+    comp.with_supplier_links(load_supplier_links(example_dir))
+  }
   let robot = comp.to_robot()
   if robot.has_errors() {
     for diagnostic in robot.diagnostics() {

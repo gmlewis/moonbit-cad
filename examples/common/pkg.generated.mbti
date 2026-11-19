@@ -17,6 +17,8 @@ pub async fn eval_boolean_component_cached(@gmlewis/cad.Component, Map[String, @
 
 pub fn gearbox_exploded_design(@gmlewis/step/cad.Design, name~ : String) -> @gmlewis/step/cad.Design
 
+pub async fn load_supplier_links(String) -> Array[@gmlewis/cad.SupplierLink]
+
 pub fn output_paths(@cli.Args) -> OutputPaths
 
 pub fn prefix_body_names(@gmlewis/cad.Component, String) -> @gmlewis/cad.Component
@@ -25,7 +27,7 @@ pub async fn run_gearbox_cli(GearboxConfig) -> Unit
 
 pub fn with_output_args(Map[String, @cli.Arg]) -> Map[String, @cli.Arg]
 
-pub async fn write_output(@gmlewis/cad.Component, OutputPaths, joint_positions? : Map[String, Double]) -> Unit
+pub async fn write_output(@gmlewis/cad.Component, OutputPaths, joint_positions? : Map[String, Double], example_dir? : String) -> Unit
 
 // Errors
 

@@ -597,7 +597,12 @@ async fn main {
   let comp = comp
     .with_supplier_links(@cad.parse_supplier_links(links_text))
     .with_param("exploded_view", "exploded.step")
-  @common.write_output(comp, output, joint_positions=positions)
+  @common.write_output(
+    comp,
+    output,
+    joint_positions=positions,
+    example_dir="examples/02-planetary-actuator",
+  )
   // The 4-elbow herringbone gear set is print-in-place. Add its single
   // cartridge STEP to the build package; the package's START-HERE and
   // print-list replace the separate sun/planet/ring files with this one.

@@ -983,7 +983,7 @@ fn build_a12_planetary_actuator(
       )
   }
   // 6x M4 flange tie bolts in Detailed mode
-  if !(params.detail is @step_common.DetailLevel::Simplified) {
+  if params.detail != @step_common.DetailLevel::Simplified {
     let screw_part = wbr_purchased(
       "ISO4762-M4x12", "ISO 4762 socket head cap screw M4 x 12 mm", "steel", 0.09,
     )
@@ -1079,7 +1079,7 @@ fn build_wbr_wheel(name : String, params : WbrParams) -> @cad.Component {
       2.0 * (rim_r - 2.0),
       w,
       rx_deg=90.0,
-      density=@urdf.Density::kg_per_m3(1150.0),
+      density=@urdf.Density::rubber(),
       color=dark_matte(),
     ).with_part(tire_part),
   )
@@ -1323,7 +1323,7 @@ pub fn build_wbr(
         x_mm=104.0 * sx,
         z_mm=70.0 * sz,
         ry_deg=44.0,
-        density=@urdf.Density::kg_per_m3(2100.0),
+        density=@urdf.Density::lipo_battery(),
         color=dark_matte(),
       ).with_part(bat_part),
     )
@@ -1390,7 +1390,7 @@ pub fn build_wbr(
         6.0,
         x_mm=48.0 * sx,
         z_mm=-86.0 * sz,
-        density=@urdf.Density::kg_per_m3(1850.0),
+        density=@urdf.Density::fr4_pcb(),
         color=pcb_green(),
       ).with_part(imu_part),
     )
@@ -1402,7 +1402,7 @@ pub fn build_wbr(
         8.0,
         x_mm=42.0 * sx,
         z_mm=18.0 * sz,
-        density=@urdf.Density::kg_per_m3(1850.0),
+        density=@urdf.Density::fr4_pcb(),
         color=pcb_green(),
       ).with_part(mcu_part),
     )
@@ -1641,9 +1641,7 @@ pub fn build_wbr(
         parent_mate="wheel_axle",
         build_wbr_wheel(prefix + "_wheel_link", params),
         child_mate="axle",
-        spec=@cad.JointSpec::continuous(
-          limit=Some(@urdf.JointLimit::new(effort=35.0, velocity=30.0)),
-        ),
+        spec=@cad.JointSpec::continuous_limit(effort=35.0, velocity=30.0),
       )
 
     upper_arm = upper_arm.attach(
@@ -1719,13 +1717,11 @@ pub fn build_wbr(
         parent_mate=prefix + "_hip_pivot",
         upper_arm,
         child_mate="hip_pivot",
-        spec=@cad.JointSpec::revolute(
-          @urdf.JointLimit::new(
-            lower=Some(-1.49),
-            upper=Some(0.26),
-            effort=90.0,
-            velocity=15.0,
-          ),
+        spec=@cad.JointSpec::revolute_deg(
+          lower_deg=-85.0,
+          upper_deg=15.0,
+          effort=90.0,
+          velocity=15.0,
         ),
       )
       .add_mate_mm_deg(
@@ -2094,7 +2090,12 @@ pub async fn run_cli() -> Unit {
     hip_deg~,
     wheel_spin_deg=args.double("wheelSpinDeg"),
   )
-  @common.write_output(robot, output, joint_positions=positions)
+  @common.write_output(
+    robot,
+    output,
+    joint_positions=positions,
+    example_dir="examples/08-wbr-biped",
+  )
   // Write flat print-in-place 4-elbow planetary cartridge and exploded view.
   match output.build_package {
     Some(dir) => {

@@ -582,5 +582,10 @@ async fn main {
     )
     abort("")
   }
-  @common.write_output(chassis, output, joint_positions=positions)
+  @common.write_output(
+    chassis,
+    output,
+    joint_positions=positions,
+    example_dir="examples/06-assistive-scooter",
+  )
 }

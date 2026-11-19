@@ -39,17 +39,40 @@ if [[ ! -d "examples" ]]; then
 fi
 
 EXAMPLE="${1:-02}"
-case "${EXAMPLE}" in
-  1 | 01) DIR="01" ;;
-  2 | 02) DIR="02" ;;
-  3 | 03) DIR="03" ;;
-  4 | 04) DIR="04" ;;
-  5 | 05) DIR="05" ;;
-  6 | 06) DIR="06" ;;
-  7 | 07) DIR="07" ;;
-  8 | 08) DIR="08" ;;
-  *) DIR="${EXAMPLE}" ;;
-esac
+
+# Discover the example directory the same way run-example.sh does, so a new
+# examples/NN-* directory needs no edit here. Accepts a single digit (`8`), a
+# two-digit number (`08`), or a full directory name (`08-wbr-biped`).
+resolve_example_dir() {
+  local arg="$1" num match
+  if [[ "$arg" =~ ^[0-9]+$ ]]; then
+    num="$(printf "%02d" $((10#$arg)))"
+    match="$(compgen -G "examples/${num}-*" | sort | head -n 1 || true)"
+    if [[ -z "$match" ]]; then
+      match="$(compgen -G "examples/${num}_*" | sort | head -n 1 || true)"
+    fi
+    if [[ -n "$match" ]]; then
+      printf '%s\n' "$match"
+      return 0
+    fi
+    return 1
+  fi
+  if [[ -d "examples/${arg}" ]]; then
+    printf '%s\n' "examples/${arg}"
+    return 0
+  fi
+  return 1
+}
+
+if ! EXAMPLE_PATH="$(resolve_example_dir "${EXAMPLE}")"; then
+  echo "error: example not found: ${EXAMPLE}" >&2
+  echo "looked in: examples/${EXAMPLE} and examples/<NN>-*" >&2
+  exit 2
+fi
+EXAMPLE_NAME="$(basename "${EXAMPLE_PATH}")"
+# Output directory keeps the numeric prefix (08-wbr-biped -> build/08), or the
+# whole name when the directory has no NN- prefix.
+DIR="${EXAMPLE_NAME%%[-_]*}"
 OUT="build/${DIR}"
 
 echo "Building ${EXAMPLE} ..."

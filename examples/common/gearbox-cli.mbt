@@ -540,7 +540,12 @@ pub async fn run_gearbox_cli(defaults : GearboxConfig) -> Unit {
     .unwrap_or(cfg.gearbox_name + "_motor_rotor_joint")
   let positions : Map[String, Double] = Map([])
   positions.set(command_joint, cfg.motor_deg * @math.PI / 180.0)
-  write_output(assembly, output, joint_positions=positions)
+  write_output(
+    assembly,
+    output,
+    joint_positions=positions,
+    example_dir="examples/" + cfg.prog,
+  )
   match output.build_package {
     Some(dir) =>
       for k in 0..<cfg.num_stages {

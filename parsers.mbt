@@ -138,3 +138,53 @@ pub fn parse_supplier_links(text : String) -> Array[SupplierLink] {
   }
   out
 }
+
+///|
+/// Merges shared supplier-link defaults with per-example overrides.
+///
+/// An override wins for every non-empty field (and for a present cost); an
+/// empty field keeps the default. Overrides for part numbers missing from the
+/// defaults are appended, so examples can introduce example-specific parts.
+pub fn merge_supplier_links(
+  defaults : Array[SupplierLink],
+  overrides : Array[SupplierLink],
+) -> Array[SupplierLink] {
+  let out : Array[SupplierLink] = []
+  for link in defaults {
+    match supplier_link_for(overrides, link.part_number) {
+      Some(over) => {
+        let supplier = if over.supplier == "" {
+          link.supplier
+        } else {
+          over.supplier
+        }
+        let supplier_url = if over.supplier_url == "" {
+          link.supplier_url
+        } else {
+          over.supplier_url
+        }
+        let notes = if over.notes == "" { link.notes } else { over.notes }
+        let unit_cost_usd : Double? = match over.unit_cost_usd {
+          Some(cost) => Some(cost)
+          None => link.unit_cost_usd
+        }
+        out.push(
+          SupplierLink::new(
+            part_number=link.part_number,
+            supplier~,
+            supplier_url~,
+            notes~,
+            unit_cost_usd?,
+          ),
+        )
+      }
+      None => out.push(link)
+    }
+  }
+  for link in overrides {
+    if supplier_link_for(defaults, link.part_number) is None {
+      out.push(link)
+    }
+  }
+  out
+}

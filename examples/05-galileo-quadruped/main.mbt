@@ -1339,5 +1339,10 @@ async fn main {
       )
     }
   }
-  @common.write_output(base, output, joint_positions=positions)
+  @common.write_output(
+    base,
+    output,
+    joint_positions=positions,
+    example_dir="examples/05-galileo-quadruped",
+  )
 }

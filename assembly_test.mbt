@@ -188,3 +188,45 @@ test "assembly checks flag hardware problems" {
   assert_true(has("duplicate port name"))
   assert_true(has("is outside"))
 }
+
+///|
+test "revolute_deg converts degrees to radians" {
+  let spec = @cad.JointSpec::revolute_deg(
+    lower_deg=-90.0,
+    upper_deg=15.0,
+    effort=90.0,
+    velocity=15.0,
+  )
+  match spec.kind {
+    @cad.Revolute(limit) =>
+      match (limit.lower, limit.upper) {
+        (Some(lower), Some(upper)) => {
+          assert_true((lower - -@math.PI / 2.0).abs() < 1.0e-12)
+          assert_true((upper - 15.0 * @math.PI / 180.0).abs() < 1.0e-12)
+        }
+        _ => fail("expected both joint limits")
+      }
+    _ => fail("expected a revolute joint")
+  }
+  match spec.kind {
+    @cad.Revolute(limit) => {
+      assert_true(limit.effort == 90.0)
+      assert_true(limit.velocity == 15.0)
+    }
+    _ => fail("expected a revolute joint")
+  }
+}
+
+///|
+test "continuous_limit builds an unbounded continuous joint" {
+  let spec = @cad.JointSpec::continuous_limit(effort=12.0, velocity=3.0)
+  match spec.kind {
+    @cad.Continuous(Some(limit)) => {
+      assert_true(limit.lower is None)
+      assert_true(limit.upper is None)
+      assert_true(limit.effort == 12.0)
+      assert_true(limit.velocity == 3.0)
+    }
+    _ => fail("expected a continuous joint with an effort/velocity limit")
+  }
+}

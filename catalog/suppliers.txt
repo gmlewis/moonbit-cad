@@ -1,0 +1,100 @@
+# Shared default purchasing links for every example.
+#
+# Format (one part per line, pipe-separated):
+#   part_number | supplier | supplier_url | notes | unit_cost_usd
+#
+# `examples/common/output.mbt` loads this catalog, then overlays the example's
+# own `examples/<example>/supplier-links.txt` when one exists. An example row
+# wins for any non-empty field, so a local file only needs to record genuine
+# overrides (a different source, kit, note, or price).
+#
+# Keep part numbers exactly as the detailed BOM emits them. Costs are per piece;
+# kits include spares, so the cart total can differ from the estimate.
+# Research workflow and the full source list: .claude/skills/sourcing-parts.
+
+# --- Metric socket-head and set screws -------------------------------------
+
+ISO4762-M2.5x6 | Amazon | https://www.amazon.com/dp/B07VG889RW | iexcell 1350-piece M2.5 socket-head kit (4/5/6/8/10/12/16/20/25 mm) covers M2.5 x 6 mm | 0.05
+ISO4762-M3x6 | Amazon | https://www.amazon.com/NIULUNBAO-Socket-Machine-Threaded-Assortment/dp/B0BJQ6M8XW | 250-piece M3 socket-head kit (4/6/8/10/12 mm) covers M3 x 6 mm | 0.05
+ISO4762-M3x8 | Amazon | https://www.amazon.com/NIULUNBAO-Socket-Machine-Threaded-Assortment/dp/B0BJQ6M8XW | Same 250-piece M3 kit covers M3 x 8 mm | 0.05
+ISO4762-M3x10 | Amazon | https://www.amazon.com/NIULUNBAO-Socket-Machine-Threaded-Assortment/dp/B0BJQ6M8XW | Same 250-piece M3 kit covers M3 x 10 mm | 0.05
+ISO4762-M3x10.0 | Amazon | https://www.amazon.com/NIULUNBAO-Socket-Machine-Threaded-Assortment/dp/B0BJQ6M8XW | Same 250-piece M3 kit covers M3 x 10 mm | 0.05
+ISO4762-M3x12 | Amazon | https://www.amazon.com/NIULUNBAO-Socket-Machine-Threaded-Assortment/dp/B0BJQ6M8XW | Same 250-piece M3 kit covers M3 x 12 mm | 0.05
+ISO4762-M3x16 | Amazon | https://www.amazon.com/Socket-Screws-Metric-Stainless-Machine/dp/B07KRRG8HT | MewuDecor M3 x 16 mm 100-pack, 304 stainless | 0.10
+ISO4762-M4x8 | McMaster-Carr | https://www.mcmaster.com/screws/socket-head-cap-screws/ | ISO 4762 M4 x 8 mm socket head cap screw | 0.35
+ISO4762-M4x12 | McMaster-Carr | https://www.mcmaster.com/screws/socket-head-cap-screws/ | ISO 4762 M4 x 12 mm socket head cap screw | 0.35
+ISO4762-M4x20 | Amazon | https://www.amazon.com/Socket-Screws-Stainless-Thread-Spanner/dp/B0DJP83447 | M4 x 20 mm 304 stainless socket-head screws | 0.10
+ISO4762-M4x30 | Amazon | https://www.amazon.com/Socket-Screws-Stainless-Thread-Spanner/dp/B0DJP83447 | M4 x 30 mm 304 stainless socket-head screw kit (with nuts, washers, hex key) | 0.09
+ISO10642-M4x8 | McMaster-Carr | https://www.mcmaster.com/screws/flat-head-socket-cap-screws/ | ISO 10642 M4 x 8 mm flat countersunk socket head cap screw | 0.35
+SET-M3x5.9 | Amazon | https://www.amazon.com/HanTof-Set-Screws-Grub/dp/B07CKFJ8GY | M3-M8 grub-screw kit; M3 x 6 mm is the closest length | 0.03
+SET-M3x6.0 | Amazon | https://www.amazon.com/HanTof-Set-Screws-Grub/dp/B07CKFJ8GY | M3-M8 grub-screw kit; use M3 x 6 mm | 0.05
+SET-M4x10.0 | Amazon | https://www.amazon.com/Point-Assortment-Stainless-Metric-Thread/dp/B01FH8CP3E | 76-piece M4 set-screw kit (4-25 mm) covers M4 x 10 mm | 0.10
+SET-M4x12 | Amazon | https://www.amazon.com/Prime-Line-9185823-Socket-Screws-10-Pack/dp/B07DS7CVBP | M4 x 12 mm cup-point set screws, 10-pack | 0.60
+SET-M4x12.0 | Amazon | https://www.amazon.com/Point-Assortment-Stainless-Metric-Thread/dp/B01FH8CP3E | 76-piece M4 set-screw kit (4-25 mm) covers M4 x 12 mm | 0.10
+
+# --- Heat-set inserts and standoffs ----------------------------------------
+
+INSERT-3 | Amazon | https://www.amazon.com/Vibit-Threaded-Soldering-Printing-Component/dp/B0FWWW8VP1 | 152-piece M3 heat-set insert kit with tips; use M3 x 4 mm short inserts | 0.05
+INSERT-4 | Amazon | https://www.amazon.com/Ktehloy-Threaded-Assortment-Printing-Components/dp/B0DK1FGWZ5 | 120-piece M4 heat-set insert kit (M4x4x6 and M4x6x6) | 0.08
+STANDOFF-M3-SENSOR | Amazon | https://www.amazon.com/Uxcell-a15081800ux0064-Standoff-Spacer-Threaded/dp/B016B2ESOE | M3 x 13 mm female-female brass hex, 5 mm AF, 25-pack | 0.40
+STANDOFF-5-6 | Amazon | https://www.amazon.com/Electronics-Salon-Female-Female-Standoff-Assortment-Spacer/dp/B014K9RLH6 | M3 nylon female-female standoff kit (5/6/8/10/12/16/18/20 mm); covers 5 mm AF x 6 mm | 0.15
+STANDOFF-5-8 | Amazon | https://www.amazon.com/Electronics-Salon-Female-Female-Standoff-Assortment-Spacer/dp/B014K9RLH6 | Same M3 nylon standoff kit covers 5 mm AF x 8 mm | 0.15
+
+# --- Bearings ---------------------------------------------------------------
+
+BEARING-608 | Amazon | https://www.amazon.com/Bearings-Skateboard-Shielded-Miniature-Skateboards/dp/B07R7PR72H | 608-2RS, 8 x 22 x 7 mm, 10-pack | 0.70
+BEARING-688 | Amazon | https://www.amazon.com/uxcell-Groove-Bearings-Metric-Double/dp/B0B5XPHC51 | 688-2RS, 8 x 16 x 5 mm, 10-pack | 1.12
+BEARING-FR8-2RS | Amazon | https://www.amazon.com/METERXITY-Flanged-Shielded-Bearings-Wheelbarrow/dp/B0F4QR9XYQ | FR8-2RS 10-pack, exact 1/2 x 1-1/8 x 5/16 in flanged sealed bearing. VXB also stocks it: https://vxb.com/products/flanged-sealed-bearing-fr8-2rs-1-2-x-1-1-8-x-5-16 | 1.55
+
+# --- Shafts, dowel pins, washers, collars, springs --------------------------
+
+SHAFT-8.0x24.5 | McMaster-Carr | https://www.mcmaster.com/4143N17/ | 8 mm x 100 mm 303 stainless rotary shaft; cut to 24.5 mm | 12.00
+SHAFT-8.0x31.0 | McMaster-Carr | https://www.mcmaster.com/4143N17/ | Same 8 mm 303 stainless shaft; cut to 31 mm | 12.00
+SHAFT-8x7.5 | McMaster-Carr | https://www.mcmaster.com/4143N17/ | Same 8 mm 303 stainless shaft; cut to 7.5 mm | 12.00
+SHAFT-8x18 | McMaster-Carr | https://www.mcmaster.com/91595A558/ | 8 x 20 mm DIN 6325 hardened pins, 10-pack; cut to 18 mm | 1.50
+SHAFT-8x80 | McMaster-Carr | https://www.mcmaster.com/4143N17/ | Same 8 mm 303 stainless shaft; cut to 80 mm | 12.00
+SHAFT-12.7x45.9 | OnlineMetals | https://www.onlinemetals.com/en/buy/stainless-steel/1-2-dia-round-stainless-steel-rod-303-12-long-1-piece/pid/mp-00000673 | 1/2 in x 12 in 303 stainless rod; cut to 45.9 mm | 19.99
+SHAFT-12.7x48 | OnlineMetals | https://www.onlinemetals.com/en/buy/stainless-steel/1-2-dia-round-stainless-steel-rod-303-12-long-1-piece/pid/mp-00000673 | Same 1/2 in 303 stainless rod; cut to 48 mm | 6.00
+SHAFT-12.7x48.2 | OnlineMetals | https://www.onlinemetals.com/en/buy/stainless-steel/1-2-dia-round-stainless-steel-rod-303-12-long-1-piece/pid/mp-00000673 | Same 1/2 in 303 stainless rod; cut to 48.2 mm | 19.99
+SHAFT-12.7x72.8 | OnlineMetals | https://www.onlinemetals.com/en/buy/stainless-steel/1-2-dia-round-stainless-steel-rod-303-12-long-1-piece/pid/mp-00000673 | Same 1/2 in 303 stainless rod; cut to 72.8 mm | 19.99
+SHAFT-12.7x74.8 | OnlineMetals | https://www.onlinemetals.com/en/buy/stainless-steel/1-2-dia-round-stainless-steel-rod-303-12-long-1-piece/pid/mp-00000673 | Same 1/2 in 303 stainless rod; cut to 74.8 mm | 19.99
+DOWEL-3.0x12.0 | McMaster-Carr | https://www.mcmaster.com/products/dowel-pins/metric-dowel-pins/ | 3 x 12 mm DIN 7 / ISO 2338 hardened steel dowel pins | 0.35
+DOWEL-8x18.5 | McMaster-Carr | https://www.mcmaster.com/91595A558/ | 8 x 20 mm DIN 6325 hardened pins, 10-pack; cut to 18.5 mm | 1.50
+DOWEL-8x22.5 | McMaster-Carr | https://www.mcmaster.com/91595A564/ | 8 x 24 mm DIN 6325 hardened pins, 10-pack; cut to 22.5 mm | 1.50
+DOWEL-12.7x18.5 | Amazon | https://www.amazon.com/Dowel-Pin-Alloy-STL-Pk10/dp/B083H48859 | 1/2 x 3/4 in hardened dowel pins, 10-pack; 0.55 mm longer than modeled | 1.50
+DOWEL-12.7x24 | Amazon | https://www.amazon.com/Dowel-Pin-Alloy-STL-Pk10/dp/B083H48859 | Same 1/2 in hardened dowel pins; cut to 24 mm | 1.50
+WASHER-14x8.2x1 | McMaster-Carr | https://www.mcmaster.com/98055A115/ | DIN 988 spring-steel shim, 8 x 14 x 1 mm, pack of 50 | 0.20
+COLLAR-8-16 | McMaster-Carr | https://www.mcmaster.com/57485K67/ | 8 mm bore x 16 mm OD, 8 mm wide; model uses a 2 mm spacer, so thin it | 8.00
+COLLAR-10-20 | McMaster-Carr | https://www.mcmaster.com/6057N18/ | DIN 705 set-screw collar, 10 mm bore x 20 mm OD x 10 mm wide, zinc-plated steel | 6.00
+COLLAR-12.7-25.4 | McMaster-Carr | https://www.mcmaster.com/6432K16/ | 1/2 in bore x 1 in OD x 7/16 in wide zinc-plated set-screw collar | 3.00
+SPRING-3.5x18x38.4 | Amazon | https://www.amazon.com/VSOLS-Compression-Springs-Pressure-Various/dp/B0BKPZHBJD | Closest stocked 20 mm OD x 40 mm compression spring; verify the rate before use | 2.00
+
+# --- Motors, controllers, magnets, encoders --------------------------------
+
+BLDC-A12-8318 | FreeRcHobby | https://www.freerchobby.cc/ | A12 / 8318 100KV brushless outrunner motor (91 mm OD, 12 mm shaft, 32 mm M4 mount) | 159.00
+BLDC-5010_360kv | Amazon | https://www.amazon.com/GoolRC-Brushless-MultiCopter-Quadcopter-Multi-axis/dp/B0C2YRNX1Z | GoolRC 5010 360KV outrunner, 4 mm shaft, 19 mm bolt circle | 27.98
+MOTEUS-C1-R1.2 | mjbots | https://mjbots.com/products/moteus-c1 | moteus C1 r1.2 FOC controller with integrated AS5047P encoder. Vendor STEP: components/vendor/20240305-moteus-c1-r1_2.step | 69.00
+MAG-6x2.5-DIA | mjbots | https://mjbots.com/products/diametric-disc-magnet | Exact 6 x 2.5 mm diametric sense magnet (mdd060a025c35sh) | 2.00
+MAG-8x2-DIA | mjbots | https://mjbots.com/products/diametric-disc-magnet | 8 x 2 mm diametric disc sense magnet | 2.00
+IMU-6AXIS | Amazon | https://www.amazon.com/Gyroscope-Accelerometer-Interface-Measurement-High-Performance/dp/B0HJ4M3HYK | BMI088 6-axis breakout (I2C/SPI), 3-axis gyro + accelerometer | 22.99
+CAM-1080P | Amazon | https://www.amazon.com/dp/B0CNCSFQC1 | innomaker 1080p USB UVC camera board, 32 x 32 mm PCB, 130 deg wide angle | 18.99
+JOYSTICK-2AXIS | Adafruit | https://www.adafruit.com/product/512 | Analog 2-axis thumb joystick with select button and breakout; E-stop and power switch are separate parts | 5.95
+
+# --- Wheels, tires, and extrusion hardware ---------------------------------
+
+WHEEL-7IN | Amazon | https://www.amazon.com/budrash-72-107-Replaces-Universal-Utility/dp/B09XMGXFDN | budrash 72-107 7 x 1.5 in wheel, 2-pack; 1/2 in bore; drill 3 x 4.5 mm holes at 55.85 mm BCD | 9.50
+RR-WHEEL-180 | Amazon | https://www.amazon.com/budrash-72-107-Replaces-Universal-Utility/dp/B09XMGXFDN | 180 mm (7 in) multi-spoke rubber wheel and rim | 22.00
+WBR-TIRE-RUBBER | Amazon | https://www.amazon.com/budrash-72-107-Replaces-Universal-Utility/dp/B09XMGXFDN | Rubber tire tread (7 in default; scale or substitute to match --wheelDiam) | 9.50
+TNUT-M5-6 | Amazon | https://www.amazon.com/Drop-Tee-Nuts-20-Pack/dp/B08CS38675 | OpenBuilds drop-in M5 tee nuts for 6 mm V-slot, 20-pack | 0.50
+VSLOT-BRACKET-20 | Amazon | https://www.amazon.com/Aluminum-20x20x17mm-Connector-Extrusions-Profiles/dp/B08JFZD3Q3 | 20 x 20 x 17 mm aluminum L brackets for 2020 V-slot | 0.50
+VSLOT-JOIN-40 | Amazon | https://www.amazon.com/Joining-Aluminum-Connecting-Reinforcement-Construction/dp/B0DRPKHMW7 | 40 x 18 x 4 mm aluminum joining plates with 20 mm hole pitch, 10-pack | 0.92
+
+# --- Batteries, connectors, sensors, controllers ---------------------------
+
+RR-BAT-48V | Amazon | https://www.amazon.com/s?k=48V+Li-ion+battery+pack+XT60 | 48 V 8 Ah high-discharge Li-ion battery pack with XT60 | 165.00
+WBR-BAT-6S | Amazon | https://www.amazon.com/s?k=6S+LiPo+5000mAh+XT60+battery | 6S (22.2 V) 5000 mAh LiPo pack with XT60 connector | 79.00
+WBR-XT60 | Amazon | https://www.amazon.com/s?k=Amass+XT60+connector+panel+mount | Amass XT60 male/female high-current battery plug | 1.50
+RR-IMU-6DOF | Amazon | https://www.amazon.com/s?k=BMI088+6-DOF+IMU+module | 6-DOF MEMS IMU sensor board | 18.00
+WBR-IMU-6DOF | Amazon | https://www.amazon.com/s?k=BMI088+6-DOF+IMU+module | 6-DOF MEMS IMU sensor board (EKF pitch/rate estimation) | 18.00
+WBR-MCU-BOARD | Amazon | https://www.amazon.com/s?k=ESP32+S3+CAN+bus+controller+board | ESP32-S3 + CAN transceiver main control board | 22.00
+WBR-TOF-SENSOR | Amazon | https://www.amazon.com/s?k=VL53L1X+ToF+range+sensor+module | Front ToF / ultrasonic obstacle sensor module | 9.50

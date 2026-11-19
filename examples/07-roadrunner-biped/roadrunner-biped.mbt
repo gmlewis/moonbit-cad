@@ -1063,5 +1063,10 @@ pub async fn run_cli() -> Unit {
       wheel_spin_deg=args.double("wheelSpinDeg"),
     )
   }
-  @common.write_output(base, output, joint_positions=positions)
+  @common.write_output(
+    base,
+    output,
+    joint_positions=positions,
+    example_dir="examples/07-roadrunner-biped",
+  )
 }

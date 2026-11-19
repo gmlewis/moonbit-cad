@@ -71,3 +71,46 @@ test "supplier links parse comments, fields, and costs" {
     None => ()
   }
 }
+
+///|
+test "merge_supplier_links overlays example values over catalog defaults" {
+  let defaults = @cad.parse_supplier_links(
+    "M4 | CatalogCo | https://catalog.example/4 | catalog default | 1.0\n" +
+    "M3 | CatalogCo | https://catalog.example/3 | catalog default | 0.5\n",
+  )
+  let overrides = @cad.parse_supplier_links(
+    "M4 | ExampleCo |  | example note | 2.0\n" +
+    "M5 | ExampleCo | https://example.example/5 | only here | 3.0\n",
+  )
+  let merged = @cad.merge_supplier_links(defaults, overrides)
+  assert_eq(merged.length(), 3)
+  let lookup = fn(part_number : String) -> @cad.SupplierLink? {
+    let mut found : @cad.SupplierLink? = None
+    for link in merged {
+      if link.part_number == part_number {
+        found = Some(link)
+      }
+    }
+    found
+  }
+  match lookup("M4") {
+    Some(link) => {
+      assert_eq(link.supplier, "ExampleCo")
+      assert_eq(link.supplier_url, "https://catalog.example/4")
+      assert_eq(link.notes, "example note")
+      match link.unit_cost_usd {
+        Some(cost) => assert_true((cost - 2.0).abs() < 1.0e-9)
+        None => fail("expected the example cost")
+      }
+    }
+    None => fail("expected a merged M4 link")
+  }
+  match lookup("M3") {
+    Some(link) => assert_eq(link.supplier, "CatalogCo")
+    None => fail("expected the catalog M3 link")
+  }
+  match lookup("M5") {
+    Some(link) => assert_eq(link.supplier_url, "https://example.example/5")
+    None => fail("expected the added M5 link")
+  }
+}
