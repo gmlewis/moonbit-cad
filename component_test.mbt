@@ -63,6 +63,25 @@ test "joint spec constructors" {
 }
 
 ///|
+test "body from sketch extrudes on a plane" {
+  let body = @cad.BodyPart::extruded_sketch_mm(
+    "sketch_body",
+    @step_cad.Sketch2D::rect(20.0, 10.0),
+    @step_cad.Plane::XY,
+    4.0,
+    density=@urdf.Density::pla(),
+  )
+  let (x0, x1, y0, y1, z0, z1) = body.node.bounding_box()
+  assert_true((x0 + 10.0).abs() < 1.0e-9)
+  assert_true((x1 - 10.0).abs() < 1.0e-9)
+  assert_true((y0 + 5.0).abs() < 1.0e-9)
+  assert_true((y1 - 5.0).abs() < 1.0e-9)
+  assert_true((z0 - 0.0).abs() < 1.0e-9)
+  assert_true((z1 - 4.0).abs() < 1.0e-9)
+  assert_true(body.inertial.mass > 0.0)
+}
+
+///|
 test "box body matches its inertial and collision" {
   let body = @cad.BodyPart::box_mm(
     "cube",

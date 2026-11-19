@@ -207,6 +207,62 @@ pub fn BodyPart::extruded_profile_mm(
 }
 
 ///|
+/// Builds a body from a `@step_cad.Sketch2D`, extruded on `plane`.
+///
+/// The sketch supplies the outer and hole loops; the STEP writer normalizes
+/// their winding. With `centered=true` the solid straddles the sketch plane.
+pub fn BodyPart::extruded_sketch_mm(
+  name : String,
+  sketch : @step_cad.Sketch2D,
+  plane : @step_cad.Plane,
+  thickness_mm : Double,
+  density~ : @urdf.Density = @urdf.Density::aluminum_6061(),
+  color~ : @step_cad.Rgb = @step_cad.Rgb::grey(),
+  x_mm~ : Double = 0.0,
+  y_mm~ : Double = 0.0,
+  z_mm~ : Double = 0.0,
+  rx_deg~ : Double = 0.0,
+  ry_deg~ : Double = 0.0,
+  rz_deg~ : Double = 0.0,
+  centered~ : Bool = false,
+) -> BodyPart {
+  let origin = @urdf.Origin::from_mm_deg(
+    x=x_mm,
+    y=y_mm,
+    z=z_mm,
+    rx_deg~,
+    ry_deg~,
+    rz_deg~,
+  )
+  let node = transform_scene_node_urdf(
+    sketch
+    .extrude_on(plane, thickness_mm, centered~)
+    .with_name(name)
+    .with_color(color),
+    @urdf.Transform::from_origin(origin),
+  )
+  let mut area_mm2 = @step_cad.polygon_area_2d(sketch.outer).abs()
+  for hole in sketch.holes {
+    area_mm2 = area_mm2 - @step_cad.polygon_area_2d(hole).abs()
+  }
+  let mass = area_mm2 / 1.0e6 * (thickness_mm / 1000.0) * density.to_kg_per_m3()
+  let (x0, x1, y0, y1, z0, z1) = node.bounding_box()
+  let inertial = @urdf.Inertial::from_box(
+    (x1 - x0) / 1000.0,
+    (y1 - y0) / 1000.0,
+    (z1 - z0) / 1000.0,
+    mass~,
+    origin~,
+  )
+  let collision = @urdf.Collision::new(
+    @urdf.Geometry::box_mm(x1 - x0, y1 - y0, z1 - z0),
+    name=Some(name),
+    origin~,
+  )
+  { name, node, density, inertial, collisions: [collision], part: None, }
+}
+
+///|
 /// Builds a body from a pre-existing scene node and inertia.
 pub fn BodyPart::custom(
   name : String,
