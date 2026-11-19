@@ -1,0 +1,6 @@
+import {
+  "gmlewis/cad/examples/08-wbr-biped" @wbr,
+  "moonbitlang/async",
+}
+
+pkgtype(kind: "executable")

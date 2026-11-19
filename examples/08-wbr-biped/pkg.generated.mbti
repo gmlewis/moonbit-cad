@@ -1,0 +1,69 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "gmlewis/cad/examples/08-wbr-biped"
+
+import {
+  "gmlewis/step/components/common",
+}
+
+// Values
+pub fn build_planetary_cartridge(WbrParams) -> @gmlewis/cad.Component
+
+pub fn build_wbr(params? : WbrParams, board_text? : String) -> @gmlewis/cad.Component
+
+pub fn pose_hip_deg(String) -> Double
+
+pub fn pose_positions(WbrParams, pose? : String, hip_deg? : Double?, wheel_spin_deg? : Double) -> Map[String, Double]
+
+pub async fn run_cli() -> Unit
+
+pub fn solve_four_bar(WbrParams, Double) -> FourBarSolution
+
+pub fn wbr_chassis_pivots(WbrParams) -> (Double, Double, Double, Double)
+
+pub fn wbr_exploded_design(@gmlewis/step/cad.Design, name? : String) -> @gmlewis/step/cad.Design
+
+// Errors
+
+// Types and methods
+pub(all) struct FourBarSolution {
+  ax : Double
+  az : Double
+  cx : Double
+  cz : Double
+  bx : Double
+  bz : Double
+  dx : Double
+  dz : Double
+  wx : Double
+  wz : Double
+  hip_joint_rad : Double
+  knee_joint_rad : Double
+  guide_joint_rad : Double
+  transmission_deg : Double
+}
+
+pub(all) struct WbrParams {
+  scale : Double
+  body_len_mm : Double
+  body_width_mm : Double
+  body_height_mm : Double
+  crank_len_mm : Double
+  coupler_len_mm : Double
+  guide_len_mm : Double
+  calf_len_mm : Double
+  wheel_diam_mm : Double
+  wheel_width_mm : Double
+  gear_module_mm : Double
+  gear_length_mm : Double
+  sun_teeth : Int32
+  planet_teeth : Int32
+  planet_count : Int32
+  num_elbows : Int32
+  tolerance_mm : Double
+  detail : @common.DetailLevel
+}
+pub fn WbrParams::new(scale? : Double, body_len_mm? : Double, body_width_mm? : Double, body_height_mm? : Double, crank_len_mm? : Double, coupler_len_mm? : Double, guide_len_mm? : Double, calf_len_mm? : Double, wheel_diam_mm? : Double, wheel_width_mm? : Double, gear_module_mm? : Double, gear_length_mm? : Double, sun_teeth? : Int32, planet_teeth? : Int32, planet_count? : Int32, num_elbows? : Int32, tolerance_mm? : Double, detail? : @common.DetailLevel) -> Self
+
+// Type aliases
+
+// Traits

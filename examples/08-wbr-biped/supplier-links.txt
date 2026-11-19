@@ -1,0 +1,18 @@
+# Purchasing links for example 08 (Ascento-inspired 4-bar Wheeled Bipedal Robot with A12 + 4-elbow planetary drives).
+#
+# Format (one part per line, pipe-separated):
+#   part_number | supplier | supplier_url | notes | unit_cost_usd
+
+BLDC-A12-8318 | FreeRcHobby | https://www.freerchobby.cc/ | A12 8318 100KV brushless outrunner motor (91 mm OD, 12 mm shaft, 32 mm M4 mount, 23 mm M4 prop adapter); 4 needed (2 hip + 2 wheel) | 159.00
+MOTEUS-C1-R1.2 | mjbots | https://mjbots.com/products/moteus-c1 | moteus C1 r1.2 FOC motor controller with integrated AS5047P encoder; 4 needed (1 per A12 actuator) | 69.00
+BEARING-FR8-2RS | Amazon | https://www.amazon.com/METERXITY-Flanged-Shielded-Bearings-Wheelbarrow/dp/B0F4QR9XYQ | FR8-2RS 1/2 x 1-1/8 x 5/16 in flanged sealed bearing; used in planet gears, output caps, and 4-bar linkage pivots | 1.55
+DOWEL-12.7x24 | Amazon | https://www.amazon.com/Dowel-Pin-Alloy-STL-Pk10/dp/B083H48859 | 1/2 in hardened steel dowel pins for planet carrier pins and 4-bar linkage pivot axles | 1.50
+SHAFT-12.7x48 | OnlineMetals | https://www.onlinemetals.com/en/buy/stainless-steel/1-2-dia-round-stainless-steel-rod-303-12-long-1-piece/pid/mp-00000673 | 1/2 in 303 stainless rotary shaft; cut to length for hip and wheel output shafts | 6.00
+ISO4762-M4x12 | Amazon | https://www.amazon.com/Socket-Screws-Stainless-Thread-Spanner/dp/B0DJP83447 | M4 x 12 mm 304 stainless socket head cap screws for actuator flanges, hubs, and chassis plates | 0.09
+ISO4762-M4x20 | Amazon | https://www.amazon.com/Socket-Screws-Stainless-Thread-Spanner/dp/B0DJP83447 | M4 x 20 mm 304 stainless socket head cap screws for 4-bar crank/hub clamping | 0.10
+WBR-BAT-6S | Amazon | https://www.amazon.com/s?k=6S+LiPo+5000mAh+XT60+battery | 6S (22.2 V) 5000 mAh LiPo pack with XT60 connector mounted on the angled front nose cradle | 79.00
+WBR-XT60 | Amazon | https://www.amazon.com/s?k=Amass+XT60+connector+panel+mount | Amass XT60 male/female high-current battery plug | 1.50
+WBR-IMU-6DOF | Amazon | https://www.amazon.com/s?k=BMI088+6-DOF+IMU+module | 6-DOF MEMS IMU sensor board (EKF pitch/rate estimation) mounted in lower belly pod | 18.00
+WBR-MCU-BOARD | Amazon | https://www.amazon.com/s?k=ESP32+S3+CAN+bus+controller+board | ESP32-S3 + CAN transceiver main control board (LQR + EKF loop) | 22.00
+WBR-TOF-SENSOR | Amazon | https://www.amazon.com/s?k=VL53L1X+ToF+range+sensor+module | Front ToF / ultrasonic obstacle sensor module (2 needed in front nose bezel) | 9.50
+WBR-TIRE-RUBBER | Amazon | https://www.amazon.com/budrash-72-107-Replaces-Universal-Utility/dp/B09XMGXFDN | Rubber tire tread (7 in default; scale or substitute tire to match --wheelDiam) | 9.50
