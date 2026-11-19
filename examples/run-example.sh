@@ -248,10 +248,15 @@ if (( HEADLESS_REQUESTED )) && (( ! VIEW_REQUESTED )) && [[ -z "$OUT_PATH" ]]; t
   FORWARD_ARGS+=(-o "$OUT_PATH")
 fi
 
+RUN_PATH="$ROOT_DIR/$EXAMPLE_PATH"
+if [[ -d "$RUN_PATH/cmd" ]]; then
+  RUN_PATH="$RUN_PATH/cmd"
+fi
+
 if (( ${#FORWARD_ARGS[@]} )); then
-  moon run --quiet "$ROOT_DIR/$EXAMPLE_PATH" -- "${FORWARD_ARGS[@]}"
+  moon run --quiet "$RUN_PATH" -- "${FORWARD_ARGS[@]}"
 else
-  moon run --quiet "$ROOT_DIR/$EXAMPLE_PATH"
+  moon run --quiet "$RUN_PATH"
 fi
 
 if (( HEADLESS_REQUESTED )); then

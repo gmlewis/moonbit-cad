@@ -1,0 +1,6 @@
+import {
+  "gmlewis/cad/examples/04_knee_joint" @knee,
+  "moonbitlang/async",
+}
+
+pkgtype(kind: "executable")

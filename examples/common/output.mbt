@@ -516,6 +516,10 @@ pub async fn write_output(
   match output.build_package {
     Some(dir) => {
       @fs.mkdir(dir, recursive=true, allow_exist=true)
+      // Remove stale printable STEPs from earlier configurations before rewriting.
+      @fs.rmdir(dir + "/printable", recursive=true) catch {
+        _ => ()
+      }
       @fs.mkdir(dir + "/printable", recursive=true, allow_exist=true)
       let written : Array[String] = []
       for file in comp.build_package_files() {

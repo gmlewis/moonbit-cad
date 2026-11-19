@@ -172,3 +172,46 @@ test "A12 motorized gearbox attaches rotor to stage1 sun with ventilated housing
     .map(fn(part) { part.part_number })
   assert_true(cart_parts.contains("MG-STAGE1-CARTRIDGE"))
 }
+
+///|
+test "wheel-mode A12 gearbox supports dual bearings, flush tire mount, moteus shroud, and single actuator budget" {
+  let stage = @components.MotorizedStageSpec::new(
+    module_mm=2.0,
+    sun_teeth=12,
+    planet_teeth=20,
+    planet_count=4,
+    gear_length_mm=10.0,
+    num_elbows=4,
+  )
+  let comp = @components.motorized_gearbox(
+    stages=[stage],
+    motor_source="a12",
+    output_hub_diam_mm=80.0,
+    output_hub_thickness_mm=10.0,
+    output_free_length_mm=0.0,
+    tire_mount_bolt_circle_mm=55.85,
+    dual_output_bearing=true,
+    tire_mount_flush=true,
+    moteus_shroud=true,
+  )
+  let _ = check_motorized_gearbox(comp)
+  let parts : Array[String] = comp
+    .printable_parts()
+    .map(fn(part) { part.part_number })
+  assert_true(parts.contains("MG-MOTEUS-SHROUD"))
+  let mut bearings = 0
+  let mut collars = 0
+  for line in comp.bom().lines {
+    if line.part_number == "BEARING-FR8-2RS" {
+      bearings = line.quantity
+    } else if line.part_number == "COLLAR-12.7-25.4" {
+      collars = line.quantity
+    }
+  }
+  // 4 planet bearings + 2 spaced output bearings.
+  assert_eq(bearings, 6)
+  // Flush mount omits the spacer shaft collar between hub and tire mount.
+  assert_eq(collars, 0)
+  // Power budget must count the combined geared A12 once, not twice.
+  assert_eq(comp.power_budget().actuators.length(), 1)
+}

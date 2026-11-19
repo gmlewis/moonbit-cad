@@ -1,0 +1,6 @@
+import {
+  "gmlewis/cad/examples/03_hip_joint" @hip,
+  "moonbitlang/async",
+}
+
+pkgtype(kind: "executable")

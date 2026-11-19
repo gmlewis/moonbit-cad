@@ -185,3 +185,43 @@ test "imported STEP body keeps the vendor geometry and a placed bbox" {
   assert_true(step.contains("MANIFOLD_SOLID_BREP"))
   assert_eq(comp.bom().unassigned, 0)
 }
+
+///|
+test "from_scene_node uses true shape volume for hollow tubes and curved arcs" {
+  let tube = @step_cad.RevolvedProfile::tube(100.0, 90.0, 20.0)
+    .as_shape()
+    .with_name("thin-ring")
+  let body = @cad.BodyPart::from_scene_node(
+    tube,
+    density=@urdf.Density::kg_per_m3(1000.0),
+  )
+  // Exact annulus volume: pi * (50^2 - 45^2) * 20 = 29845.13 mm^3 -> ~0.02985 kg
+  // (bounding box would have been 100 * 100 * 20 = 200000 mm^3 -> 0.20 kg).
+  assert_true(body.inertial.mass > 0.027 && body.inertial.mass < 0.033)
+  let r0 = 40.0
+  let r1 = 44.0
+  let da = 0.2
+  let a0 = (@math.cos(0.0) * r1, @math.sin(0.0) * r1)
+  let b0 = (@math.cos(da) * r1, @math.sin(da) * r1)
+  let b1 = (@math.cos(da) * r0, @math.sin(da) * r0)
+  let a1 = (@math.cos(0.0) * r0, @math.sin(0.0) * r0)
+  let magnet = @step_cad.ExtrudedArcProfile::new(
+      [
+        @step_cad.SegmentArc(a0, b0, (0.0, 0.0)),
+        @step_cad.SegmentLine(b0, b1),
+        @step_cad.SegmentArc(b1, a1, (0.0, 0.0)),
+        @step_cad.SegmentLine(a1, a0),
+      ],
+      10.0,
+    )
+    .as_shape()
+    .with_name("arc-magnet")
+  let mag_body = @cad.BodyPart::from_scene_node(
+    magnet,
+    density=@urdf.Density::kg_per_m3(7500.0),
+  )
+  // Sector volume: 0.5 * (44^2 - 40^2) * 0.2 * 10 = 336 mm^3 -> ~0.00252 kg.
+  assert_true(
+    mag_body.inertial.mass > 0.0020 && mag_body.inertial.mass < 0.0032,
+  )
+}

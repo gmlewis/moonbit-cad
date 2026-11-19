@@ -1,0 +1,6 @@
+import {
+  "gmlewis/cad/examples/01_motorized_wheel" @wheel,
+  "moonbitlang/async",
+}
+
+pkgtype(kind: "executable")

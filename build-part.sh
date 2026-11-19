@@ -13,8 +13,10 @@ Usage:
   ./build-part.sh [example]
 
 Examples:
-  ./build-part.sh 01      # motorized wheel (multi-stage gearbox)
+  ./build-part.sh 01      # motorized wheel (1-stage 5.33:1 for Galileo X feet)
   ./build-part.sh 02      # planetary actuator (default)
+  ./build-part.sh 03      # hip joint actuator (2-stage 28.4:1 A12)
+  ./build-part.sh 04      # knee joint actuator (2-stage 28.4:1 A12)
   ./build-part.sh 05      # Galileo quadruped
   ./build-part.sh 06      # assistive scooter
 
@@ -38,6 +40,8 @@ EXAMPLE="${1:-02}"
 case "${EXAMPLE}" in
   1 | 01) DIR="01" ;;
   2 | 02) DIR="02" ;;
+  3 | 03) DIR="03" ;;
+  4 | 04) DIR="04" ;;
   5 | 05) DIR="05" ;;
   6 | 06) DIR="06" ;;
   *) DIR="${EXAMPLE}" ;;

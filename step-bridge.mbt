@@ -163,13 +163,274 @@ pub fn BodyPart::from_scene_node(
 }
 
 ///|
+/// Cross product of two 3D vectors.
+fn vec3_cross(
+  a : (Double, Double, Double),
+  b : (Double, Double, Double),
+) -> (Double, Double, Double) {
+  (a.1 * b.2 - a.2 * b.1, a.2 * b.0 - a.0 * b.2, a.0 * b.1 - a.1 * b.0)
+}
+
+///|
+/// Normalizes a 3D vector, returning `(0, 0, 1)` when degenerate.
+fn vec3_norm(v : (Double, Double, Double)) -> (Double, Double, Double) {
+  let len = (v.0 * v.0 + v.1 * v.1 + v.2 * v.2).sqrt()
+  if len <= 1.0e-12 {
+    (0.0, 0.0, 1.0)
+  } else {
+    (v.0 / len, v.1 / len, v.2 / len)
+  }
+}
+
+///|
+/// Unsigned shoelace area of a 2D polygon in mm^2.
+fn poly_area_2d(pts : Array[(Double, Double)]) -> Double {
+  let n = pts.length()
+  if n < 3 {
+    return 0.0
+  }
+  let mut sum = 0.0
+  for i in 0..<n {
+    let a = pts[i]
+    let b = pts[(i + 1) % n]
+    sum = sum + a.0 * b.1 - b.0 * a.1
+  }
+  (sum * 0.5).abs()
+}
+
+///|
+/// Computes mesh-tight bounding box `(x0, x1, y0, y1, z0, z1)` in placed frame.
+fn tight_placed_bounds(
+  placed : @step_cad.SceneNode,
+) -> (Double, Double, Double, Double, Double, Double) {
+  match placed.shape.analysis_mesh() {
+    Ok((verts, _faces)) if verts.length() > 0 => {
+      let t = @step_cad.Transform::from_node(placed)
+      let m = t.rot
+      let (tx, ty, tz) = t.trans
+      let v0 = verts[0]
+      let g0x = m.m00 * v0.0 + m.m01 * v0.1 + m.m02 * v0.2 + tx
+      let g0y = m.m10 * v0.0 + m.m11 * v0.1 + m.m12 * v0.2 + ty
+      let g0z = m.m20 * v0.0 + m.m21 * v0.1 + m.m22 * v0.2 + tz
+      let mut x0 = g0x
+      let mut x1 = g0x
+      let mut y0 = g0y
+      let mut y1 = g0y
+      let mut z0 = g0z
+      let mut z1 = g0z
+      for v in verts {
+        let gx = m.m00 * v.0 + m.m01 * v.1 + m.m02 * v.2 + tx
+        let gy = m.m10 * v.0 + m.m11 * v.1 + m.m12 * v.2 + ty
+        let gz = m.m20 * v.0 + m.m21 * v.1 + m.m22 * v.2 + tz
+        if gx < x0 {
+          x0 = gx
+        }
+        if gx > x1 {
+          x1 = gx
+        }
+        if gy < y0 {
+          y0 = gy
+        }
+        if gy > y1 {
+          y1 = gy
+        }
+        if gz < z0 {
+          z0 = gz
+        }
+        if gz > z1 {
+          z1 = gz
+        }
+      }
+      (x0, x1, y0, y1, z0, z1)
+    }
+    _ => placed.bounding_box()
+  }
+}
+
+///|
+/// Computes physical inertial in the local frame of `shape` when its true
+/// volume/mesh can be determined, falling back cleanly for nominal booleans
+/// and swept profiles.
+fn local_shape_inertial(
+  shape : @step_cad.Shape,
+  density : @urdf.Density,
+) -> @urdf.Inertial? {
+  match shape.analysis_mesh() {
+    Ok((verts, faces)) => {
+      let triangles : Array[
+        (
+          (Double, Double, Double),
+          (Double, Double, Double),
+          (Double, Double, Double),
+        ),
+      ] = []
+      let n_verts = verts.length()
+      for face in faces {
+        if face.length() < 3 {
+          continue
+        }
+        let i0 = face[0].to_int()
+        if i0 < 0 || i0 >= n_verts {
+          continue
+        }
+        for i in 1..<(face.length() - 1) {
+          let i1 = face[i].to_int()
+          let i2 = face[i + 1].to_int()
+          if i1 >= 0 && i1 < n_verts && i2 >= 0 && i2 < n_verts {
+            triangles.push((verts[i0], verts[i1], verts[i2]))
+          }
+        }
+      }
+      if triangles.length() > 0 {
+        let inertial = @urdf.Inertial::from_triangles_mm(triangles, density~)
+        if inertial.mass > 1.0e-9 &&
+          inertial.inertia.ixx >= 0.0 &&
+          inertial.inertia.iyy >= 0.0 &&
+          inertial.inertia.izz >= 0.0 {
+          return Some(inertial)
+        }
+      }
+    }
+    Err(_) => ()
+  }
+  match shape {
+    @step_cad.Shape::SweptProfile(s) => {
+      let prof_z = vec3_norm(s.profile.normal_dir)
+      let prof_x = vec3_norm(s.profile.right_dir)
+      let prof_y = vec3_norm(vec3_cross(prof_z, prof_x))
+      let project2d = fn(v : (Double, Double, Double)) -> (Double, Double) {
+        let d = (
+          v.0 - s.profile.center.0,
+          v.1 - s.profile.center.1,
+          v.2 - s.profile.center.2,
+        )
+        (
+          d.0 * prof_x.0 + d.1 * prof_x.1 + d.2 * prof_x.2,
+          d.0 * prof_y.0 + d.1 * prof_y.1 + d.2 * prof_y.2,
+        )
+      }
+      let outer2d = s.profile.vertices.map(project2d)
+      let mut area = poly_area_2d(outer2d)
+      for hole in s.profile.holes {
+        area = area - poly_area_2d(hole.map(project2d))
+      }
+      if area < 0.0 {
+        area = 0.0
+      }
+      let pts = s.path.points
+      let mut path_len = 0.0
+      for i in 0..<(pts.length() - 1) {
+        let a = pts[i]
+        let b = pts[i + 1]
+        let dx = b.0 - a.0
+        let dy = b.1 - a.1
+        let dz = b.2 - a.2
+        path_len = path_len + (dx * dx + dy * dy + dz * dz).sqrt()
+      }
+      let vol_mm3 = area * path_len
+      if vol_mm3 > 1.0e-3 {
+        let mass = vol_mm3 * 1.0e-9 * density.to_kg_per_m3()
+        let (x0, x1, y0, y1, z0, z1) = shape.bounding_box()
+        let sx = if x1 - x0 > 1.0e-3 { x1 - x0 } else { 1.0 }
+        let sy = if y1 - y0 > 1.0e-3 { y1 - y0 } else { 1.0 }
+        let sz = if z1 - z0 > 1.0e-3 { z1 - z0 } else { 1.0 }
+        let origin = @urdf.Origin::from_mm_deg(
+          x=(x0 + x1) / 2.0,
+          y=(y0 + y1) / 2.0,
+          z=(z0 + z1) / 2.0,
+        )
+        return Some(
+          @urdf.Inertial::from_box(
+            sx / 1000.0,
+            sy / 1000.0,
+            sz / 1000.0,
+            mass~,
+            origin~,
+          ),
+        )
+      }
+      None
+    }
+    @step_cad.Shape::Difference(diff) => {
+      let base_in = node_inertial(diff.base, density)
+      let mut cut_mass = 0.0
+      for cutter in diff.cutters {
+        cut_mass = cut_mass + node_inertial(cutter, density).mass
+      }
+      let min_mass = base_in.mass * 0.08
+      let net_mass = if base_in.mass - cut_mass < min_mass {
+        min_mass
+      } else {
+        base_in.mass - cut_mass
+      }
+      let scale = if base_in.mass > 1.0e-12 {
+        net_mass / base_in.mass
+      } else {
+        1.0
+      }
+      Some(
+        @urdf.Inertial::new(
+          net_mass,
+          base_in.inertia.scale(scale),
+          origin=base_in.origin,
+        ),
+      )
+    }
+    @step_cad.Shape::Union(union) => {
+      let parts = union.nodes.map(fn(child) { node_inertial(child, density) })
+      if parts.length() > 0 {
+        Some(@urdf.Inertial::combine(parts))
+      } else {
+        None
+      }
+    }
+    @step_cad.Shape::Fillet(f) => Some(node_inertial(f.base, density))
+    @step_cad.Shape::Chamfer(c) => Some(node_inertial(c.base, density))
+    _ => None
+  }
+}
+
+///|
+/// Computes physical inertial for a `SceneNode`, accounting for true shape
+/// volume and rigid node placement.
+fn node_inertial(
+  node : @step_cad.SceneNode,
+  density : @urdf.Density,
+) -> @urdf.Inertial {
+  match local_shape_inertial(node.shape, density) {
+    Some(local_in) =>
+      local_in.transform_by(
+        step_to_urdf_transform(@step_cad.Transform::from_node(node)),
+      )
+    None => {
+      let (x0, x1, y0, y1, z0, z1) = node.bounding_box()
+      let sx = if x1 - x0 > 1.0e-3 { x1 - x0 } else { 1.0 }
+      let sy = if y1 - y0 > 1.0e-3 { y1 - y0 } else { 1.0 }
+      let sz = if z1 - z0 > 1.0e-3 { z1 - z0 } else { 1.0 }
+      let origin = @urdf.Origin::from_mm_deg(
+        x=(x0 + x1) / 2.0,
+        y=(y0 + y1) / 2.0,
+        z=(z0 + z1) / 2.0,
+      )
+      @urdf.Inertial::from_box_density(
+        sx / 1000.0,
+        sy / 1000.0,
+        sz / 1000.0,
+        density~,
+        origin~,
+      )
+    }
+  }
+}
+
+///|
 /// Builds one `BodyPart` from an already placed scene node.
 fn body_part_from_placed_node(
   placed : @step_cad.SceneNode,
   density : @urdf.Density,
   part : PartMeta?,
 ) -> BodyPart {
-  let (x0, x1, y0, y1, z0, z1) = placed.bounding_box()
+  let (x0, x1, y0, y1, z0, z1) = tight_placed_bounds(placed)
   let sx = if x1 - x0 > 1.0e-3 { x1 - x0 } else { 1.0 }
   let sy = if y1 - y0 > 1.0e-3 { y1 - y0 } else { 1.0 }
   let sz = if z1 - z0 > 1.0e-3 { z1 - z0 } else { 1.0 }
@@ -178,13 +439,7 @@ fn body_part_from_placed_node(
     y=(y0 + y1) / 2.0,
     z=(z0 + z1) / 2.0,
   )
-  let inertial = @urdf.Inertial::from_box_density(
-    sx / 1000.0,
-    sy / 1000.0,
-    sz / 1000.0,
-    density~,
-    origin~,
-  )
+  let inertial = node_inertial(placed, density)
   let collision = @urdf.Collision::new(
     @urdf.Geometry::box_mm(sx, sy, sz),
     name=Some(placed.name),
@@ -261,37 +516,8 @@ pub fn BodyPart::from_step_component(
   for node in step_comp.nodes() {
     let safe = flatten_chamfered_prism(node)
     let placed = transform_scene_node_urdf(safe, xform)
-    let (x0, x1, y0, y1, z0, z1) = placed.bounding_box()
-    let sx = if x1 - x0 > 1.0e-3 { x1 - x0 } else { 1.0 }
-    let sy = if y1 - y0 > 1.0e-3 { y1 - y0 } else { 1.0 }
-    let sz = if z1 - z0 > 1.0e-3 { z1 - z0 } else { 1.0 }
-    let cx = (x0 + x1) / 2.0
-    let cy = (y0 + y1) / 2.0
-    let cz = (z0 + z1) / 2.0
-    let origin = @urdf.Origin::from_mm_deg(x=cx, y=cy, z=cz)
-    let inertial = @urdf.Inertial::from_box_density(
-      sx / 1000.0,
-      sy / 1000.0,
-      sz / 1000.0,
-      density~,
-      origin~,
-    )
-    let collision = @urdf.Collision::new(
-      @urdf.Geometry::box_mm(sx, sy, sz),
-      name=Some(placed.name),
-      origin~,
-    )
     let body_part = if first { part } else { None }
-    bodies.push(
-      BodyPart::custom(
-        placed.name,
-        placed,
-        inertial,
-        collisions=[collision],
-        density~,
-        part=body_part,
-      ),
-    )
+    bodies.push(body_part_from_placed_node(placed, density, body_part))
     first = false
   }
   bodies

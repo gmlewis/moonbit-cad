@@ -325,7 +325,13 @@ pub fn moteus_c1_board(
       resolution="14-bit (0.022 deg)",
     ),
   )
-  .add_port(@cad.Port::new("power", @cad.PortKind::Power, spec="24 V, 15 A"))
+  .add_port(
+    @cad.Port::new(
+      "power",
+      @cad.PortKind::Power,
+      spec="10-51 V (48 V bus), 20 A peak",
+    ),
+  )
   .add_port(@cad.Port::new("can", @cad.PortKind::Bus, spec="CAN 2.0B"))
   .add_port(@cad.Port::new("motor", @cad.PortKind::Power, spec="3-phase"))
   .add_port(

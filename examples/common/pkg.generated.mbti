@@ -2,20 +2,65 @@
 package "gmlewis/cad/examples/common"
 
 import {
-  "gmlewis/cad",
+  "gmlewis/cad/components",
   "gmlewis/step/cli",
 }
 
 // Values
+pub async fn build_gearbox_component(GearboxConfig, detail? : @gmlewis/step/components/common.DetailLevel) -> (@gmlewis/cad.Component, Array[@components.MotorizedStageSpec], String, String)
+
+pub fn[T] cli_or_abort(Result[T, String]) -> T
+
+pub async fn eval_boolean_component(@gmlewis/cad.Component) -> @gmlewis/cad.Component
+
+pub fn gearbox_exploded_design(@gmlewis/step/cad.Design, name~ : String) -> @gmlewis/step/cad.Design
+
 pub fn output_paths(@cli.Args) -> OutputPaths
+
+pub fn prefix_body_names(@gmlewis/cad.Component, String) -> @gmlewis/cad.Component
+
+pub async fn run_gearbox_cli(GearboxConfig) -> Unit
 
 pub fn with_output_args(Map[String, @cli.Arg]) -> Map[String, @cli.Arg]
 
-pub async fn write_output(@cad.Component, OutputPaths, joint_positions? : Map[String, Double]) -> Unit
+pub async fn write_output(@gmlewis/cad.Component, OutputPaths, joint_positions? : Map[String, Double]) -> Unit
 
 // Errors
 
 // Types and methods
+pub(all) struct GearboxConfig {
+  prog : String
+  description : String
+  gearbox_name : String
+  links_path : String
+  num_stages : Int32
+  preset : String
+  motor_source : String
+  modules : String
+  sun_teeth : String
+  planet_teeth : String
+  num_planets : String
+  gear_lengths : String
+  num_elbows : String
+  planet_bearings : String
+  casing_wall_mm : Double
+  flange_thickness_mm : Double
+  flange_extra_mm : Double
+  carrier_thickness_mm : Double
+  coupling_shaft_mm : Double
+  output_bearing : String
+  output_free_length_mm : Double
+  collar_width_mm : Double
+  collar_outer_mm : Double
+  no_output_hub : Bool
+  no_tire : Bool
+  dual_output_bearing : Bool
+  tire_mount_flush : Bool
+  moteus_shroud : Bool
+  motor_deg : Double
+}
+pub fn GearboxConfig::new(prog? : String, description? : String, gearbox_name? : String, links_path? : String, num_stages? : Int32, preset? : String, motor_source? : String, modules? : String, sun_teeth? : String, planet_teeth? : String, num_planets? : String, gear_lengths? : String, num_elbows? : String, planet_bearings? : String, casing_wall_mm? : Double, flange_thickness_mm? : Double, flange_extra_mm? : Double, carrier_thickness_mm? : Double, coupling_shaft_mm? : Double, output_bearing? : String, output_free_length_mm? : Double, collar_width_mm? : Double, collar_outer_mm? : Double, no_output_hub? : Bool, no_tire? : Bool, dual_output_bearing? : Bool, tire_mount_flush? : Bool, moteus_shroud? : Bool, motor_deg? : Double) -> Self
+
 pub(all) struct OutputPaths {
   step : String?
   assembly : String?

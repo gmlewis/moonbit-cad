@@ -1,0 +1,22 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "gmlewis/cad/examples/03_hip_joint"
+
+import {
+  "gmlewis/cad",
+  "gmlewis/cad/components",
+}
+
+// Values
+pub async fn build_hip_joint(config? : @gmlewis/cad/examples/common.GearboxConfig, detail? : @gmlewis/step/components/common.DetailLevel) -> (@cad.Component, Array[@components.MotorizedStageSpec], String, String)
+
+pub fn default_config() -> @gmlewis/cad/examples/common.GearboxConfig
+
+pub async fn run_cli() -> Unit
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

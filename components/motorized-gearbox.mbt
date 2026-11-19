@@ -759,6 +759,7 @@ fn build_a12_motor_housing(
   frame_bolt_circle_mm : Double,
   housing_part : @cad.PartMeta,
   heat_set_inserts : Bool,
+  moteus_shroud : Bool,
   detail : @step_common.DetailLevel,
 ) -> (@cad.Component, Double, Double) {
   let stator_z = -42.0
@@ -911,6 +912,23 @@ fn build_a12_motor_housing(
       .translate(x=mx, y=my, z=-47.3),
     )
   }
+  let shroud_bolt_radius = 35.0
+  let shroud_xy : Array[(Double, Double)] = [
+    (shroud_bolt_radius, 0.0),
+    (0.0, shroud_bolt_radius),
+    (-shroud_bolt_radius, 0.0),
+    (0.0, -shroud_bolt_radius),
+  ]
+  if moteus_shroud {
+    for i in 0..<shroud_xy.length() {
+      let (sx, sy) = shroud_xy[i]
+      cutters.push(
+        @step_cad.Cylinder::new(4.0, 5.0)
+        .with_name("shroud_insert_cut_\{i}")
+        .translate(x=sx, y=sy, z=-47.3),
+      )
+    }
+  }
   let housing_color = @step_cad.Rgb::new(0.20, 0.22, 0.28)
   let housing_node = @step_cad.difference(
     shell_profile,
@@ -1039,6 +1057,127 @@ fn build_a12_motor_housing(
           detail~,
         ),
         child_mate="head_seat",
+        spec=@cad.JointSpec::merge_rigid(),
+      )
+  }
+  if moteus_shroud {
+    if heat_set_inserts {
+      for i in 0..<shroud_xy.length() {
+        let (sx, sy) = shroud_xy[i]
+        comp = comp
+          .add_mate_mm_deg("shroud_insert_\{i}", x=sx, y=sy, z=pcb_standoff_z)
+          .attach(
+            "\{housing_name}_shroud_insert_merge_\{i}",
+            parent_mate="shroud_insert_\{i}",
+            heat_set_insert(
+              name="\{housing_name}_shroud_insert_\{i}",
+              outer_diam_mm=4.0,
+              inner_diam_mm=3.0,
+              length_mm=4.0,
+            ),
+            child_mate="seat",
+            spec=@cad.JointSpec::merge_rigid(),
+          )
+      }
+    }
+    let shroud_part = fabricated_part(
+      "MG-MOTEUS-SHROUD", "Printed protective cap shrouding the rear moteus C1 board with dual 45-deg cable-exit arches (4 x M3x8 mount)",
+      "carbon fiber nylon", "3D print", 6.0,
+    )
+    let shroud_height = 14.5
+    let shroud_flange_h = 4.0
+    let shroud_blank = @step_cad.RevolvedProfile::polyline(
+        [
+          (0.0, -shroud_height),
+          (33.0, -shroud_height),
+          (33.0, -shroud_flange_h),
+          (39.5, -shroud_flange_h),
+          (39.5, 0.0),
+          (29.0, 0.0),
+          (29.0, -11.0),
+          (0.0, -11.0),
+        ],
+        closed=false,
+      )
+      .as_shape()
+      .with_name(name + "_moteus_shroud_blank")
+    let shroud_cutters : Array[@step_cad.SceneNode] = []
+    for i in 0..<shroud_xy.length() {
+      let (sx, sy) = shroud_xy[i]
+      shroud_cutters.push(
+        @step_cad.Cylinder::new(3.4, shroud_flange_h + 2.0)
+        .with_name("shroud_bolt_hole_\{i}")
+        .translate(x=sx, y=sy, z=-shroud_flange_h - 1.0),
+      )
+    }
+    // Dual cable-exit arches at 45 deg and 225 deg for CAN and XT30 power leads.
+    let arch_hw = 8.0
+    let arch_h = 8.5
+    for idx, angle_deg in [45.0, 225.0] {
+      let angle_rad = angle_deg * @math.PI / 180.0
+      let arch = @step_cad.ExtrudedProfile::new(
+          [
+            (-arch_hw, -arch_h),
+            (arch_hw, -arch_h),
+            (arch_hw, 0.5),
+            (-arch_hw, 0.5),
+          ],
+          16.0,
+        )
+        .with_name("shroud_cable_arch_\{idx}")
+        .rotate_x(90.0)
+        .rotate_z(90.0 + angle_deg)
+        .translate(x=25.0 * @math.cos(angle_rad), y=25.0 * @math.sin(angle_rad))
+      shroud_cutters.push(arch)
+    }
+    let shroud_body = @step_cad.difference(
+      shroud_blank,
+      shroud_cutters,
+      name=name + "_moteus_shroud_body",
+    ).with_color(housing_color)
+    let mut shroud_comp = @cad.Component::new(
+        name + "_moteus_shroud",
+        description="Protective rear shroud covering the moteus C1 controller",
+      )
+      .with_part(shroud_part)
+      .add_body(
+        @cad.BodyPart::from_scene_node(
+          shroud_body,
+          density=@urdf.Density::carbon_fiber(),
+          part=Some(shroud_part),
+        ),
+      )
+      .add_mate_mm_deg("mount")
+    for i in 0..<shroud_xy.length() {
+      let (sx, sy) = shroud_xy[i]
+      shroud_comp = shroud_comp
+        .add_mate_mm_deg(
+          "shroud_bolt_\{i}",
+          x=sx,
+          y=sy,
+          z=-shroud_flange_h,
+          rx_deg=180.0,
+        )
+        .attach(
+          "\{name}_shroud_screw_merge_\{i}",
+          parent_mate="shroud_bolt_\{i}",
+          iso_shcs_screw(
+            name="\{name}_shroud_screw_\{i}",
+            size=@step_standards.M3,
+            length_mm=8.0,
+            detail~,
+          ),
+          child_mate="head_seat",
+          spec=@cad.JointSpec::merge_rigid(),
+        )
+    }
+    comp = comp
+      .add_mate_mm_deg("shroud_mount", z=pcb_standoff_z)
+      .attach(
+        name + "_moteus_shroud_merge",
+        parent_mate="shroud_mount",
+        shroud_comp,
+        child_mate="mount",
         spec=@cad.JointSpec::merge_rigid(),
       )
   }
@@ -1581,6 +1720,9 @@ pub fn motorized_gearbox(
   tire_mount_bolt_hole_mm~ : Double = 6.0,
   frame_bolt_circle_mm~ : Double = 0.0,
   heat_set_inserts~ : Bool = true,
+  dual_output_bearing~ : Bool = false,
+  tire_mount_flush~ : Bool = false,
+  moteus_shroud~ : Bool = false,
   detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
   motor_source~ : String = "preset",
   joint_name~ : String = "",
@@ -1634,6 +1776,9 @@ pub fn motorized_gearbox(
       joint_name=rotor_joint,
     )
   }
+  // Parent casing carries the gearbox-rated ActuatorSpec; strip the inner motor
+  // duplicate so PowerBudget does not double-count bus current.
+  motor = { ..motor, actuator: None, }
   // ---------------------------------------------------------------------
   // Pass 1: derive each stage's gear dimensions and axial station.
   // ---------------------------------------------------------------------
@@ -1770,17 +1915,35 @@ pub fn motorized_gearbox(
   } else {
     10.0
   }
+  let output_turret_extra = if dual_output_bearing {
+    out_bearing.width_mm + 4.0
+  } else {
+    0.0
+  }
   let output_cap_top = last.z0 +
     last.height +
     flange_thickness_mm +
     output_cap_thickness
-  let output_hub_seat_global = output_cap_top +
+  let output_bearing_top = output_cap_top + output_turret_extra
+  let output_hub_seat_global = output_bearing_top +
     out_bearing.flange_thickness_mm +
     0.3
-  let output_protrusion = out_bearing.flange_thickness_mm +
+  let eff_collar_between = if tire_mount_flush {
+    0.0
+  } else {
+    output_collar_width_mm
+  }
+  let output_protrusion = output_turret_extra +
+    out_bearing.flange_thickness_mm +
     0.3 +
     (if output_hub {
-      output_hub_thickness_mm + output_collar_width_mm
+      if tire_mount_flush {
+        // Leave shaft 0.5 mm recessed inside MG-OUTPUT-HUB so it never butts
+        // against the tire mount's solid front plate when output_free = 0.
+        output_hub_thickness_mm - 0.5
+      } else {
+        output_hub_thickness_mm + eff_collar_between
+      }
     } else {
       0.0
     }) +
@@ -2267,7 +2430,7 @@ pub fn motorized_gearbox(
     )
     let (housing_comp, _, _) = build_a12_motor_housing(
       name, casing_outer, flange_outer_radius, casing_bolt_radius, eff_frame_bolt_circle,
-      housing_part, heat_set_inserts, detail,
+      housing_part, heat_set_inserts, moteus_shroud, detail,
     )
     casing = casing
       .attach(
@@ -2454,22 +2617,62 @@ pub fn motorized_gearbox(
     )
   }
   let output_cap_bottom = output_cap_top - output_cap_thickness
+  let output_cap_body = if dual_output_bearing {
+    let bore_r = (out_bearing.outer_mm - 0.1) / 2.0
+    let turret_r = if out_bearing.flange_outer_mm / 2.0 + 1.5 > 17.2 {
+      out_bearing.flange_outer_mm / 2.0 + 1.5
+    } else {
+      17.2
+    }
+    let total_span = output_cap_thickness + output_turret_extra
+    let blank = @step_cad.RevolvedProfile::polyline(
+        [
+          (bore_r, 0.0),
+          (flange_outer_radius, 0.0),
+          (flange_outer_radius, output_cap_thickness),
+          (turret_r, output_cap_thickness),
+          (turret_r, total_span),
+          (bore_r, total_span),
+        ],
+        closed=true,
+      )
+      .as_shape()
+      .with_name(name + "_output_cap_blank")
+    let cap_cutters : Array[@step_cad.SceneNode] = []
+    for i in 1..<output_cap_holes.length() {
+      let (hx, hy, hd) = output_cap_holes[i]
+      cap_cutters.push(
+        @step_cad.Cylinder::new(hd, output_cap_thickness + 2.0)
+        .with_name(name + "_output_cap_hole_\{i}")
+        .translate(x=hx, y=hy, z=-1.0),
+      )
+    }
+    @step_cad.difference(blank, cap_cutters, name=name + "_output_cap").with_color(
+      @step_cad.Rgb::black(),
+    )
+  } else {
+    actuator_plate_body(
+      name + "_output_cap",
+      flange_outer_radius * 2.0,
+      output_cap_thickness,
+      0.0,
+      output_cap_holes,
+      @urdf.Density::carbon_fiber(),
+      @step_cad.Rgb::black(),
+      detail,
+    ).node
+  }
   let output_cap_comp = @cad.Component::new(
       name + "_output_cap_component",
       description="Printed output end cap",
     )
     .with_part(output_cap_part)
     .add_body(
-      actuator_plate_body(
-        name + "_output_cap",
-        flange_outer_radius * 2.0,
-        output_cap_thickness,
-        0.0,
-        output_cap_holes,
-        @urdf.Density::carbon_fiber(),
-        @step_cad.Rgb::black(),
-        detail,
-      ).with_part(output_cap_part),
+      @cad.BodyPart::from_scene_node(
+        output_cap_body,
+        density=@urdf.Density::carbon_fiber(),
+        part=Some(output_cap_part),
+      ),
     )
   casing = casing
     .attach(
@@ -2481,7 +2684,7 @@ pub fn motorized_gearbox(
     )
     .add_mate_mm_deg("output_mount", z=output_cap_top)
     .add_mate_mm_deg("frame_mount_out", z=output_cap_top, axis=(0.0, 0.0, 1.0))
-    .add_mate_mm_deg("output_bearing", z=output_cap_top)
+    .add_mate_mm_deg("output_bearing", z=output_bearing_top)
   for i in 0..<4 {
     let theta = 2.0 * @math.PI * (i.to_double() + 0.5) / 4.0
     casing = casing.add_mate_mm_deg(
@@ -2503,6 +2706,26 @@ pub fn motorized_gearbox(
     child_mate="flange_top_reversed",
     spec=@cad.JointSpec::merge_rigid(),
   )
+  if dual_output_bearing {
+    let inner_bearing_comp = flanged_bearing_component(
+      name + "_output_bearing_inner",
+      out_bearing,
+      detail,
+    )
+    casing = casing
+      .add_mate_mm_deg(
+        "output_bearing_inner",
+        z=output_cap_bottom,
+        axis=(0.0, 0.0, -1.0),
+      )
+      .attach(
+        name + "_output_bearing_inner_merge",
+        parent_mate="output_bearing_inner",
+        inner_bearing_comp,
+        child_mate="flange_top",
+        spec=@cad.JointSpec::merge_rigid(),
+      )
+  }
   // ---------------------------------------------------------------------
   // Casing joint and cap screws, and their heat-set inserts.
   // ---------------------------------------------------------------------
@@ -2673,8 +2896,15 @@ pub fn motorized_gearbox(
   // ---------------------------------------------------------------------
   if output_hub {
     let hub_part = fabricated_part(
-      "MG-OUTPUT-HUB", "Printed output flange hub with a 40 mm bolt circle for wheels, knees, hips, and other driven links, plus an optional three-hole tire-mount interface with heat-set inserts; retained by the shaft collar",
-      "carbon fiber nylon", "3D print", 8.0,
+      "MG-OUTPUT-HUB",
+      if tire_mount_flush {
+        "Printed output flange hub with a 40 mm bolt circle, flush three-hole tire-mount interface with M4 heat-set inserts, and dual radial M4 set-screw shaft clamps"
+      } else {
+        "Printed output flange hub with a 40 mm bolt circle for wheels, knees, hips, and other driven links, plus an optional three-hole tire-mount interface with heat-set inserts; retained by the shaft collar"
+      },
+      "carbon fiber nylon",
+      "3D print",
+      8.0,
     )
     let hub_bore = output_shaft_diam - 0.03
     let hub_holes : Array[(Double, Double, Double)] = [(0.0, 0.0, hub_bore)]
@@ -2705,6 +2935,65 @@ pub fn motorized_gearbox(
         )
       }
     }
+    let hub_body = if tire_mount_flush {
+      let blank = @step_cad.Cylinder::new(
+        output_hub_diam_mm, output_hub_thickness_mm,
+      ).with_name(name + "_output_hub_blank")
+      let hub_cutters : Array[@step_cad.SceneNode] = []
+      for i, hole in hub_holes {
+        let (hx, hy, hd) = hole
+        hub_cutters.push(
+          @step_cad.Cylinder::new(hd, output_hub_thickness_mm + 2.0)
+          .with_name(name + "_output_hub_hole_\{i}")
+          .translate(x=hx, y=hy, z=-1.0),
+        )
+      }
+      let hub_r = output_hub_diam_mm / 2.0
+      let mid_z = output_hub_thickness_mm / 2.0
+      // Radial M4 tap clearance, brass INSERT-4 pockets (r = 10..16), and outer
+      // hex-key access bores at 0 deg and 180 deg, clearing both 40 mm (45 deg)
+      // and 55.85 mm (30/150/270 deg) bolt circles.
+      hub_cutters.push(
+        @step_cad.Cylinder::new(4.2, 22.0)
+        .with_name(name + "_output_hub_radial_tap")
+        .rotate_y(90.0)
+        .translate(x=-11.0, z=mid_z),
+      )
+      for idx, sign in [1.0, -1.0] {
+        let rot = if sign > 0.0 { 90.0 } else { -90.0 }
+        hub_cutters.push(
+          @step_cad.Cylinder::new(5.8, 6.2)
+          .with_name(name + "_output_hub_radial_insert_cut_\{idx}")
+          .rotate_y(rot)
+          .translate(x=sign * 9.9, z=mid_z),
+        )
+        let access_len = if hub_r > 15.8 { hub_r - 14.5 } else { 4.0 }
+        hub_cutters.push(
+          @step_cad.Cylinder::new(6.6, access_len)
+          .with_name(name + "_output_hub_radial_wrench_\{idx}")
+          .rotate_y(rot)
+          .translate(x=sign * 15.8, z=mid_z),
+        )
+      }
+      @cad.BodyPart::from_scene_node(
+        @step_cad.difference(blank, hub_cutters, name=name + "_output_hub_body").with_color(
+          @step_cad.Rgb::orange(),
+        ),
+        density=@urdf.Density::carbon_fiber(),
+        part=Some(hub_part),
+      )
+    } else {
+      actuator_plate_body(
+        name + "_output_hub_body",
+        output_hub_diam_mm,
+        output_hub_thickness_mm,
+        0.0,
+        hub_holes,
+        @urdf.Density::carbon_fiber(),
+        @step_cad.Rgb::orange(),
+        detail,
+      ).with_part(hub_part)
+    }
     let mut hub = @cad.Component::new(
         name + "_output_hub",
         description="Output flange hub",
@@ -2715,23 +3004,12 @@ pub fn motorized_gearbox(
         tire_mount_bolt_circle_mm.to_string(),
       )
       .with_param("shaft_bore_mm", hub_bore.to_string())
-      .add_body(
-        actuator_plate_body(
-          name + "_output_hub_body",
-          output_hub_diam_mm,
-          output_hub_thickness_mm,
-          0.0,
-          hub_holes,
-          @urdf.Density::carbon_fiber(),
-          @step_cad.Rgb::orange(),
-          detail,
-        ).with_part(hub_part),
-      )
+      .add_body(hub_body)
       .add_mate_mm_deg("back")
       .add_mate_mm_deg("output_face", z=output_hub_thickness_mm)
       .add_mate_mm_deg(
         "tire_mount",
-        z=output_hub_thickness_mm + output_collar_width_mm,
+        z=output_hub_thickness_mm + eff_collar_between,
         ry_deg=90.0,
         axis=(1.0, 0.0, 0.0),
       )
@@ -2776,6 +3054,59 @@ pub fn motorized_gearbox(
           )
       }
     }
+    if tire_mount_flush {
+      let mid_z = output_hub_thickness_mm / 2.0
+      let set_screw_part = purchased_part(
+        "SET-M4x10.0", "M4 x 10.0 mm socket set screw", "steel", 0.10,
+      )
+      for idx, sign in [1.0, -1.0] {
+        let rot = if sign > 0.0 { 90.0 } else { -90.0 }
+        hub = hub
+          .add_mate_mm_deg(
+            "radial_insert_\{idx}",
+            x=sign * 16.0,
+            z=mid_z,
+            ry_deg=rot,
+          )
+          .attach(
+            "output_hub_radial_insert_merge_\{idx}",
+            parent_mate="radial_insert_\{idx}",
+            heat_set_insert(
+              name=name + "_output_hub_radial_insert_\{idx}",
+              outer_diam_mm=6.0,
+              inner_diam_mm=4.0,
+              length_mm=6.0,
+            ),
+            child_mate="top",
+            spec=@cad.JointSpec::merge_rigid(),
+          )
+          .add_body(
+            @cad.BodyPart::cylinder_mm(
+              name + "_output_hub_set_screw_\{idx}",
+              4.0,
+              10.0,
+              x_mm=sign * 11.0,
+              z_mm=mid_z,
+              ry_deg=rot,
+              density=@urdf.Density::steel_mild(),
+              color=@step_cad.Rgb::grey(),
+            ).with_part(set_screw_part),
+          )
+      }
+      hub = hub.add_fastener(
+        @cad.Fastener::new(
+          "output_hub_radial_set_screws",
+          @cad.FastenerKind::Screw,
+          thread="M4",
+          length_mm=10.0,
+          engagement_mm=6.0,
+          quantity=2,
+          torque_nm=1.5,
+          references=[name + "_output_hub_body"],
+          part=Some(set_screw_part),
+        ),
+      )
+    }
     casing = casing.attach_to(
       motorized_last_carrier_name(name, stage_count),
       name + "_output_hub_joint",
@@ -2784,22 +3115,24 @@ pub fn motorized_gearbox(
       child_mate="back",
       spec=@cad.JointSpec::merge_rigid(),
     )
-    let collar = shaft_collar(
-      name=name + "_output_hub_collar",
-      bore_diam_mm=output_shaft_diam,
-      outer_diam_mm=output_collar_outer_diam_mm,
-      width_mm=output_collar_width_mm,
-      style="set_screw",
-      thread_size=@step_standards.M4,
-    )
-    casing = casing.attach_to(
-      name + "_output_hub",
-      name + "_output_hub_collar_joint",
-      parent_mate="output_face",
-      collar,
-      child_mate="bore",
-      spec=@cad.JointSpec::merge_rigid(offset_mm=output_collar_width_mm / 2.0),
-    )
+    if !tire_mount_flush {
+      let collar = shaft_collar(
+        name=name + "_output_hub_collar",
+        bore_diam_mm=output_shaft_diam,
+        outer_diam_mm=output_collar_outer_diam_mm,
+        width_mm=output_collar_width_mm,
+        style="set_screw",
+        thread_size=@step_standards.M4,
+      )
+      casing = casing.attach_to(
+        name + "_output_hub",
+        name + "_output_hub_collar_joint",
+        parent_mate="output_face",
+        collar,
+        child_mate="bore",
+        spec=@cad.JointSpec::merge_rigid(offset_mm=output_collar_width_mm / 2.0),
+      )
+    }
   }
   // ---------------------------------------------------------------------
   // Stage reduction records, actuator specification, and control binding.
