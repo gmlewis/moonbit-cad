@@ -1,5 +1,6 @@
 import {
   "gmlewis/cad",
+  "gmlewis/cad/components",
   "gmlewis/cad/examples/common",
   "gmlewis/step/cad" @step_cad,
   "gmlewis/step/cli",

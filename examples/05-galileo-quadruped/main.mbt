@@ -73,23 +73,6 @@ fn cnc_fab(
 }
 
 ///|
-fn purchased_qdd_part(
-  part_number : String,
-  description : String,
-  cost_usd : Double,
-) -> @cad.PartMeta {
-  @cad.PartMeta::new(
-    part_number,
-    description~,
-    supplier="ODrive Robotics",
-    supplier_url="https://www.odriverobotics.com/",
-    material="6061-T6 aluminum / steel",
-    process="purchased",
-    unit_cost_usd=cost_usd,
-  )
-}
-
-///|
 /// Octagonal chamfered rectangle cross-section centered at the origin.
 fn chamfered_rect_profile(
   width_mm : Double,
@@ -187,29 +170,47 @@ fn galileo_qdd_actuator(
   max_effort_nm~ : Double = 90.0,
   max_vel_rad_s~ : Double = 18.0,
 ) -> @cad.Component {
-  let part = purchased_qdd_part(
-    "GALILEO-QDD-\{housing_diam_mm.to_int()}",
-    "Galileo QDD planetary actuator \{housing_diam_mm.to_int()} mm",
-    240.0,
+  let housing_part = cnc_fab(
+    "GALILEO-A12-HOUSING-\{housing_diam_mm.to_int()}",
+    "A12 8318 QDD planetary housing \{housing_diam_mm.to_int()} mm",
+    "6061-T6 aluminum / CF nylon",
+    45.0,
   )
   let cap_height = if is_swivel { 22.0 } else { 0.0 }
   let stator_z_min = -housing_length_mm / 2.0
   let mount_z = stator_z_min - cap_height
+  let a12_raw = @components.step_a12_motor(
+    name=name + "_a12",
+    joint_name=name + "_a12_rotor_joint",
+  )
+  let a12_motor = { ..a12_raw, actuator: None, }
   let mut stator = @cad.Component::new(
       name,
-      description="Galileo QDD actuator stator",
+      description="Galileo A12 8318 QDD actuator stator",
     )
+    .with_param("motor", "A12 8318 100KV")
     .with_param("housing_diam_mm", housing_diam_mm.to_string())
     .with_param("housing_length_mm", housing_length_mm.to_string())
     .with_param("reduction", reduction.to_string())
     .add_body(
-      @cad.BodyPart::cylinder_mm(
+      @cad.BodyPart::tube_mm(
         name + "_housing",
         housing_diam_mm,
+        92.0,
         housing_length_mm,
         density=@urdf.Density::aluminum_6061(),
         color=silver_machined(),
-      ).with_part(part),
+      ).with_part(housing_part),
+    )
+    .add_body(
+      @cad.BodyPart::cylinder_mm(
+        name + "_rear_plate",
+        housing_diam_mm,
+        4.0,
+        z_mm=stator_z_min + 2.0,
+        density=@urdf.Density::aluminum_6061(),
+        color=silver_machined(),
+      ).with_part(housing_part),
     )
     .add_body(
       @cad.BodyPart::tube_mm(
@@ -220,7 +221,15 @@ fn galileo_qdd_actuator(
         z_mm=stator_z_min + 3.0,
         density=@urdf.Density::aluminum_6061(),
         color=silver_hull(),
-      ).with_part(part),
+      ).with_part(housing_part),
+    )
+    .add_mate_mm_deg("a12_mount", z=stator_z_min + 4.0, axis=(0.0, 0.0, -1.0))
+    .attach(
+      name + "_a12_mount_joint",
+      parent_mate="a12_mount",
+      a12_motor,
+      child_mate="mount",
+      spec=@cad.JointSpec::fixed(),
     )
   if is_swivel {
     // Distinctive black octagonal/chamfered top end-cap and vented barrel grilles.
@@ -237,7 +246,7 @@ fn galileo_qdd_actuator(
         z_mm=stator_z_min - cap_height / 2.0,
         density=@urdf.Density::carbon_fiber(),
         color=matte_black(),
-      ).with_part(part),
+      ).with_part(housing_part),
     )
     for i in 0..<4 {
       let theta = @math.PI / 4.0 + i.to_double() * @math.PI / 2.0
@@ -253,7 +262,7 @@ fn galileo_qdd_actuator(
           rz_deg=theta * 180.0 / @math.PI,
           density=@urdf.Density::aluminum_6061(),
           color=dark_trim(),
-        ).with_part(part),
+        ).with_part(housing_part),
       )
     }
   }
@@ -272,20 +281,20 @@ fn galileo_qdd_actuator(
         output_thickness_mm,
         density=@urdf.Density::aluminum_6061(),
         color=silver_hull(),
-      ).with_part(part),
+      ).with_part(housing_part),
     )
     .add_mate_mm_deg("base", z=-output_thickness_mm / 2.0)
     .add_mate_mm_deg("output_flange", z=output_thickness_mm / 2.0)
   let spec = @cad.ActuatorSpec::new(
     @cad.ActuatorKind::Bldc,
-    model="Galileo QDD " + housing_diam_mm.to_int().to_string(),
+    model="A12 8318 100KV QDD " + housing_diam_mm.to_int().to_string(),
     voltage_v=48.0,
-    current_rated_a=14.0,
-    current_stall_a=36.0,
+    current_rated_a=60.0,
+    current_stall_a=120.0,
     torque_rated_nm=max_effort_nm,
-    driver="integrated FOC",
+    driver="moteus C1 / FOC",
     interface="CAN",
-    encoder="magnetic 14-bit",
+    encoder="AS5047P",
   )
   let joint_spec = if continuous {
     @cad.JointSpec::continuous(
@@ -311,7 +320,7 @@ fn galileo_qdd_actuator(
   }
   stator
   .with_actuator(spec)
-  .add_port(@cad.Port::new("power", @cad.PortKind::Power, spec="48 V, 14 A"))
+  .add_port(@cad.Port::new("power", @cad.PortKind::Power, spec="48 V, 60 A"))
   .add_port(@cad.Port::new("can", @cad.PortKind::Bus, spec="CAN 2.0B, 1 Mbps"))
   .add_port(@cad.Port::new("ground", @cad.PortKind::Ground, spec="0 V"))
   .attach(
@@ -322,7 +331,7 @@ fn galileo_qdd_actuator(
     spec=joint_spec,
     bom_external=false,
   )
-  .with_part(part)
+  .with_part(housing_part)
 }
 
 ///|

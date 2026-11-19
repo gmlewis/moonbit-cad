@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "gmlewis/cad/examples/01_motorized_wheel"
+package "gmlewis/cad/examples/04-knee-joint"
 
 import {
   "gmlewis/cad",
@@ -7,7 +7,7 @@ import {
 }
 
 // Values
-pub async fn build_wheel(config? : @gmlewis/cad/examples/common.GearboxConfig, detail? : @gmlewis/step/components/common.DetailLevel) -> (@cad.Component, Array[@components.MotorizedStageSpec], String, String)
+pub async fn build_knee_joint(config? : @gmlewis/cad/examples/common.GearboxConfig, detail? : @gmlewis/step/components/common.DetailLevel) -> (@cad.Component, Array[@components.MotorizedStageSpec], String, String)
 
 pub fn default_config() -> @gmlewis/cad/examples/common.GearboxConfig
 

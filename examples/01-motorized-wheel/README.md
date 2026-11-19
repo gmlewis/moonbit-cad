@@ -6,9 +6,9 @@ A compact single-stage (`5.33:1`) motorized wheel built from the
 purchased budrash 7-inch wheel.
 
 This package is structured as an importable MoonBit library
-(`gmlewis/cad/examples/01_motorized_wheel`) with a thin CLI entrypoint under
+(`gmlewis/cad/examples/01-motorized-wheel`) with a thin CLI entrypoint under
 `cmd/`. The original two-stage (`28.4:1`) high-torque gearbox configuration is
-preserved in `examples/03_hip_joint` and `examples/04_knee_joint`.
+preserved in `examples/03-hip-joint` and `examples/04-knee-joint`.
 
 ```sh
 ./run-example.sh 01 --headless              # single stage, 5.33:1 (Galileo X foot)

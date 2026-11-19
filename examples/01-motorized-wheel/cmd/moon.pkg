@@ -1,5 +1,5 @@
 import {
-  "gmlewis/cad/examples/01_motorized_wheel" @wheel,
+  "gmlewis/cad/examples/01-motorized-wheel" @wheel,
   "moonbitlang/async",
 }
 

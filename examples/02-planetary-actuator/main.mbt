@@ -60,6 +60,10 @@ fn explode_offset(node : @step_cad.SceneNode) -> (Double, Double, Double) {
     (150.0, 0.0, 10.0)
   } else if name.contains("M3-10") {
     (150.0, 0.0, -10.0)
+  } else if name.contains("a12_motor_barrel") {
+    (105.0, 0.0, 0.0)
+  } else if name.contains("_rotor_adapter") {
+    (0.0, 0.0, -35.0)
   } else if name.contains("_housing") {
     (105.0, 0.0, 0.0)
   } else if name.contains("_motor") {
@@ -149,7 +153,7 @@ async fn main {
       help="Motor layout: bldc (housed actuator) or exposed (BLDC on an exposed stage); default bldc",
     ),
     "preset": @cli.opt_string(
-      help="BLDC preset: 5010_360kv, 5008_335kv, 5208_180kv, 5065_270kv, 6354_190kv (default 5010_360kv)",
+      help="BLDC preset: a12_8318_100kv, 5010_360kv, 5008_335kv, 5208_180kv, 5065_270kv, 6354_190kv (default a12_8318_100kv)",
     ),
     "gearType": @cli.opt_string(
       help="Gear type: herringbone (swept) or spur (smooth exact arcs); default herringbone",
@@ -206,7 +210,8 @@ async fn main {
     )
     abort("")
   }
-  let preset = args.string_opt("preset").unwrap_or("5010_360kv")
+  let preset = args.string_opt("preset").unwrap_or("a12_8318_100kv")
+  let is_a12 = preset == "a12_8318_100kv" || preset == "a12"
   let gear_type = args.string_opt("gearType").unwrap_or("herringbone")
   let num_elbows = args.int("numElbows")
   let stages = args.int("stages")
@@ -230,7 +235,7 @@ async fn main {
           @components.bldc_preset_names().join(", "),
         )
     }
-    let sun_bore = p.shaft_diameter_mm + 0.2
+    let sun_bore = if is_a12 { 4.5 } else { p.shaft_diameter_mm + 0.2 }
     // A 688 bearing needs a planet root radius above about 9.5 mm.
     let use_planet_bearing = module_mm * (planet_teeth.to_double() / 2.0 - 1.25) >
       9.5
@@ -281,6 +286,7 @@ async fn main {
     // Drop the adapter and motor together so the planet retaining washers
     // clear the adapter plate.
     let adapter_drop = 1.5
+    let motor_offset = if is_a12 { adapter_drop - 32.0 } else { adapter_drop }
     let mut assembly = stage
       .attach(
         "adapter_merge",
@@ -294,7 +300,7 @@ async fn main {
         parent_mate="input_flange",
         motor,
         child_mate="mount",
-        spec=@cad.JointSpec::fixed(offset_mm=adapter_drop),
+        spec=@cad.JointSpec::fixed(offset_mm=motor_offset),
       )
     // The motor envelope is a purchased solid, so the mounting hardware is a
     // schedule rather than screws modeled through it.

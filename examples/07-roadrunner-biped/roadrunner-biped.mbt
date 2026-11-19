@@ -1,5 +1,5 @@
 ///|
-/// 07_roadrunner_biped — RAI Institute "Roadrunner" symmetric bipedal-wheeled
+/// 07-roadrunner-biped — RAI Institute "Roadrunner" symmetric bipedal-wheeled
 /// robot prototype for multi-modal locomotion.
 ///
 /// Key observed design features:
@@ -179,29 +179,44 @@ fn roadrunner_qdd_actuator(
   max_effort_nm~ : Double = 90.0,
   max_vel_rad_s~ : Double = 20.0,
 ) -> @cad.Component {
-  let part = purchased_part(
+  let housing_part = printed_part(
     "RR-QDD-\{housing_diam_mm.to_int()}",
-    "Symmetric QDD planetary actuator \{housing_diam_mm.to_int()} mm",
-    "ODrive Robotics",
-    "https://www.odriverobotics.com/",
-    "6061-T6 aluminum / steel",
-    240.0,
+    "A12 8318 QDD planetary housing \{housing_diam_mm.to_int()} mm",
+    "CF nylon / 6061-T6 aluminum",
+    42.0,
   )
+  let a12_raw = @components.step_a12_motor(
+    name=name + "_a12",
+    joint_name=name + "_a12_rotor_joint",
+  )
+  let a12_motor = { ..a12_raw, actuator: None, }
   let stator = @cad.Component::new(
       name,
-      description="Roadrunner QDD planetary actuator stator",
+      description="Roadrunner A12 8318 QDD planetary actuator stator",
     )
+    .with_param("motor", "A12 8318 100KV")
     .with_param("housing_diam_mm", housing_diam_mm.to_string())
     .with_param("housing_length_mm", housing_length_mm.to_string())
     .with_param("reduction", reduction.to_string())
     .add_body(
-      @cad.BodyPart::cylinder_mm(
+      @cad.BodyPart::tube_mm(
         name + "_housing",
         housing_diam_mm,
+        92.0,
         housing_length_mm,
         density=@urdf.Density::kg_per_m3(1650.0),
         color=housing_color,
-      ).with_part(part),
+      ).with_part(housing_part),
+    )
+    .add_body(
+      @cad.BodyPart::cylinder_mm(
+        name + "_rear_plate",
+        housing_diam_mm,
+        4.0,
+        z_mm=-housing_length_mm / 2.0 + 2.0,
+        density=@urdf.Density::aluminum_6061(),
+        color=silver_aluminum(),
+      ).with_part(housing_part),
     )
     .add_body(
       @cad.BodyPart::tube_mm(
@@ -212,7 +227,19 @@ fn roadrunner_qdd_actuator(
         z_mm=housing_length_mm / 2.0 - 3.0,
         density=@urdf.Density::aluminum_6061(),
         color=silver_aluminum(),
-      ).with_part(part),
+      ).with_part(housing_part),
+    )
+    .add_mate_mm_deg(
+      "a12_mount",
+      z=-housing_length_mm / 2.0 + 4.0,
+      axis=(0.0, 0.0, -1.0),
+    )
+    .attach(
+      name + "_a12_mount_joint",
+      parent_mate="a12_mount",
+      a12_motor,
+      child_mate="mount",
+      spec=@cad.JointSpec::fixed(),
     )
     .add_mate_mm_deg(
       "motor_mount",
@@ -232,20 +259,20 @@ fn roadrunner_qdd_actuator(
         output_thickness_mm,
         density=@urdf.Density::aluminum_6061(),
         color=silver_aluminum(),
-      ).with_part(part),
+      ).with_part(housing_part),
     )
     .add_mate_mm_deg("base", z=-output_thickness_mm / 2.0)
     .add_mate_mm_deg("output_flange", z=output_thickness_mm / 2.0)
   let spec = @cad.ActuatorSpec::new(
     @cad.ActuatorKind::Bldc,
-    model="Roadrunner QDD " + housing_diam_mm.to_int().to_string(),
+    model="A12 8318 100KV QDD " + housing_diam_mm.to_int().to_string(),
     voltage_v=48.0,
-    current_rated_a=12.0,
-    current_stall_a=30.0,
+    current_rated_a=60.0,
+    current_stall_a=120.0,
     torque_rated_nm=max_effort_nm,
-    driver="integrated FOC",
+    driver="moteus C1 / FOC",
     interface="CAN",
-    encoder="magnetic 14-bit",
+    encoder="AS5047P",
   )
   let joint_spec = if continuous {
     @cad.JointSpec::continuous(
@@ -271,7 +298,7 @@ fn roadrunner_qdd_actuator(
   }
   stator
   .with_actuator(spec)
-  .add_port(@cad.Port::new("power", @cad.PortKind::Power, spec="48 V, 12 A"))
+  .add_port(@cad.Port::new("power", @cad.PortKind::Power, spec="48 V, 60 A"))
   .add_port(@cad.Port::new("can", @cad.PortKind::Bus, spec="CAN 2.0B, 1 Mbps"))
   .add_port(@cad.Port::new("ground", @cad.PortKind::Ground, spec="0 V"))
   .attach(
@@ -587,8 +614,8 @@ fn build_roadrunner_leg(
   let hip_roll_drive = roadrunner_qdd_actuator(
     name=prefix + "_hip_roll_drive",
     joint_name=prefix + "_hip_roll_joint",
-    housing_diam_mm=90.0,
-    housing_length_mm=44.0,
+    housing_diam_mm=98.0,
+    housing_length_mm=46.0,
     output_diam_mm=64.0,
     output_thickness_mm=10.0,
     housing_color=purple_shell(),
@@ -605,8 +632,8 @@ fn build_roadrunner_leg(
   let hip_pitch_drive = roadrunner_qdd_actuator(
     name=prefix + "_hip_pitch_drive",
     joint_name=prefix + "_hip_pitch_joint",
-    housing_diam_mm=94.0,
-    housing_length_mm=46.0,
+    housing_diam_mm=100.0,
+    housing_length_mm=48.0,
     output_diam_mm=68.0,
     output_thickness_mm=10.0,
     housing_color=teal_anodized(),
@@ -619,8 +646,8 @@ fn build_roadrunner_leg(
   let knee_drive = roadrunner_qdd_actuator(
     name=prefix + "_knee_drive",
     joint_name=prefix + "_knee_joint",
-    housing_diam_mm=86.0,
-    housing_length_mm=44.0,
+    housing_diam_mm=98.0,
+    housing_length_mm=46.0,
     output_diam_mm=64.0,
     output_thickness_mm=10.0,
     housing_color=teal_anodized(),
@@ -632,8 +659,8 @@ fn build_roadrunner_leg(
   let wheel_drive = roadrunner_qdd_actuator(
     name=prefix + "_wheel_drive",
     joint_name=prefix + "_wheel_joint",
-    housing_diam_mm=88.0,
-    housing_length_mm=34.0,
+    housing_diam_mm=98.0,
+    housing_length_mm=42.0,
     output_diam_mm=64.0,
     output_thickness_mm=8.0,
     housing_color=teal_anodized(),
@@ -990,7 +1017,7 @@ pub fn pose_positions(
 }
 
 ///|
-/// Runs the `07_roadrunner_biped` CLI.
+/// Runs the `07-roadrunner-biped` CLI.
 pub async fn run_cli() -> Unit {
   let base_spec = {
     "drumDiam": @cli.opt_double(230.0, help="Torso drum diameter in mm"),
@@ -1009,7 +1036,7 @@ pub async fn run_cli() -> Unit {
   let spec = @common.with_output_args(base_spec)
   guard @cli.parse(
       spec,
-      prog="07_roadrunner_biped",
+      prog="07-roadrunner-biped",
       description="Roadrunner symmetric 8-DOF bipedal wheeled robot (side-by-side, in-line, one-wheel, wide).",
     )
     is Some(args) else {

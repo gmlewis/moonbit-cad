@@ -1,0 +1,7 @@
+# Purchasing links for example 07 (Roadrunner bipedal wheeled robot).
+
+BLDC-A12-8318 | FreeRcHobby | https://www.freerchobby.cc/ | A12 8318 100KV brushless outrunner motor (91 mm OD, 12 mm shaft, 32 mm M4 mount) | 159.00
+RR-WHEEL-180 | Amazon | https://www.amazon.com/budrash-72-107-Replaces-Universal-Utility/dp/B09XMGXFDN | 180 mm (7 in) multi-spoke rubber wheel & rim | 22.00
+RR-BAT-48V | Amazon | https://www.amazon.com/s?k=48V+Li-ion+battery+pack+XT60 | 48 V 8 Ah high-discharge Li-ion battery pack | 165.00
+RR-IMU-6DOF | Amazon | https://www.amazon.com/s?k=BMI088+6-DOF+IMU+module | 6-DOF MEMS IMU sensor board | 18.00
+

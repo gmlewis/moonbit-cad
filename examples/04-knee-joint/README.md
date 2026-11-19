@@ -6,7 +6,7 @@ output flange hub with twin spaced `FR8-2RS` output bearings and
 `MG-MOTEUS-SHROUD`).
 
 This package is structured as an importable MoonBit library
-(`gmlewis/cad/examples/04_knee_joint`) with a thin CLI entrypoint under `cmd/`.
+(`gmlewis/cad/examples/04-knee-joint`) with a thin CLI entrypoint under `cmd/`.
 
 ```sh
 ./run-example.sh 04 --headless

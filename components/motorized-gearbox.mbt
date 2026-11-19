@@ -182,6 +182,17 @@ fn standard_shcs_len(value : Double) -> Double {
 }
 
 ///|
+/// Prefixes all body and node names in `comp` so every fastener, insert, and
+/// bearing retains its owning role name in flattened designs and exploded views.
+fn mg_tag_bodies(prefix : String, comp : @cad.Component) -> @cad.Component {
+  let bodies = comp.bodies.map(fn(body) {
+    let tagged = "\{prefix}_\{body.name}"
+    { ..body, name: tagged, node: body.node.with_name(tagged), }
+  })
+  { ..comp, bodies, }
+}
+
+///|
 /// A flanged ball bearing component.
 ///
 /// Local frame: the flange shoulder (`flange_top`) is `z = 0`; the outer-race
@@ -220,6 +231,7 @@ fn flanged_bearing_component(
     density=@urdf.Density::steel_mild(),
     part=Some(part),
   )
+  comp = mg_tag_bodies(name, comp)
   if spec.flange_thickness_mm > 0.0 {
     // Rim the outer race only so the flange does not render as a full-face washer.
     let flange_inner = spec.outer_mm - 0.8
@@ -975,11 +987,14 @@ fn build_a12_motor_housing(
         .attach(
           "\{housing_name}_top_insert_merge_\{i}",
           parent_mate="top_insert_\{i}",
-          heat_set_insert(
-            name="\{housing_name}_top_insert_\{i}",
-            outer_diam_mm=4.5,
-            inner_diam_mm=3.0,
-            length_mm=4.0,
+          mg_tag_bodies(
+            "\{name}_motor_housing_top_insert_\{i}",
+            heat_set_insert(
+              name="\{housing_name}_top_insert_\{i}",
+              outer_diam_mm=4.5,
+              inner_diam_mm=3.0,
+              length_mm=4.0,
+            ),
           ),
           child_mate="seat",
           spec=@cad.JointSpec::merge_rigid(),
@@ -992,11 +1007,14 @@ fn build_a12_motor_housing(
         .attach(
           "\{housing_name}_moteus_insert_merge_\{i}",
           parent_mate="moteus_insert_\{i}",
-          heat_set_insert(
-            name="\{housing_name}_moteus_insert_\{i}",
-            outer_diam_mm=4.0,
-            inner_diam_mm=3.0,
-            length_mm=4.0,
+          mg_tag_bodies(
+            "\{name}_motor_housing_moteus_insert_\{i}",
+            heat_set_insert(
+              name="\{housing_name}_moteus_insert_\{i}",
+              outer_diam_mm=4.0,
+              inner_diam_mm=3.0,
+              length_mm=4.0,
+            ),
           ),
           child_mate="seat",
           spec=@cad.JointSpec::merge_rigid(),
@@ -1025,11 +1043,14 @@ fn build_a12_motor_housing(
       .attach(
         "\{housing_name}_stator_screw_merge_\{i}",
         parent_mate="a12_stator_bolt_\{i}",
-        iso_cs_screw(
-          name="\{name}_motor_stator_screw_\{i}",
-          size=@step_standards.M4,
-          length_mm=8.0,
-          detail~,
+        mg_tag_bodies(
+          "\{name}_motor_stator_screw_\{i}",
+          iso_cs_screw(
+            name="\{name}_motor_stator_screw_\{i}",
+            size=@step_standards.M4,
+            length_mm=8.0,
+            detail~,
+          ),
         ),
         child_mate="head_top",
         spec=@cad.JointSpec::merge_rigid(),
@@ -1050,11 +1071,14 @@ fn build_a12_motor_housing(
       .attach(
         "\{housing_name}_moteus_screw_merge_\{i}",
         parent_mate="moteus_bolt_\{i}",
-        iso_shcs_screw(
-          name="\{name}_moteus_screw_\{i}",
-          size=@step_standards.M3,
-          length_mm=6.0,
-          detail~,
+        mg_tag_bodies(
+          "\{name}_moteus_screw_\{i}",
+          iso_shcs_screw(
+            name="\{name}_moteus_screw_\{i}",
+            size=@step_standards.M3,
+            length_mm=6.0,
+            detail~,
+          ),
         ),
         child_mate="head_seat",
         spec=@cad.JointSpec::merge_rigid(),
@@ -1069,11 +1093,14 @@ fn build_a12_motor_housing(
           .attach(
             "\{housing_name}_shroud_insert_merge_\{i}",
             parent_mate="shroud_insert_\{i}",
-            heat_set_insert(
-              name="\{housing_name}_shroud_insert_\{i}",
-              outer_diam_mm=4.0,
-              inner_diam_mm=3.0,
-              length_mm=4.0,
+            mg_tag_bodies(
+              "\{housing_name}_shroud_insert_\{i}",
+              heat_set_insert(
+                name="\{housing_name}_shroud_insert_\{i}",
+                outer_diam_mm=4.0,
+                inner_diam_mm=3.0,
+                length_mm=4.0,
+              ),
             ),
             child_mate="seat",
             spec=@cad.JointSpec::merge_rigid(),
@@ -1161,11 +1188,14 @@ fn build_a12_motor_housing(
         .attach(
           "\{name}_shroud_screw_merge_\{i}",
           parent_mate="shroud_bolt_\{i}",
-          iso_shcs_screw(
-            name="\{name}_shroud_screw_\{i}",
-            size=@step_standards.M3,
-            length_mm=8.0,
-            detail~,
+          mg_tag_bodies(
+            "\{name}_shroud_screw_\{i}",
+            iso_shcs_screw(
+              name="\{name}_shroud_screw_\{i}",
+              size=@step_standards.M3,
+              length_mm=8.0,
+              detail~,
+            ),
           ),
           child_mate="head_seat",
           spec=@cad.JointSpec::merge_rigid(),
@@ -1279,11 +1309,14 @@ fn build_a12_rotor_adapter(
       .attach(
         "\{raw_name}_rotor_screw_merge_\{i}",
         parent_mate="rotor_bolt_\{i}",
-        iso_shcs_screw(
-          name="\{raw_name}_screw_\{i}",
-          size=@step_standards.M4,
-          length_mm=8.0,
-          detail~,
+        mg_tag_bodies(
+          "\{raw_name}_screw_\{i}",
+          iso_shcs_screw(
+            name="\{raw_name}_screw_\{i}",
+            size=@step_standards.M4,
+            length_mm=8.0,
+            detail~,
+          ),
         ),
         child_mate="head_seat",
         spec=@cad.JointSpec::merge_rigid(),
@@ -2208,11 +2241,14 @@ pub fn motorized_gearbox(
         .attach(
           name + "_stage1_sun_bolt_merge",
           parent_mate="clamp_seat",
-          iso_shcs_screw(
-            name=name + "_stage1_sun_bolt",
-            size=@step_standards.M4,
-            length_mm=12.0,
-            detail~,
+          mg_tag_bodies(
+            name + "_stage1_sun_bolt",
+            iso_shcs_screw(
+              name=name + "_stage1_sun_bolt",
+              size=@step_standards.M4,
+              length_mm=12.0,
+              detail~,
+            ),
           ),
           child_mate="head_seat",
           spec=@cad.JointSpec::merge_rigid(),
@@ -2606,12 +2642,19 @@ pub fn motorized_gearbox(
       ),
     )
   }
+  let out_frame_bolt_circle = if frame_bolt_circle_mm <= 0.0 &&
+    stage_flush &&
+    eff_frame_bolt_circle / 2.0 < casing_outer + 2.5 {
+    casing_bolt_radius * 2.0
+  } else {
+    eff_frame_bolt_circle
+  }
   for i in 0..<4 {
     let theta = 2.0 * @math.PI * (i.to_double() + 0.5) / 4.0
     output_cap_holes.push(
       (
-        eff_frame_bolt_circle / 2.0 * @math.cos(theta),
-        eff_frame_bolt_circle / 2.0 * @math.sin(theta),
+        out_frame_bolt_circle / 2.0 * @math.cos(theta),
+        out_frame_bolt_circle / 2.0 * @math.sin(theta),
         5.5,
       ),
     )
@@ -2689,8 +2732,8 @@ pub fn motorized_gearbox(
     let theta = 2.0 * @math.PI * (i.to_double() + 0.5) / 4.0
     casing = casing.add_mate_mm_deg(
       "frame_mount_out_\{i}",
-      x=eff_frame_bolt_circle / 2.0 * @math.cos(theta),
-      y=eff_frame_bolt_circle / 2.0 * @math.sin(theta),
+      x=out_frame_bolt_circle / 2.0 * @math.cos(theta),
+      y=out_frame_bolt_circle / 2.0 * @math.sin(theta),
       z=output_cap_top,
     )
   }
@@ -2737,11 +2780,14 @@ pub fn motorized_gearbox(
         casing = casing.attach(
           "\{name}_stage\{idx}_top_insert_merge_\{i}",
           parent_mate="\{name}_stage\{idx}_top_bolt_\{i}",
-          heat_set_insert(
-            name="\{name}_stage\{idx}_top_insert_\{i}",
-            outer_diam_mm=4.5,
-            inner_diam_mm=3.0,
-            length_mm=insert_len,
+          mg_tag_bodies(
+            "\{name}_stage\{idx}_top_insert_\{i}",
+            heat_set_insert(
+              name="\{name}_stage\{idx}_top_insert_\{i}",
+              outer_diam_mm=4.5,
+              inner_diam_mm=3.0,
+              length_mm=insert_len,
+            ),
           ),
           child_mate="seat",
           spec=@cad.JointSpec::merge_rigid(),
@@ -2762,11 +2808,14 @@ pub fn motorized_gearbox(
           .attach(
             "\{name}_stage1_bottom_insert_merge_\{i}",
             parent_mate="\{name}_stage1_bottom_insert_\{i}",
-            heat_set_insert(
-              name="\{name}_stage1_bottom_insert_\{i}",
-              outer_diam_mm=4.5,
-              inner_diam_mm=3.0,
-              length_mm=insert_len,
+            mg_tag_bodies(
+              "\{name}_stage1_bottom_insert_\{i}",
+              heat_set_insert(
+                name="\{name}_stage1_bottom_insert_\{i}",
+                outer_diam_mm=4.5,
+                inner_diam_mm=3.0,
+                length_mm=insert_len,
+              ),
             ),
             child_mate="seat",
             spec=@cad.JointSpec::merge_rigid(),
@@ -2791,11 +2840,14 @@ pub fn motorized_gearbox(
         .attach(
           name + "_motor_cap_screw_merge_\{i}",
           parent_mate=name + "_motor_cap_bolt_\{i}",
-          iso_shcs_screw(
-            name="\{name}_motor_cap_screw_\{i}",
-            size=@step_standards.M3,
-            length_mm=standard_shcs_len(flange_thickness_mm + 4.0),
-            detail~,
+          mg_tag_bodies(
+            "\{name}_motor_cap_screw_\{i}",
+            iso_shcs_screw(
+              name="\{name}_motor_cap_screw_\{i}",
+              size=@step_standards.M3,
+              length_mm=standard_shcs_len(flange_thickness_mm + 4.0),
+              detail~,
+            ),
           ),
           child_mate="head_seat",
           spec=@cad.JointSpec::merge_rigid(),
@@ -2812,11 +2864,14 @@ pub fn motorized_gearbox(
         .attach(
           name + "_motor_cap_screw_merge_\{i}",
           parent_mate=name + "_motor_cap_bolt_\{i}",
-          iso_shcs_screw(
-            name="\{name}_motor_cap_screw_\{i}",
-            size=@step_standards.M3,
-            length_mm=standard_shcs_len(motor_cap_thickness + insert_len),
-            detail~,
+          mg_tag_bodies(
+            "\{name}_motor_cap_screw_\{i}",
+            iso_shcs_screw(
+              name="\{name}_motor_cap_screw_\{i}",
+              size=@step_standards.M3,
+              length_mm=standard_shcs_len(motor_cap_thickness + insert_len),
+              detail~,
+            ),
           ),
           child_mate="head_seat",
           spec=@cad.JointSpec::merge_rigid(),
@@ -2854,11 +2909,14 @@ pub fn motorized_gearbox(
         .attach(
           "\{name}_stage\{idx}_joint_screw_merge_\{i}",
           parent_mate="\{name}_stage\{idx}_joint_bolt_\{i}",
-          iso_shcs_screw(
-            name="\{name}_stage\{idx}_joint_screw_\{i}",
-            size=@step_standards.M3,
-            length_mm=stage_screw_len,
-            detail~,
+          mg_tag_bodies(
+            "\{name}_stage\{idx}_joint_screw_\{i}",
+            iso_shcs_screw(
+              name="\{name}_stage\{idx}_joint_screw_\{i}",
+              size=@step_standards.M3,
+              length_mm=stage_screw_len,
+              detail~,
+            ),
           ),
           child_mate="head_seat",
           spec=@cad.JointSpec::merge_rigid(),
@@ -2881,11 +2939,14 @@ pub fn motorized_gearbox(
       .attach(
         name + "_output_cap_screw_merge_\{i}",
         parent_mate=name + "_output_cap_bolt_\{i}",
-        iso_shcs_screw(
-          name="\{name}_output_cap_screw_\{i}",
-          size=@step_standards.M3,
-          length_mm=standard_shcs_len(output_cap_thickness + 6.0),
-          detail~,
+        mg_tag_bodies(
+          "\{name}_output_cap_screw_\{i}",
+          iso_shcs_screw(
+            name="\{name}_output_cap_screw_\{i}",
+            size=@step_standards.M3,
+            length_mm=standard_shcs_len(output_cap_thickness + 6.0),
+            detail~,
+          ),
         ),
         child_mate="head_seat",
         spec=@cad.JointSpec::merge_rigid(),
@@ -2895,10 +2956,18 @@ pub fn motorized_gearbox(
   // Rotating output interface: flange hub plus a clamp collar.
   // ---------------------------------------------------------------------
   if output_hub {
+    let has_radial_lock = tire_mount_flush ||
+      (
+        dual_output_bearing &&
+        output_hub_diam_mm >= 50.0 &&
+        output_hub_thickness_mm >= 9.0
+      )
     let hub_part = fabricated_part(
       "MG-OUTPUT-HUB",
       if tire_mount_flush {
         "Printed output flange hub with a 40 mm bolt circle, flush three-hole tire-mount interface with M4 heat-set inserts, and dual radial M4 set-screw shaft clamps"
+      } else if has_radial_lock {
+        "Printed output flange hub with a 40 mm bolt circle for hips, knees, and driven links, plus dual radial M4 set-screw shaft clamps; retained by the shaft collar"
       } else {
         "Printed output flange hub with a 40 mm bolt circle for wheels, knees, hips, and other driven links, plus an optional three-hole tire-mount interface with heat-set inserts; retained by the shaft collar"
       },
@@ -2935,7 +3004,7 @@ pub fn motorized_gearbox(
         )
       }
     }
-    let hub_body = if tire_mount_flush {
+    let hub_body = if has_radial_lock {
       let blank = @step_cad.Cylinder::new(
         output_hub_diam_mm, output_hub_thickness_mm,
       ).with_name(name + "_output_hub_blank")
@@ -3054,7 +3123,7 @@ pub fn motorized_gearbox(
           )
       }
     }
-    if tire_mount_flush {
+    if has_radial_lock {
       let mid_z = output_hub_thickness_mm / 2.0
       let set_screw_part = purchased_part(
         "SET-M4x10.0", "M4 x 10.0 mm socket set screw", "steel", 0.10,
@@ -3071,11 +3140,14 @@ pub fn motorized_gearbox(
           .attach(
             "output_hub_radial_insert_merge_\{idx}",
             parent_mate="radial_insert_\{idx}",
-            heat_set_insert(
-              name=name + "_output_hub_radial_insert_\{idx}",
-              outer_diam_mm=6.0,
-              inner_diam_mm=4.0,
-              length_mm=6.0,
+            mg_tag_bodies(
+              name + "_output_hub_radial_insert_\{idx}",
+              heat_set_insert(
+                name=name + "_output_hub_radial_insert_\{idx}",
+                outer_diam_mm=6.0,
+                inner_diam_mm=4.0,
+                length_mm=6.0,
+              ),
             ),
             child_mate="top",
             spec=@cad.JointSpec::merge_rigid(),

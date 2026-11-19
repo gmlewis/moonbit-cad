@@ -1,5 +1,5 @@
 import {
-  "gmlewis/cad/examples/03_hip_joint" @hip,
+  "gmlewis/cad/examples/07-roadrunner-biped" @roadrunner,
   "moonbitlang/async",
 }
 

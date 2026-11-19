@@ -12,6 +12,8 @@ ISO4762-M3x12 | Amazon | https://www.amazon.com/NIULUNBAO-Socket-Machine-Threade
 ISO4762-M3x10 | Amazon | https://www.amazon.com/NIULUNBAO-Socket-Machine-Threaded-Assortment/dp/B0BJQ6M8XW | Same 250-piece kit also covers M3 x 10 mm | 0.05
 BEARING-608 | Amazon | https://www.amazon.com/Bearings-Skateboard-Shielded-Miniature-Skateboards/dp/B07R7PR72H | 608-2RS, 8 x 22 x 7 mm, 10-pack | 0.70
 INSERT-3 | Amazon | https://www.amazon.com/Vibit-Threaded-Soldering-Printing-Component/dp/B0FWWW8VP1 | M3 heat-set insert kit with soldering tips | 0.05
+BLDC-A12-8318 | FreeRcHobby | https://www.freerchobby.cc/ | A12 8318 100KV brushless outrunner motor (91 mm OD, 12 mm shaft, 32 mm M4 mount) | 159.00
+ISO4762-M4x10 | McMaster-Carr | https://www.mcmaster.com/screws/socket-head-cap-screws/ | ISO 4762 M4 x 10 mm socket head cap screw (A12 stator mount) | 0.35
 BLDC-5010_360kv | Amazon | https://www.amazon.com/GoolRC-Brushless-MultiCopter-Quadcopter-Multi-axis/dp/B0C2YRNX1Z | 5010 360KV outrunner (GoolRC) | 27.98
 SET-M3x5.9 | Amazon | https://www.amazon.com/HanTof-Set-Screws-Grub/dp/B07CKFJ8GY | M3-M8 grub-screw kit; M3 x 6 mm is the closest length | 0.03
 SHAFT-8x18 | McMaster-Carr | https://www.mcmaster.com/91595A558/ | 8 x 20 mm DIN 6325 hardened pins, 10-pack; cut to 18 mm | 1.50

@@ -6,7 +6,7 @@ Galileo X (`--noTire` output flange hub with twin spaced `FR8-2RS` output
 bearings and `MG-MOTEUS-SHROUD`).
 
 This package is structured as an importable MoonBit library
-(`gmlewis/cad/examples/03_hip_joint`) with a thin CLI entrypoint under `cmd/`.
+(`gmlewis/cad/examples/03-hip-joint`) with a thin CLI entrypoint under `cmd/`.
 
 ```sh
 ./run-example.sh 03 --headless

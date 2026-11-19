@@ -65,10 +65,10 @@ async fn main {
   let half_track = track_width / 2.0
   let frame_z = rear_wheel_r + 60.0
   let deg = @math.PI / 180.0
-  // Two-stage 12/18/48 planetary drive: 25:1.
+  // Two-stage 12/18/48 planetary drive: 25:1, driven by an A12 8318 100KV motor.
   let reduction = @components.planetary_reduction(12, 18, 2)
   let stage_length = 14.0
-  let drive_length = stage_length * 2.0 + 92.0
+  let drive_length = stage_length * 2.0 + 124.0
   let mut chassis = @cad.Component::new(
       "chassis_link",
       description="Motorized wheelchair chassis",
@@ -272,7 +272,7 @@ async fn main {
         parent_mate="\{drive_name}_mount",
         @components.planetary_wheel_drive_unit(
           name=drive_name,
-          preset="6354_190kv",
+          preset="a12_8318_100kv",
           stages=2,
           module_mm~,
           sun_teeth=12,

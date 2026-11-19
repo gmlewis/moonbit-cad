@@ -1,6 +1,6 @@
 ///|
 /// Shared OCCT boolean evaluation and exploded-view helpers for the gearbox
-/// examples (`01_motorized_wheel`, `03_hip_joint`, `04_knee_joint`).
+/// examples (`01-motorized-wheel`, `03-hip-joint`, `04-knee-joint`).
 
 ///|
 /// Unwraps a shared CLI/parser `Result`, aborting with a clean message on error.
@@ -624,71 +624,72 @@ fn gearbox_explode_offset(
   let (_, _, _, _, z0, z1) = node.bounding_box()
   let zc = (z0 + z1) / 2.0
   if name.contains("collar") || name.contains("shaft-collar") {
-    return (0.0, 0.0, 505.0)
+    return (0.0, 0.0, 515.0)
   }
   if name.contains("radial_insert") {
     let (rx, ry, _) = radial_offset(node, 18.0)
-    return (rx, ry, 470.0)
+    return (rx, ry, 475.0)
   }
   if name.contains("output_hub_set_screw") {
     let (rx, ry, _) = radial_offset(node, 34.0)
-    return (rx, ry, 470.0)
+    return (rx, ry, 475.0)
   }
   if name.contains("set_screw") || name.contains("set-screw") {
     let (rx, ry, _) = radial_offset(node, 24.0)
     let parent_z = if name.contains("stage2_coupler") {
-      145.0
+      148.0
     } else if name.contains("stage2_carrier") {
       305.0
     } else if name.contains("stage1_carrier") {
-      92.0
+      95.0
     } else {
       0.0
     }
     return (rx, ry, parent_z)
   }
   if name.contains("tire_bolt") {
-    (0.0, 0.0, 645.0)
+    (0.0, 0.0, 655.0)
   } else if name.contains("tire_mount") || name.contains("tire-mount") {
-    (0.0, 0.0, 535.0)
+    (0.0, 0.0, 545.0)
   } else if name.contains("tire") {
-    (0.0, 0.0, 585.0)
+    (0.0, 0.0, 595.0)
   } else if name.contains("output_hub_insert") {
-    (0.0, 0.0, 492.0)
+    (0.0, 0.0, 497.0)
   } else if name.contains("output_hub") {
-    (0.0, 0.0, 470.0)
-  } else if name.contains("output_cap_screw") {
-    (0.0, 0.0, 405.0)
+    (0.0, 0.0, 475.0)
+  } else if name.contains("output_cap_screw") || name.contains("ISO4762-M3-16") {
+    (0.0, 0.0, 415.0)
   } else if name.contains("output_bearing_inner") {
-    (0.0, 0.0, 350.0)
+    (0.0, 0.0, 360.0)
   } else if (
       name.contains("output_bearing") ||
       name.contains("deep-groove-bearing") ||
       name.contains("bearing-FR8")
     ) &&
     !name.contains("planet") {
-    (0.0, 0.0, 435.0)
+    (0.0, 0.0, 442.0)
   } else if name.contains("output_cap") {
-    (0.0, 0.0, 380.0)
+    (0.0, 0.0, 385.0)
   } else if name.contains("stage2_carrier") {
     (0.0, 0.0, 305.0)
   } else if name.contains("stage2_top_insert") {
-    (0.0, 0.0, 260.0)
+    (0.0, 0.0, 227.0)
   } else if name.contains("stage2_joint_screw") {
-    (0.0, 0.0, 162.0)
+    (0.0, 0.0, 165.0)
   } else if name.contains("stage2") &&
     (name.contains("bearing") || name.contains("bearing_flange")) {
-    (0.0, 0.0, 240.0)
+    (0.0, 0.0, 242.0)
   } else if name.contains("stage2_coupler") {
-    (0.0, 0.0, 145.0)
+    (0.0, 0.0, 148.0)
   } else if name.contains("stage2") {
     (0.0, 0.0, 195.0)
   } else if name.contains("stage1_carrier") {
-    (0.0, 0.0, 92.0)
-  } else if name.contains("stage1_sun_bolt") {
+    (0.0, 0.0, 95.0)
+  } else if name.contains("stage1_sun_bolt") ||
+    (name.contains("stage1_sun") && name.contains("ISO4762")) {
     (0.0, 0.0, 66.0)
   } else if name.contains("motor_cap_screw") {
-    (0.0, 0.0, -30.0)
+    (0.0, 0.0, -28.0)
   } else if name.contains("stage1_top_insert") {
     (0.0, 0.0, 32.0)
   } else if name.contains("shroud_screw") {
@@ -696,16 +697,16 @@ fn gearbox_explode_offset(
   } else if name.contains("moteus_shroud") {
     (0.0, 0.0, -375.0)
   } else if name.contains("shroud_insert") {
-    (0.0, 0.0, -280.0)
+    (0.0, 0.0, -282.0)
   } else if name.contains("ISO4762-M3") {
     if zc < -48.0 {
       (0.0, 0.0, -405.0)
     } else if zc < 0.0 {
       (0.0, 0.0, -350.0)
     } else if zc < 15.0 {
-      (0.0, 0.0, -30.0)
+      (0.0, 0.0, -28.0)
     } else {
-      (0.0, 0.0, 162.0)
+      (0.0, 0.0, 165.0)
     }
   } else if name.contains("stage1") &&
     (name.contains("bearing") || name.contains("bearing_flange")) {
@@ -715,32 +716,37 @@ fn gearbox_explode_offset(
   } else if name.contains("moteus_screw") {
     (0.0, 0.0, -350.0)
   } else if name.contains("motor_housing_moteus_insert") {
-    (0.0, 0.0, -280.0)
+    (0.0, 0.0, -282.0)
   } else if name.contains("motor_housing_top_insert") {
     (0.0, 0.0, -238.0)
   } else if name.contains("moteus") {
     (0.0, 0.0, -320.0)
   } else if name.contains("motor_housing") {
     (0.0, 0.0, -260.0)
-  } else if name.contains("rotor_adapter") && name.contains("screw") {
+  } else if (name.contains("rotor_adapter") && name.contains("screw")) ||
+    name.contains("motor_rotor_ISO4762") {
     (0.0, 0.0, -48.0)
   } else if name.contains("rotor_adapter") {
     (0.0, 0.0, -78.0)
   } else if name.contains("_rotor_magnet") {
     (0.0, 0.0, -198.0)
-  } else if name.contains("_motor_rotor") || name.contains("_motor_stator") {
-    (0.0, 0.0, -140.0)
+  } else if name.contains("_motor_stator") {
+    (0.0, 0.0, -170.0)
+  } else if name.contains("_motor_rotor") || name.contains("_rotor") {
+    (0.0, 0.0, -125.0)
   } else if name.contains("motor_cap") {
     (0.0, 0.0, -28.0)
-  } else if name.contains("_motor") || name.contains("_rotor") {
+  } else if name.contains("_motor") {
     (0.0, 0.0, -140.0)
   } else if name.contains("HEATSET") {
     if zc < -10.0 {
-      (0.0, 0.0, -280.0)
+      (0.0, 0.0, -282.0)
     } else if zc < 10.0 {
       (0.0, 0.0, -238.0)
-    } else {
+    } else if zc < 35.0 {
       (0.0, 0.0, 32.0)
+    } else {
+      (0.0, 0.0, 227.0)
     }
   } else {
     (0.0, 0.0, 0.0)

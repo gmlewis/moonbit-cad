@@ -1,6 +1,6 @@
 ///|
 /// Shared parameterized builder and CLI runner for the A12 planetary gearbox
-/// subassemblies (`01_motorized_wheel`, `03_hip_joint`, `04_knee_joint`).
+/// subassemblies (`01-motorized-wheel`, `03-hip-joint`, `04-knee-joint`).
 
 ///|
 /// Configuration for building an A12 planetary gearbox subassembly (with or
@@ -40,10 +40,10 @@ pub(all) struct GearboxConfig {
 ///|
 /// Default configuration helper.
 pub fn GearboxConfig::new(
-  prog~ : String = "01_motorized_wheel",
+  prog~ : String = "01-motorized-wheel",
   description~ : String = "Compact motorized planetary gearbox.",
   gearbox_name~ : String = "motorized_gearbox",
-  links_path~ : String = "examples/01_motorized_wheel/supplier-links.txt",
+  links_path~ : String = "examples/01-motorized-wheel/supplier-links.txt",
   num_stages~ : Int32 = 1,
   preset~ : String = "",
   motor_source~ : String = "a12",
@@ -212,7 +212,7 @@ async fn build_gearbox_component_with_cache(
     output_collar_outer_diam_mm=config.collar_outer_mm,
     output_hub=!config.no_output_hub,
     output_hub_diam_mm=if include_tire { 80.0 } else { 60.0 },
-    output_hub_thickness_mm=if flush_mount { 10.0 } else { 8.0 },
+    output_hub_thickness_mm=10.0,
     tire_mount_bolt_circle_mm=if include_tire {
       mount_spec.bolt_hole_circle_diameter_mm
     } else {

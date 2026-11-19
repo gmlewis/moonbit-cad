@@ -1,6 +1,6 @@
 # 02 — Planetary Actuator
 
-A low-KV BLDC outrunner (`@step_motors.brushless_motor`) driving a Tier-1
+An A12 8318 100KV brushless outrunner (`@components.step_a12_motor`) driving a Tier-1
 planetary gearbox, either housed with a twin-bearing output cartridge and the
 moteus C1 on-axis output sensor, or exposed as a bench/viewing stage.
 

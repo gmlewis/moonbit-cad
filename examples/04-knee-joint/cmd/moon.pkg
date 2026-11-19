@@ -1,5 +1,5 @@
 import {
-  "gmlewis/cad/examples/04_knee_joint" @knee,
+  "gmlewis/cad/examples/04-knee-joint" @knee,
   "moonbitlang/async",
 }
 

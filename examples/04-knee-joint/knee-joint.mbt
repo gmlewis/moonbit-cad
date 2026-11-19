@@ -1,5 +1,5 @@
 ///|
-/// 03_hip_joint — reusable 2-stage (28.44:1) A12 hip actuator library for
+/// 04-knee-joint — reusable 2-stage (28.44:1) A12 knee actuator library for
 /// Galileo X.
 ///
 /// Preserves the high-torque two-stage 4-elbow print-in-place planetary gearbox
@@ -8,13 +8,13 @@
 /// protective `MG-MOTEUS-SHROUD` rear cover.
 
 ///|
-/// Default hip-joint actuator configuration for `03_hip_joint`.
+/// Default knee-joint actuator configuration for `04-knee-joint`.
 pub fn default_config() -> @common.GearboxConfig {
   @common.GearboxConfig::new(
-    prog="03_hip_joint",
-    description="High-torque 2-stage (28.44:1) A12 planetary hip-joint actuator with twin output bearings and moteus C1 shroud.",
-    gearbox_name="hip_gearbox",
-    links_path="examples/03_hip_joint/supplier-links.txt",
+    prog="04-knee-joint",
+    description="High-torque 2-stage (28.44:1) A12 planetary knee-joint actuator with twin output bearings and moteus C1 shroud.",
+    gearbox_name="knee_gearbox",
+    links_path="examples/04-knee-joint/supplier-links.txt",
     num_stages=2,
     motor_source="a12",
     no_tire=true,
@@ -25,9 +25,9 @@ pub fn default_config() -> @common.GearboxConfig {
 }
 
 ///|
-/// Builds the assembled `03_hip_joint` component for use in full-robot
+/// Builds the assembled `04-knee-joint` component for use in full-robot
 /// assemblies.
-pub async fn build_hip_joint(
+pub async fn build_knee_joint(
   config~ : @common.GearboxConfig = default_config(),
   detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
 ) -> (@cad.Component, Array[@components.MotorizedStageSpec], String, String) {
@@ -35,7 +35,7 @@ pub async fn build_hip_joint(
 }
 
 ///|
-/// Runs the `03_hip_joint` CLI.
+/// Runs the `04-knee-joint` CLI.
 pub async fn run_cli() -> Unit {
   @common.run_gearbox_cli(default_config())
 }

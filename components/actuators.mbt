@@ -1289,6 +1289,10 @@ pub fn step_brushless_motor(
   detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
   joint_name~ : String = "",
 ) -> @cad.Component {
+  if preset == "a12_8318_100kv" || preset == "a12" {
+    let _ = detail
+    return step_a12_motor(name~, joint_name~)
+  }
   let _ = detail
   let p = resolve_bldc_preset(preset)
   let measured = brushless_motor_spec_for_preset(p)
@@ -1464,12 +1468,14 @@ pub fn step_a12_motor(
   for i in 0..<spec.magnet_count {
     rotor_layers.push("rotor-magnet-\{i + 1}")
   }
-  let stator_part = purchased_part(
+  let stator_part = @cad.PartMeta::new(
     "BLDC-A12-8318",
-    "A12 8318 100KV brushless outrunner motor (91 mm OD, 12 mm shaft, 32 mm M4 / 30 mm M3 mount, 23 mm M4 prop adapter)",
-    "mixed",
-    p.cost_usd,
-    supplier_url="https://www.amazon.com/s?k=8318+100KV+brushless+motor",
+    description="A12 8318 100KV brushless outrunner motor (91 mm OD, 12 mm shaft, 32 mm M4 / 30 mm M3 mount, 23 mm M4 prop adapter)",
+    supplier="FreeRcHobby",
+    supplier_url="https://www.freerchobby.cc/",
+    material="mixed",
+    process="purchased",
+    unit_cost_usd=p.cost_usd,
   )
   let mut stator = @cad.Component::from_step_layers(
     stator_name,
@@ -1619,6 +1625,8 @@ pub fn planetary_bldc_actuator(
   // `low_kv_bldc_motor`; "brushless" uses the measured Tier-1
   // `step_brushless_motor` envelope.
   let p = resolve_bldc_preset(preset)
+  let is_a12 = p.name == "A12-8318-100KV" || motor_source == "a12"
+  let p = if is_a12 { resolve_bldc_preset("a12_8318_100kv") } else { p }
   let stage_count = if stages < 1 { 1 } else if stages > 2 { 2 } else { stages }
   // Only an explicit spur request uses exact line/arc gears. The default
   // herringbone gear set uses the 4-elbow print-in-place geometry at every
@@ -1629,7 +1637,9 @@ pub fn planetary_bldc_actuator(
   } else {
     joint_name
   }
-  let motor = if motor_source == "brushless" {
+  let motor = if is_a12 {
+    step_a12_motor(name=name + "_motor", joint_name=rotor_joint)
+  } else if motor_source == "brushless" {
     step_brushless_motor(
       name=name + "_motor",
       preset~,
@@ -1645,6 +1655,7 @@ pub fn planetary_bldc_actuator(
     )
   }
   let motor_plate_mm = 6.0
+  let motor_mount_z = if is_a12 { -38.0 } else { 0.0 }
   // A 6 mm wall leaves more than 1 mm of printed material around the M3
   // cover screws at the bolt circle.
   let housing_wall = 6.0
@@ -1665,16 +1676,23 @@ pub fn planetary_bldc_actuator(
     tolerance / @math.sin(pa_deg * deg) +
     gear_outer_thickness
   let housing_outer = ring_outer + housing_wall
+  let barrel_outer = if is_a12 && housing_outer < 53.5 {
+    53.5
+  } else {
+    housing_outer
+  }
   let housing_inner = ring_outer - 0.05
   let bolt_circle = (ring_outer + housing_wall / 2.0) * 2.0
+  let rear_bolt_circle = (barrel_outer - housing_wall / 2.0) * 2.0
   let stage_pitch = gear_length_mm + carrier_thickness + 8.0
   let housing_top = stage_gap +
     (stage_count - 1).to_double() * stage_pitch +
     gear_length_mm +
     carrier_thickness +
     2.0
-  let housing_bottom = -motor_plate_mm
+  let housing_bottom = if is_a12 { 0.0 } else { -motor_plate_mm }
   let housing_height = housing_top - housing_bottom
+  let plate_bottom_z = motor_mount_z - motor_plate_mm
   let cover_plate_mm = 8.0
   // The bearing boss above the cover plate is 8 mm tall. With the on-axis
   // output encoder fitted, an output-shaft extension also raises the boss so
@@ -1698,7 +1716,11 @@ pub fn planetary_bldc_actuator(
   } else {
     final_shaft_len
   }
-  let stage1_sun_bore = p.shaft_diameter_mm / 2.0 + 0.1
+  let stage1_sun_bore = if is_a12 {
+    2.25
+  } else {
+    p.shaft_diameter_mm / 2.0 + 0.1
+  }
   let coupling_shaft_diam = 8.0
   let coupling_bore = coupling_shaft_diam / 2.0 + 0.1
   // A 688 bearing (8 x 16 x 5) needs a planet root radius above about 9.5 mm
@@ -1778,15 +1800,19 @@ pub fn planetary_bldc_actuator(
     let theta = 2.0 * @math.PI * i.to_double() / 4.0
     plate_holes.push(
       (
-        bolt_circle / 2.0 * @math.cos(theta),
-        bolt_circle / 2.0 * @math.sin(theta),
+        rear_bolt_circle / 2.0 * @math.cos(theta),
+        rear_bolt_circle / 2.0 * @math.sin(theta),
         3.4,
       ),
     )
   }
   // Motor phase-wire pass-through, outside the motor bell but inside the
   // plate rim and clear of the housing-screw holes (which sit on the axes).
-  let phase_radius = p.diameter_mm * 0.5 + 3.0
+  let phase_radius = if is_a12 {
+    barrel_outer - housing_wall - 2.0
+  } else {
+    p.diameter_mm * 0.5 + 3.0
+  }
   let phase_angle = @math.PI / 4.0
   plate_holes.push(
     (
@@ -1832,9 +1858,9 @@ pub fn planetary_bldc_actuator(
     .add_body(
       actuator_plate_body(
         name + "_motor_plate",
-        housing_outer * 2.0,
+        barrel_outer * 2.0,
         motor_plate_mm,
-        -motor_plate_mm,
+        plate_bottom_z,
         plate_holes,
         @urdf.Density::carbon_fiber(),
         @step_cad.Rgb::black(),
@@ -1864,7 +1890,7 @@ pub fn planetary_bldc_actuator(
         color=@step_cad.Rgb::black(),
       ).with_part(cover_boss_part),
     )
-    .add_mate_mm_deg("motor_mount", z=-motor_plate_mm, axis=(0.0, 0.0, -1.0))
+    .add_mate_mm_deg("motor_mount", z=motor_mount_z, axis=(0.0, 0.0, -1.0))
     .add_mate_mm_deg("bearing_seat", z=-3.0)
     .add_mate_mm_deg("gearbox_mount")
     .add_mate_mm_deg("output_face", z=housing_top)
@@ -1911,6 +1937,19 @@ pub fn planetary_bldc_actuator(
         max_mm=22.05,
       ),
     )
+  if is_a12 {
+    housing = housing.add_body(
+      @cad.BodyPart::tube_mm(
+        name + "_a12_motor_barrel",
+        barrel_outer * 2.0,
+        95.0,
+        -motor_mount_z,
+        z_mm=motor_mount_z / 2.0,
+        density=@urdf.Density::carbon_fiber(),
+        color=@step_cad.Rgb::black(),
+      ).with_part(housing_part),
+    )
+  }
   // Motor and cover bolt mates.
   for i in 0..<4 {
     let theta = 2.0 * @math.PI * i.to_double() / 4.0
@@ -1919,13 +1958,14 @@ pub fn planetary_bldc_actuator(
         "motor_bolt_\{i}",
         x=motor_bolt_radius * @math.cos(theta),
         y=motor_bolt_radius * @math.sin(theta),
+        z=motor_mount_z,
         axis=(0.0, 0.0, -1.0),
       )
       .add_mate_mm_deg(
         "housing_bolt_\{i}",
-        x=bolt_circle / 2.0 * @math.cos(theta),
-        y=bolt_circle / 2.0 * @math.sin(theta),
-        z=-motor_plate_mm,
+        x=rear_bolt_circle / 2.0 * @math.cos(theta),
+        y=rear_bolt_circle / 2.0 * @math.sin(theta),
+        z=plate_bottom_z,
         rx_deg=180.0,
       )
       .add_mate_mm_deg(
@@ -2091,22 +2131,55 @@ pub fn planetary_bldc_actuator(
     name + "_stage1_sun_joint",
     @urdf.JointMimic::new(rotor_joint, multiplier=1.0),
   )
-  // Clamp the sun onto the motor shaft. The hub's body is on the motor side
-  // of the sun, so the shaft engages the full sun face width.
-  housing = housing.attach_to(
-    name + "_stage1_sun",
-    "sun_hub_merge",
-    parent_mate="bottom",
-    sun_clamp_hub(
-      name + "_sun_hub",
-      p.shaft_diameter_mm + 0.2,
-      12.0,
-      4.5,
-      detail,
-    ),
-    child_mate="top",
-    spec=@cad.JointSpec::merge_rigid(),
-  )
+  // Couple the A12 rotor prop adapter (`output_face` at z = -6.0) to Stage 1 sun
+  // (`z = 4.0`), or clamp the compact BLDC shaft with `sun_clamp_hub`.
+  if is_a12 {
+    let adapter_len = -motor_mount_z - 32.0 + stage_gap
+    let adapter_part = fabricated_part(
+      "ACT-ROTOR-ADAPTER", "Printed A12 rotor-to-sun drive adapter flange", "carbon fiber nylon",
+      "3D print", 6.0,
+    )
+    let adapter = @cad.Component::new(
+        name + "_rotor_adapter",
+        description="Bolted A12 rotor-to-sun adapter",
+      )
+      .with_part(adapter_part)
+      .add_body(
+        @cad.BodyPart::tube_mm(
+          name + "_rotor_adapter_flange",
+          31.0,
+          4.5,
+          adapter_len,
+          z_mm=adapter_len / 2.0,
+          density=@urdf.Density::carbon_fiber(),
+          color=@step_cad.Rgb::orange(),
+        ).with_part(adapter_part),
+      )
+      .add_mate_mm_deg("rotor_seat")
+    housing = housing.attach_to(
+      name + "_motor_rotor",
+      name + "_rotor_adapter_merge",
+      parent_mate="output_face",
+      adapter,
+      child_mate="rotor_seat",
+      spec=@cad.JointSpec::merge_rigid(),
+    )
+  } else {
+    housing = housing.attach_to(
+      name + "_stage1_sun",
+      "sun_hub_merge",
+      parent_mate="bottom",
+      sun_clamp_hub(
+        name + "_sun_hub",
+        p.shaft_diameter_mm + 0.2,
+        12.0,
+        4.5,
+        detail,
+      ),
+      child_mate="top",
+      spec=@cad.JointSpec::merge_rigid(),
+    )
+  }
   let mut output_joint = name + "_stage1_carrier_joint"
   let mut output_carrier = name + "_stage1_carrier"
   if stage_count >= 2 {
@@ -2260,7 +2333,7 @@ pub fn planetary_bldc_actuator(
     current_rated_a=p.current_rated_a,
     current_stall_a=p.current_peak_a,
     torque_rated_nm=output_torque,
-    driver="VESC / SimpleFOC",
+    driver=if is_a12 { "moteus C1 / FOC" } else { "VESC / SimpleFOC" },
     interface="CAN",
     encoder=if output_encoder {
       "AS5047P output + rotor encoder"
@@ -2333,7 +2406,11 @@ pub fn planetary_actuator_cartridge(
     pressure_angle_deg: 20.0,
     num_elbows,
     resolution: 5,
-    bore_radius_mm: p.shaft_diameter_mm / 2.0 + 0.1,
+    bore_radius_mm: if p.name == "A12-8318-100KV" {
+      2.25
+    } else {
+      p.shaft_diameter_mm / 2.0 + 0.1
+    },
     planet_bore_radius_mm: planet_bore_radius,
     carrier_pin_diam_mm: if use_planet_bearing {
       8.0
