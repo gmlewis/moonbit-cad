@@ -389,10 +389,15 @@ def colorize_output(output_path: Path, layers_path: Path) -> bool:
 
     labels = TDF_LabelSequence()
     shape_tool.GetFreeShapes(labels)
+    out_doc = doc
+    out_color_tool = color_tool
     targets: list[tuple[object, list[float]]] = []
+    compound_solids = []
+    has_non_compound = False
     for i in range(1, labels.Length() + 1):
         label = labels.Value(i)
         if shape_tool.IsAssembly_s(label):
+            has_non_compound = True
             comps = TDF_LabelSequence()
             shape_tool.GetComponents_s(label, comps)
             for j in range(1, comps.Length() + 1):
@@ -407,9 +412,28 @@ def colorize_output(output_path: Path, layers_path: Path) -> bool:
                     targets.append((use, bbox))
         else:
             shape = shape_tool.GetShape_s(label)
+            count = _solid_count(shape)
             bbox = _shape_bbox(shape)
-            if bbox is not None and _solid_count(shape) == 1:
+            if count == 1 and bbox is not None:
+                has_non_compound = True
                 targets.append((label, bbox))
+            elif count > 1:
+                from OCP.TopAbs import TopAbs_SOLID
+                from OCP.TopExp import TopExp_Explorer
+
+                exp = TopExp_Explorer(shape, TopAbs_SOLID)
+                while exp.More():
+                    compound_solids.append(exp.Current())
+                    exp.Next()
+    if compound_solids and not has_non_compound:
+        out_doc = TDocStd_Document(TCollection_ExtendedString("XmlXCAF"))
+        app.NewDocument(TCollection_ExtendedString("XmlXCAF"), out_doc)
+        st2 = XCAFDoc_DocumentTool.ShapeTool_s(out_doc.Main())
+        out_color_tool = XCAFDoc_DocumentTool.ColorTool_s(out_doc.Main())
+        for solid in compound_solids:
+            bbox = _shape_bbox(solid)
+            if bbox is not None:
+                targets.append((st2.AddShape(solid, False), bbox))
     if len(targets) != len(layers):
         return False
 
@@ -443,11 +467,11 @@ def colorize_output(output_path: Path, layers_path: Path) -> bool:
         quantity = Quantity_Color(
             float(color[0]), float(color[1]), float(color[2]), Quantity_TOC_RGB
         )
-        color_tool.SetColor(label, quantity, XCAFDoc_ColorGen)
+        out_color_tool.SetColor(label, quantity, XCAFDoc_ColorGen)
 
     writer = STEPCAFControl_Writer()
     writer.SetColorMode(True)
-    if not writer.Transfer(doc):
+    if not writer.Transfer(out_doc):
         return False
     if not writer.Write(str(output_path)):
         return False
@@ -706,6 +730,9 @@ def ocp_multi_chamfer(
     reader.TransferRoots()
     shape = reader.OneShape()
     kind = selector.get("kind", "all")
+    radii = [float(value) for value in (selector.get("radii") or [])]
+    z_filter = selector.get("z")
+    radial_tol = float(selector.get("tol", 1.0e-3))
     direction = (
         _norm(_vec3(selector["dir"]))
         if kind in ("direction", "perpendicular")
@@ -740,6 +767,19 @@ def ocp_multi_chamfer(
                 if kind == "perpendicular"
                 else all(value >= limit for value in dirs)
             )
+        elif kind == "radii":
+            first = curve.FirstParameter()
+            last = curve.LastParameter()
+            keep = True
+            for sample in range(9):
+                p = curve.Value(first + (last - first) * sample / 8.0)
+                radius = math.hypot(p.X(), p.Y())
+                if not any(abs(radius - value) <= radial_tol for value in radii):
+                    keep = False
+                    break
+                if z_filter is not None and abs(p.Z() - float(z_filter)) > radial_tol:
+                    keep = False
+                    break
         if keep:
             selected_edges.append(edge)
         explorer.Next()
@@ -759,55 +799,6 @@ def ocp_multi_chamfer(
         raise CsgEvalError("cannot transfer the multi-edge chamfer result")
     if not writer.Write(str(output_path)):
         raise CsgEvalError("cannot write the multi-edge chamfer result")
-
-
-def isolate_rep_placements(output_path: Path) -> None:
-    """Gives SHAPE_REPRESENTATION / ADVANCED_BREP_SHAPE_REPRESENTATION a
-    dedicated AXIS2_PLACEMENT_3D so downstream rigid transforms that reset rep
-    placements to identity never move geometry faces sharing #13.
-    """
-    txt = output_path.read_text()
-    ids = [int(m) for m in re.findall(r"^#(\d+)=", txt, re.M)]
-    if not ids:
-        return
-    nxt = max(ids) + 1
-    p_orig, d_x, d_z, ax_id = nxt, nxt + 1, nxt + 2, nxt + 3
-    extra = (
-        f"#{p_orig}=CARTESIAN_POINT('',(0.0,0.0,0.0));\n"
-        f"#{d_x}=DIRECTION('',(1.0,0.0,0.0));\n"
-        f"#{d_z}=DIRECTION('',(0.0,0.0,1.0));\n"
-        f"#{ax_id}=AXIS2_PLACEMENT_3D('',#{p_orig},#{d_z},#{d_x});\n"
-    )
-    # Find identity AXIS2_PLACEMENT_3D refs used in SHAPE_REPRESENTATION
-    sr_matches = re.findall(
-        r"^#\d+=SHAPE_REPRESENTATION\([^,]+,\(#(\d+)\),#\d+\);",
-        txt,
-        re.M,
-    )
-    if not sr_matches:
-        return
-    rep_ax = sr_matches[0]
-
-    def _swap_line(line: str) -> str:
-        if line.startswith("#") and (
-            "=SHAPE_REPRESENTATION(" in line
-            or "=ADVANCED_BREP_SHAPE_REPRESENTATION(" in line
-        ):
-            return re.sub(
-                rf"([,(])#{rep_ax}(\))",
-                rf"\1#{ax_id}\2",
-                line,
-            )
-        return line
-
-    lines = [_swap_line(l) for l in txt.splitlines()]
-    out = "\n".join(lines) + "\n"
-    last_end = out.rfind("ENDSEC;")
-    if last_end >= 0:
-        out = out[:last_end] + extra + out[last_end:]
-    if ",.U." in out:
-        out = out.replace(",.U.,", ",.F.,").replace(",.U.,", ",.F.,").replace(",.U.)", ",.F.)")
-    output_path.write_text(out)
 
 
 def evaluate_with_solidcraft(
@@ -921,22 +912,10 @@ def evaluate_with_solidcraft(
         flush_pending()
 
         root_bodies = [body_of[r] for r in roots]
-        final_body = root_bodies[0]
-        if len(root_bodies) > 1:
-            script.append(
-                {
-                    "command": "solid.combine",
-                    "params": {
-                        "target": final_body,
-                        "tools": root_bodies[1:],
-                        "operation": "join",
-                    },
-                }
-            )
         script.append(
             {
                 "command": "file.export_step",
-                "params": {"path": str(output_path), "bodies": [final_body]},
+                "params": {"path": str(output_path), "bodies": root_bodies},
             }
         )
         script_path = tmpdir / "script.json"
@@ -957,7 +936,6 @@ def evaluate_with_solidcraft(
         or output_path.stat().st_size == 0
     ):
         return None
-    isolate_rep_placements(output_path)
     if layers_path is not None:
         colorize_output(output_path, layers_path)
     preserve_input_header(text, output_path)
@@ -1026,9 +1004,30 @@ def evaluate(
                         )
                     leaf_path = tmpdir / f"leaf-{step.operand}.step"
                     payload = step.payload or {}
-                    selected = select_edges(tool, leaf_path, payload, timeout)
                     op = payload.get("op")
                     size = float(payload.get("size", 0.0))
+                    selector = payload.get("selector") or {"kind": "all"}
+                    # A radial selector depends on the actual curve geometry,
+                    # not on DRAW's bounding boxes, so it always uses the OCP
+                    # multi-edge chamfer path.
+                    if op == "chamfer" and selector.get("kind") == "radii":
+                        angle = payload.get("angle")
+                        if angle is not None and abs(float(angle) - 45.0) > 1e-6:
+                            raise CsgEvalError(
+                                "angled chamfer needs a reference face; only "
+                                "equal-distance (45 degree) chamfers are "
+                                "supported"
+                            )
+                        chamfer_path = tmpdir / f"chamfer-{step.ref}.step"
+                        ocp_multi_chamfer(
+                            leaf_path, selector, size, chamfer_path
+                        )
+                        commands.append(
+                            f'testreadstep "{_tcl_path(chamfer_path)}" '
+                            f"r{step.ref}"
+                        )
+                        continue
+                    selected = select_edges(tool, leaf_path, payload, timeout)
                     if op == "fillet":
                         if not selected:
                             raise CsgEvalError(

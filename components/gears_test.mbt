@@ -170,3 +170,72 @@ test "planetary gearbox and smooth spur gear export glTF" {
   let spur_gltf = @cad.gltf_safe_design(spur.to_design()).to_gltf()
   assert_true(spur_gltf.contains("\"2.0\""))
 }
+
+///|
+test "motorized_gearbox tolerance_mm keeps outer casing bounding box invariant" {
+  let stages = [
+    @components.MotorizedStageSpec::new(
+      module_mm=2.0,
+      sun_teeth=12,
+      planet_teeth=20,
+      planet_count=4,
+      gear_length_mm=10.0,
+      num_elbows=4,
+      planet_bearing="FR8-2RS",
+    ),
+  ]
+  let gb_petg = @components.motorized_gearbox(
+    name="gb_petg",
+    stages~,
+    motor_source="a12",
+    tolerance_mm=0.042,
+    detail=@step_common.DetailLevel::Simplified,
+  )
+  let gb_pla = @components.motorized_gearbox(
+    name="gb_pla",
+    stages~,
+    motor_source="a12",
+    tolerance_mm=0.25,
+    detail=@step_common.DetailLevel::Simplified,
+  )
+  let d_petg = gb_petg.to_design()
+  let d_pla = gb_pla.to_design()
+  let union_bbox = fn(d : @step_cad.Design) {
+    let mut x0 = 1.0e9
+    let mut x1 = -1.0e9
+    let mut y0 = 1.0e9
+    let mut y1 = -1.0e9
+    let mut z0 = 1.0e9
+    let mut z1 = -1.0e9
+    for node in d.nodes {
+      let b = node.bounding_box()
+      if b.0 < x0 {
+        x0 = b.0
+      }
+      if b.1 > x1 {
+        x1 = b.1
+      }
+      if b.2 < y0 {
+        y0 = b.2
+      }
+      if b.3 > y1 {
+        y1 = b.3
+      }
+      if b.4 < z0 {
+        z0 = b.4
+      }
+      if b.5 > z1 {
+        z1 = b.5
+      }
+    }
+    (x0, x1, y0, y1, z0, z1)
+  }
+  let b_petg = union_bbox(d_petg)
+  let b_pla = union_bbox(d_pla)
+  assert_true((b_petg.0 - b_pla.0).abs() < 1.0e-6)
+  assert_true((b_petg.1 - b_pla.1).abs() < 1.0e-6)
+  assert_true((b_petg.2 - b_pla.2).abs() < 1.0e-6)
+  assert_true((b_petg.3 - b_pla.3).abs() < 1.0e-6)
+  assert_true((b_petg.4 - b_pla.4).abs() < 1.0e-6)
+  assert_true((b_petg.5 - b_pla.5).abs() < 1.0e-6)
+}

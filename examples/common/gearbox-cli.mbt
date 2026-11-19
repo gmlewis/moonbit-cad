@@ -19,6 +19,7 @@ pub(all) struct GearboxConfig {
   num_planets : String
   gear_lengths : String
   num_elbows : String
+  tolerance_mm : Double
   planet_bearings : String
   casing_wall_mm : Double
   flange_thickness_mm : Double
@@ -53,6 +54,7 @@ pub fn GearboxConfig::new(
   num_planets~ : String = "4",
   gear_lengths~ : String = "10",
   num_elbows~ : String = "4",
+  tolerance_mm~ : Double = 0.2,
   planet_bearings~ : String = "FR8-2RS",
   casing_wall_mm~ : Double = 6.0,
   flange_thickness_mm~ : Double = 6.0,
@@ -84,6 +86,7 @@ pub fn GearboxConfig::new(
     num_planets,
     gear_lengths,
     num_elbows,
+    tolerance_mm,
     planet_bearings,
     casing_wall_mm,
     flange_thickness_mm,
@@ -206,6 +209,7 @@ async fn build_gearbox_component_with_cache(
     flange_extra_mm=config.flange_extra_mm,
     carrier_thickness_mm=config.carrier_thickness_mm,
     coupling_shaft_mm=config.coupling_shaft_mm,
+    tolerance_mm=config.tolerance_mm,
     output_bearing=config.output_bearing,
     output_free_length_mm=output_free,
     output_collar_width_mm=config.collar_width_mm,
@@ -420,6 +424,10 @@ pub async fn run_gearbox_cli(defaults : GearboxConfig) -> Unit {
     "numElbows": @cli.opt_string(
       help="Comma-separated herringbone elbow counts per stage (default \{defaults.num_elbows}; 0 = straight gears)",
     ),
+    "tolerance": @cli.opt_double(
+      defaults.tolerance_mm,
+      help="Radial/flank printing clearance in mm (e.g. 0.042 for 1Off PETG, 0.25 for IVI PLA)",
+    ),
     "planetBearing": @cli.opt_string(
       help="Comma-separated planet bearings per stage (default \{defaults.planet_bearings})",
     ),
@@ -499,6 +507,7 @@ pub async fn run_gearbox_cli(defaults : GearboxConfig) -> Unit {
     num_planets: args.string_opt("numPlanets").unwrap_or(defaults.num_planets),
     gear_lengths: args.string_opt("gearLength").unwrap_or(defaults.gear_lengths),
     num_elbows: args.string_opt("numElbows").unwrap_or(defaults.num_elbows),
+    tolerance_mm: args.double("tolerance"),
     planet_bearings: args
     .string_opt("planetBearing")
     .unwrap_or(defaults.planet_bearings),
@@ -546,6 +555,7 @@ pub async fn run_gearbox_cli(defaults : GearboxConfig) -> Unit {
             flange_extra_mm=cfg.flange_extra_mm,
             carrier_thickness_mm=cfg.carrier_thickness_mm,
             coupling_shaft_mm=cfg.coupling_shaft_mm,
+            tolerance_mm=cfg.tolerance_mm,
             motor_source~,
             detail~,
           )

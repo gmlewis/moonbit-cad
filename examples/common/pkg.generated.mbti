@@ -44,6 +44,7 @@ pub(all) struct GearboxConfig {
   num_planets : String
   gear_lengths : String
   num_elbows : String
+  tolerance_mm : Double
   planet_bearings : String
   casing_wall_mm : Double
   flange_thickness_mm : Double
@@ -61,7 +62,7 @@ pub(all) struct GearboxConfig {
   moteus_shroud : Bool
   motor_deg : Double
 }
-pub fn GearboxConfig::new(prog? : String, description? : String, gearbox_name? : String, links_path? : String, num_stages? : Int32, preset? : String, motor_source? : String, modules? : String, sun_teeth? : String, planet_teeth? : String, num_planets? : String, gear_lengths? : String, num_elbows? : String, planet_bearings? : String, casing_wall_mm? : Double, flange_thickness_mm? : Double, flange_extra_mm? : Double, carrier_thickness_mm? : Double, coupling_shaft_mm? : Double, output_bearing? : String, output_free_length_mm? : Double, collar_width_mm? : Double, collar_outer_mm? : Double, no_output_hub? : Bool, no_tire? : Bool, dual_output_bearing? : Bool, tire_mount_flush? : Bool, moteus_shroud? : Bool, motor_deg? : Double) -> Self
+pub fn GearboxConfig::new(prog? : String, description? : String, gearbox_name? : String, links_path? : String, num_stages? : Int32, preset? : String, motor_source? : String, modules? : String, sun_teeth? : String, planet_teeth? : String, num_planets? : String, gear_lengths? : String, num_elbows? : String, tolerance_mm? : Double, planet_bearings? : String, casing_wall_mm? : Double, flange_thickness_mm? : Double, flange_extra_mm? : Double, carrier_thickness_mm? : Double, coupling_shaft_mm? : Double, output_bearing? : String, output_free_length_mm? : Double, collar_width_mm? : Double, collar_outer_mm? : Double, no_output_hub? : Bool, no_tire? : Bool, dual_output_bearing? : Bool, tire_mount_flush? : Bool, moteus_shroud? : Bool, motor_deg? : Double) -> Self
 
 pub(all) struct OutputPaths {
   step : String?
