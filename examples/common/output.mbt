@@ -29,6 +29,7 @@ pub(all) struct OutputPaths {
   threads : String
   bed_size : String
   check : Bool
+  analyze : Bool
   collisions : Bool
   validate : Bool
   validate_meshes : Bool
@@ -189,6 +190,10 @@ pub fn with_output_args(spec : Map[String, @cli.Arg]) -> Map[String, @cli.Arg] {
     @cli.flag(help="Print assembly/hardware warnings to stderr"),
   )
   spec.set(
+    "analyze",
+    @cli.flag(help="Print statics, CoM, inertia, and joint torque margins"),
+  )
+  spec.set(
     "collisions",
     @cli.flag(help="Analyze placed parts for unintended overlaps"),
   )
@@ -233,6 +238,7 @@ pub fn output_paths(args : @cli.Args) -> OutputPaths {
     threads: args.string_opt("threads").unwrap_or(""),
     bed_size: args.string_opt("bedSize").unwrap_or(""),
     check: args.flag("check"),
+    analyze: args.flag("analyze"),
     collisions: args.flag("collisions"),
     validate: args.flag("validate"),
     validate_meshes: args.flag("validate-meshes"),
@@ -311,9 +317,99 @@ fn any_output(output : OutputPaths) -> Bool {
   output.build_package is Some(_) ||
   output.print_parts is Some(_) ||
   output.posed_parts is Some(_) ||
+  output.analyze ||
   output.collisions ||
   output.validate ||
   output.validate_meshes
+}
+
+///|
+/// True when any output writes a file (everything except `--analyze`).
+fn has_file_output(output : OutputPaths) -> Bool {
+  output.step is Some(_) ||
+  output.assembly is Some(_) ||
+  output.assembly_instanced is Some(_) ||
+  output.eval is Some(_) ||
+  output.gltf is Some(_) ||
+  output.bpy is Some(_) ||
+  output.blender is Some(_) ||
+  output.blend is Some(_) ||
+  output.urdf is Some(_) ||
+  output.bundle is Some(_) ||
+  output.bom is Some(_) ||
+  output.plan is Some(_) ||
+  output.report is Some(_) ||
+  output.control is Some(_) ||
+  output.pins is Some(_) ||
+  output.build_package is Some(_) ||
+  output.print_parts is Some(_) ||
+  output.posed_parts is Some(_) ||
+  output.collisions ||
+  output.validate ||
+  output.validate_meshes
+}
+
+///|
+fn analysis_number(value : Double) -> String {
+  let rounded = (value * 1000.0).round() / 1000.0
+  rounded.to_string()
+}
+
+///|
+/// Prints the whole-robot statics table to stdout.
+fn print_robot_analysis(analysis : @cad.RobotAnalysis) -> Unit {
+  println("Robot analysis: " + analysis_number(analysis.total_mass_kg) + " kg")
+  for pose in analysis.poses {
+    println(
+      "Pose '" +
+      pose.name +
+      "': CoM (" +
+      analysis_number(pose.com_m.0) +
+      ", " +
+      analysis_number(pose.com_m.1) +
+      ", " +
+      analysis_number(pose.com_m.2) +
+      ") m, Iyy " +
+      analysis_number(pose.inertia.iyy) +
+      " kg m^2",
+    )
+    println(
+      "  joint                     tau_static   tau_rated   safety   status",
+    )
+    for joint in pose.joints {
+      println(
+        "  " +
+        joint.joint +
+        "  " +
+        analysis_number(joint.tau_static_nm) +
+        "  " +
+        analysis_number(joint.tau_rated_nm) +
+        "  " +
+        analysis_number(joint.safety_factor) +
+        "  " +
+        (if joint.ok { "OK" } else { "LOW" }),
+      )
+    }
+    for contact in pose.contacts {
+      println(
+        "  contact '" +
+        contact.name +
+        "' min z " +
+        analysis_number(contact.min_z_m) +
+        " m",
+      )
+    }
+    if pose.contact_misalignment_m > 0.0 {
+      println(
+        "  contact misalignment " +
+        analysis_number(pose.contact_misalignment_m * 1000.0) +
+        " mm",
+      )
+    }
+  }
+  for warning in analysis.warnings {
+    println("warning: " + warning)
+  }
 }
 
 ///|
@@ -409,6 +505,14 @@ pub async fn write_output(
     )
   }
   let bed = output.print_bed()
+  if output.analyze {
+    print_robot_analysis(
+      @cad.analyze_robot(comp, [("default", joint_positions)]),
+    )
+    if !has_file_output(output) && !output.check && !output.collisions {
+      return
+    }
+  }
   if output.check {
     let warnings = comp.assembly_checks(bed~)
     for warning in warnings {
@@ -600,7 +704,7 @@ pub async fn write_output(
       }
       @fs.mkdir(dir + "/printable", recursive=true, allow_exist=true)
       let written : Array[String] = []
-      for file in comp.build_package_files(bed~) {
+      for file in comp.build_package_files(bed~, joint_positions~) {
         @step_cad.write_text_file(file.content, Some(dir + "/" + file.path))
         written.push(file.path)
       }

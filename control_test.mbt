@@ -142,3 +142,43 @@ test "firmware header lists bindings, pins, and sensors" {
   assert_true(header.contains("1.0f"))
   assert_true(header.contains("microswitch"))
 }
+
+///|
+test "control constants header and lqr model reflect the tree" {
+  let base = analysis_arm(30.0).add_control_binding(
+    @cad.ControlBinding::new(
+      "arm_joint",
+      actuator="arm",
+      channel="can0:1",
+      gear_ratio=6.0,
+    ),
+  )
+  let header = base.control_params_header()
+  assert_true(header.contains("#define ROBOT_TOTAL_MASS_KG 2.0f"))
+  assert_true(header.contains("#define ROBOT_COM_X_M 0.5f"))
+  assert_true(header.contains("#define ROBOT_IYY_KGM2"))
+  assert_true(header.contains("#define ROBOT_GROUND_Z_M 0.0f"))
+  assert_true(header.contains("#define ROBOT_JOINT_COUNT 1"))
+  assert_true(header.contains("\"arm_joint\""))
+  assert_true(header.contains("\"can0:1\""))
+  assert_true(header.contains("6.0f"))
+  assert_true(header.contains("30.0f"))
+
+  let py = base.lqr_model_python()
+  assert_true(py.contains("class RobotConstants"))
+  assert_true(py.contains("total_mass_kg: float = 2.0"))
+  assert_true(py.contains("ground_z_m: float = 0.0"))
+  assert_true(py.contains("class JointConstants"))
+  assert_true(py.contains("can_id=\"can0:1\""))
+  assert_true(py.contains("def inverted_pendulum_AB"))
+  assert_true(
+    py.contains("return [[0.0, 1.0], [a, 0.0]], [[0.0], [1.0 / inertia]]"),
+  )
+}
+
+///|
+test "control constants list only commandable joints" {
+  let header = analysis_arm(10.0).control_params_header()
+  assert_true(header.contains("#define ROBOT_JOINT_COUNT 0"))
+  assert_true(!header.contains("arm_joint"))
+}

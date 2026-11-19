@@ -89,6 +89,7 @@ pub(all) struct OutputPaths {
   threads : String
   bed_size : String
   check : Bool
+  analyze : Bool
   collisions : Bool
   validate : Bool
   validate_meshes : Bool

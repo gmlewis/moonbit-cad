@@ -245,6 +245,8 @@ Every example supports the shared output flags:
 - `--posed-parts <dir>` — world-posed per-link STEP files for exact
   interference analysis.
 - `--collisions` — conservative OBB/AABB collision and interference audit.
+- `--analyze` — whole-robot mass, CoM, inertia, static joint torque margins, and
+  wheel/foot ground-contact alignment.
 - `-o`, `--assembly`, `--gltf`, `--blender`, `--urdf`, `--bundle`,
   `--package`, `--bom`, `--control`, `--pins`, and `--check`.
 
@@ -348,6 +350,8 @@ test one example:
 | `pcb-connectors.csv` | Imported PCB connector placements (reference, value, footprint, position, side). |
 | `link-parts.csv` | Link-to-part map used by the drawing generator. |
 | `firmware.h` | C header: joint bindings, gear ratios, limits, pins, and sensors. |
+| `control_params.h` | C header: robot mass, CoM, inertia, ground contact, and commandable joint constants. |
+| `lqr_model.py` | Python dataclasses with the same constants and an inverted-pendulum `A`/`B` helper. |
 | `assembly.step` | Posed assembly STEP. |
 | `bundle/` | URDF, `package.xml`, glTF meshes, and per-link STEP parts. |
 

@@ -72,3 +72,102 @@ test "placed shapes carry world poses" {
   let child_shape = shapes[1]
   assert_true(child_shape.obb.center.2 > 40.0)
 }
+
+///|
+fn analysis_arm(effort : Double) -> @cad.Component {
+  let arm_body = @cad.BodyPart::custom(
+    "arm_body",
+    @step_cad.Cuboid::new(1.0, 0.1, 0.1).with_name("arm_body"),
+    @urdf.Inertial::from_box(
+      1.0,
+      0.1,
+      0.1,
+      mass=2.0,
+      origin=@urdf.Origin::new(xyz=(0.5, 0.0, 0.0)),
+    ),
+  )
+  let base = @cad.Component::new("base").add_mate_mm_deg(
+    "joint",
+    axis=(0.0, 1.0, 0.0),
+  )
+  let arm = @cad.Component::new("arm").add_body(arm_body)
+  base.attach(
+    "arm_joint",
+    parent_mate="joint",
+    arm,
+    child_mate="origin",
+    spec=@cad.JointSpec::revolute(
+      @urdf.JointLimit::new(
+        effort~,
+        velocity=1.0,
+        lower=Some(-3.0),
+        upper=Some(3.0),
+      ),
+    ),
+  )
+}
+
+///|
+test "static gravity torque matches a known horizontal arm" {
+  let analysis = @cad.analyze_robot(analysis_arm(10.0), [
+    ("horizontal", Map([])),
+  ])
+  assert_true((analysis.total_mass_kg - 2.0).abs() < 1.0e-9)
+  let pose = analysis.poses[0]
+  assert_true((pose.com_m.0 - 0.5).abs() < 1.0e-9)
+  assert_true(pose.com_m.1.abs() < 1.0e-9)
+  assert_true(pose.com_m.2.abs() < 1.0e-9)
+  assert_eq(pose.joints.length(), 1)
+  let joint = pose.joints[0]
+  assert_eq(joint.joint, "arm_joint")
+  let expected = 2.0 * 9.80665 * 0.5
+  assert_true((joint.tau_static_nm - expected).abs() < 1.0e-4)
+  assert_true((joint.tau_rated_nm - 10.0).abs() < 1.0e-9)
+  assert_true(joint.safety_factor < 1.5)
+  assert_false(joint.ok)
+  assert_true(analysis.warnings.length() > 0)
+}
+
+///|
+test "safety factor passes with a stronger actuator" {
+  let analysis = @cad.analyze_robot(analysis_arm(30.0), [
+    ("horizontal", Map([])),
+  ])
+  let joint = analysis.poses[0].joints[0]
+  assert_true(joint.safety_factor > 3.0)
+  assert_true(joint.ok)
+  assert_eq(analysis.warnings.length(), 0)
+}
+
+///|
+test "wheel contact links report ground misalignment" {
+  let base = @cad.Component::new("base")
+    .add_mate_mm_deg("l_mount", z=0.0)
+    .add_mate_mm_deg("r_mount", z=12.0)
+  let left = @cad.Component::new("l_wheel_link").add_body(
+    @cad.BodyPart::box_mm("wheel_body", 10.0, 10.0, 10.0),
+  )
+  let right = @cad.Component::new("r_wheel_link").add_body(
+    @cad.BodyPart::box_mm("wheel_body", 10.0, 10.0, 10.0),
+  )
+  let comp = base
+    .attach(
+      "l_wheel_fixed",
+      parent_mate="l_mount",
+      left,
+      spec=@cad.JointSpec::fixed(),
+    )
+    .attach(
+      "r_wheel_fixed",
+      parent_mate="r_mount",
+      right,
+      spec=@cad.JointSpec::fixed(),
+    )
+  let analysis = @cad.analyze_robot(comp, [("default", Map([]))])
+  let pose = analysis.poses[0]
+  assert_eq(pose.contacts.length(), 2)
+  assert_true((pose.contact_misalignment_m - 0.012).abs() < 1.0e-6)
+  assert_true(analysis.warnings.length() > 0)
+  let constants = comp.control_constants()
+  assert_true((constants.ground_z_m - -0.005).abs() < 1.0e-6)
+}

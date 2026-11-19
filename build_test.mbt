@@ -120,15 +120,34 @@ test "build package files cover sourcing, print list, torque, and procedure" {
   assert_true(manifest.contains("`sourcing.csv`"))
   assert_true(manifest.contains("bundle/parts"))
   let files = root.build_package_files(name="demo")
-  assert_eq(files.length(), 15)
+  assert_eq(files.length(), 17)
   let names : Array[String] = files.map(fn(file) { file.path })
   for
     name in [
       "START-HERE.md", "NAME-KEY.md", "README.md", "bom.csv", "sourcing.csv", "print-list.csv",
       "fasteners.csv", "assembly.txt", "report.txt", "control.yaml", "pins.csv",
+      "control_params.h", "lqr_model.py",
     ] {
     assert_true(names.contains(name))
   }
+}
+
+///|
+test "build package control constants follow the requested pose" {
+  let positions : Map[String, Double] = Map([])
+  positions.set("arm_joint", -1.5707963267948966)
+  let files = analysis_arm(10.0).build_package_files(
+    name="demo",
+    joint_positions=positions,
+  )
+  let mut header = ""
+  for file in files {
+    if file.path == "control_params.h" {
+      header = file.content
+    }
+  }
+  assert_true(header.contains("ROBOT_COM_Z_M 0.5"))
+  assert_true(header.contains("ROBOT_GROUND_Z_M 0.0f"))
 }
 
 ///|

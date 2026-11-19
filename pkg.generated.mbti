@@ -9,6 +9,8 @@ import {
 }
 
 // Values
+pub fn analyze_robot(Component, Array[(String, Map[String, Double])]) -> RobotAnalysis
+
 pub fn centered_cuboid_node(Double, Double, Double, name? : String, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/step/cad.SceneNode
 
 pub fn centered_cylinder_node(Double, Double, name? : String, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/step/cad.SceneNode
@@ -227,7 +229,7 @@ pub fn Component::attach(Self, String, parent_mate~ : String, Self, child_mate? 
 pub fn Component::attach_to(Self, String, String, parent_mate~ : String, Self, child_mate? : String, spec? : JointSpec, bom_external? : Bool, explode? : ExplodeSpec?) -> Self
 pub fn Component::bom(Self) -> Bom
 pub fn Component::build_manifest(Self, name? : String) -> String
-pub fn Component::build_package_files(Self, name? : String, bed? : PrintBedSpec) -> Array[BuildFile]
+pub fn Component::build_package_files(Self, name? : String, bed? : PrintBedSpec, joint_positions? : Map[String, Double]) -> Array[BuildFile]
 pub fn Component::build_procedure_text(Self) -> String
 pub fn Component::cable_routes(Self) -> Array[CableRoute]
 pub fn Component::collision_checks(Self, joint_positions? : Map[String, Double], tol? : @collision.TolerancePolicy, policy? : @collision.ContactPolicy) -> Array[String]
@@ -236,6 +238,8 @@ pub fn Component::collision_reports(Self, joint_positions? : Map[String, Double]
 pub fn Component::compile_links(Self, package_name? : String?) -> (Array[CompiledLink], Array[@urdf.Joint], Array[@urdf.Transmission])
 pub fn Component::control_bindings(Self) -> Array[ControlBinding]
 pub fn Component::control_checks(Self) -> Array[String]
+pub fn Component::control_constants(Self, joint_positions? : Map[String, Double]) -> ControlConstants
+pub fn Component::control_params_header(Self, joint_positions? : Map[String, Double]) -> String
 pub fn Component::display_name(Self) -> String
 pub fn Component::fastener_table_csv(Self) -> String
 pub fn Component::firmware_header(Self) -> String
@@ -248,6 +252,7 @@ pub fn Component::harness_checks(Self) -> Array[String]
 pub fn Component::has_explode_spec(Self) -> Bool
 pub fn Component::link_design(Self, String) -> @gmlewis/step/cad.Design?
 pub fn Component::link_parts_csv(Self) -> String
+pub fn Component::lqr_model_python(Self, joint_positions? : Map[String, Double]) -> String
 pub fn Component::name_key_text(Self, name? : String) -> String
 pub fn Component::new(String, description? : String) -> Self
 pub fn Component::pcb_placements_csv(Self) -> String
@@ -292,6 +297,12 @@ pub(all) enum ConnectionKind {
 }
 pub fn ConnectionKind::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
+pub(all) struct ContactAlignment {
+  name : String
+  min_z_m : Double
+}
+
 pub(all) struct ControlBinding {
   joint : String
   actuator : String
@@ -305,6 +316,32 @@ pub(all) struct ControlBinding {
   limit_input : String?
 }
 pub fn ControlBinding::new(String, actuator? : String, channel? : String, mcu_pins? : String, direction? : String, gear_ratio? : Double, soft_lower? : Double?, soft_upper? : Double?, homing_input? : String?, limit_input? : String?) -> Self
+
+#derive(Eq, @debug.Debug)
+pub(all) struct ControlConstants {
+  robot_name : String
+  total_mass_kg : Double
+  com_x_m : Double
+  com_y_m : Double
+  com_z_m : Double
+  ixx_kgm2 : Double
+  iyy_kgm2 : Double
+  izz_kgm2 : Double
+  ground_z_m : Double
+  joints : Array[ControlJointConstants]
+}
+
+#derive(Eq, @debug.Debug)
+pub(all) struct ControlJointConstants {
+  joint : String
+  actuator : String
+  channel : String
+  gear_ratio : Double
+  lower : Double?
+  upper : Double?
+  effort : Double
+  velocity : Double
+}
 
 #derive(Eq, @debug.Debug)
 pub(all) enum ExplodeSpec {
@@ -368,6 +405,15 @@ pub fn JointSpec::prismatic(@urdf.JointLimit, offset_mm? : Double, angle_deg? : 
 pub fn JointSpec::revolute(@urdf.JointLimit, offset_mm? : Double, angle_deg? : Double, flip_axis? : Bool, dynamics? : @urdf.JointDynamics?, mimic? : @urdf.JointMimic?, transmission_reduction? : Double?) -> Self
 pub fn JointSpec::revolute_deg(lower_deg~ : Double, upper_deg~ : Double, effort~ : Double, velocity~ : Double) -> Self
 pub fn JointSpec::to_repr(Self) -> @debug.Repr
+
+#derive(Eq, @debug.Debug)
+pub(all) struct JointTorque {
+  joint : String
+  tau_static_nm : Double
+  tau_rated_nm : Double
+  safety_factor : Double
+  ok : Bool
+}
 
 pub(all) struct PartMeta {
   part_number : String
@@ -434,6 +480,17 @@ pub(all) struct PortLine {
   spec : String
 }
 
+#derive(Eq, @debug.Debug)
+pub(all) struct PoseAnalysis {
+  name : String
+  total_mass_kg : Double
+  com_m : (Double, Double, Double)
+  inertia : @urdf.Inertia
+  joints : Array[JointTorque]
+  contacts : Array[ContactAlignment]
+  contact_misalignment_m : Double
+}
+
 pub(all) struct PowerBudget {
   actuators : Array[ActuatorLine]
   sensors : Array[SensorLine]
@@ -476,6 +533,13 @@ pub fn PrintablePart::bbox_mm(Self) -> (Double, Double, Double)?
 pub fn PrintablePart::est_mass_g(Self, BomLine) -> Double
 pub fn PrintablePart::est_print_min(Self, BomLine) -> Double
 pub fn PrintablePart::fits_bed(Self, PrintBedSpec) -> Bool
+
+#derive(Eq, @debug.Debug)
+pub(all) struct RobotAnalysis {
+  total_mass_kg : Double
+  poses : Array[PoseAnalysis]
+  warnings : Array[String]
+}
 
 pub(all) struct RouteLine {
   path : String

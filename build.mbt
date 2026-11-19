@@ -1317,6 +1317,7 @@ pub fn Component::build_package_files(
   self : Component,
   name~ : String = "",
   bed~ : PrintBedSpec = PrintBedSpec::default(),
+  joint_positions~ : Map[String, Double] = Map([]),
 ) -> Array[BuildFile] {
   let files : Array[BuildFile] = [
     BuildFile::new("START-HERE.md", self.start_here_text(name~, bed~)),
@@ -1333,6 +1334,11 @@ pub fn Component::build_package_files(
     BuildFile::new("pcb-connectors.csv", self.pcb_placements_csv()),
     BuildFile::new("link-parts.csv", self.link_parts_csv()),
     BuildFile::new("firmware.h", self.firmware_header()),
+    BuildFile::new(
+      "control_params.h",
+      self.control_params_header(joint_positions~),
+    ),
+    BuildFile::new("lqr_model.py", self.lqr_model_python(joint_positions~)),
   ]
   let cartridges = parse_cartridges(
     self.parameters.get("print_in_place_gearset").unwrap_or(""),
