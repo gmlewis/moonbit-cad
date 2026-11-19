@@ -54,7 +54,7 @@ echo "Building ${EXAMPLE} ..."
 # `detailed` is the buildable level: it includes heat-set inserts, bearings,
 # and the full fastener schedule. Use `--detail simplified` by hand for a
 # lighter mock-up.
-./run-example.sh "${EXAMPLE}" --headless --detail detailed --package "${OUT}"
+./run-example.sh "${EXAMPLE}" --headless --release --detail detailed --package "${OUT}"
 
 # Every purchased part should carry a viable supplier link. This is a warning,
 # not a build failure, so existing examples keep building while their link

@@ -8,6 +8,7 @@ import {
   "gmlewis/step/components/motion" @step_motion,
   "gmlewis/step/components/standards" @step_standards,
   "gmlewis/urdf",
+  "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/process",
   "moonbitlang/core/math",

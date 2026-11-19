@@ -38,6 +38,12 @@ DRAW_OP = {
     ".INTERSECTION.": "bcommon",
 }
 
+SC_OP = {
+    ".UNION.": "join",
+    ".DIFFERENCE.": "cut",
+    ".INTERSECTION.": "intersect",
+}
+
 SOLID_TYPES = {"MANIFOLD_SOLID_BREP", "BREP_WITH_VOIDS"}
 
 ENTITY_RE = re.compile(r"^\s*#(\d+)\s*=\s*(.*)$", re.S)
@@ -455,6 +461,7 @@ def write_leaf(
     context_ref: int,
     out_path: Path,
     schema: str,
+    leaf_name: str = "operand",
 ) -> None:
     """Writes one leaf solid as a standalone, readable flat STEP document."""
     selected = _closure(records, [leaf_ref, context_ref])
@@ -478,7 +485,9 @@ def write_leaf(
         "APPLICATION_CONTEXT('core data for automotive mechanical design processes')"
     )
     product_context = new(f"PRODUCT_CONTEXT('',#{application},'mechanical')")
-    product = new(f"PRODUCT('operand','operand','',(#{product_context}))")
+    product = new(
+        f"PRODUCT('{leaf_name}','{leaf_name}','',(#{product_context}))"
+    )
     formation = new(f"PRODUCT_DEFINITION_FORMATION('','',#{product})")
     definition_context = new(
         f"PRODUCT_DEFINITION_CONTEXT('part definition',#{application},'design')"
@@ -487,7 +496,7 @@ def write_leaf(
     definition_shape = new(f"PRODUCT_DEFINITION_SHAPE('','',#{definition})")
     representation = new(
         "ADVANCED_BREP_SHAPE_REPRESENTATION("
-        f"'operand',(#{placement},#{leaf_ref}),#{context_ref})"
+        f"'{leaf_name}',(#{placement},#{leaf_ref}),#{context_ref})"
     )
     new(f"SHAPE_DEFINITION_REPRESENTATION(#{definition_shape},#{representation})")
 
@@ -501,10 +510,25 @@ def write_leaf(
         "ENDSEC;",
         "DATA;",
     ]
-    lines.extend(f"{records[eid].text};" for eid in sorted(selected))
+    for eid in sorted(selected):
+        text = records[eid].text
+        if eid == leaf_ref and leaf_name != "operand":
+            text = re.sub(
+                r"^(#\d+\s*=\s*(?:MANIFOLD_SOLID_BREP|BREP_WITH_VOIDS)\s*\(\s*)'[^']*'",
+                rf"\1'{leaf_name}'",
+                text,
+                count=1,
+            )
+        lines.append(f"{text};")
     lines.extend(fresh)
     lines.extend(["ENDSEC;", "END-ISO-10303-21;"])
     out_path.write_text("\n".join(lines) + "\n")
+
+
+def _solidcraft_tool() -> str | None:
+    if os.environ.get("CSG_EVAL_BACKEND", "").lower() == "occt":
+        return None
+    return shutil.which("solidcraft-cli")
 
 
 def _draw_tool() -> str | None:
@@ -737,6 +761,209 @@ def ocp_multi_chamfer(
         raise CsgEvalError("cannot write the multi-edge chamfer result")
 
 
+def isolate_rep_placements(output_path: Path) -> None:
+    """Gives SHAPE_REPRESENTATION / ADVANCED_BREP_SHAPE_REPRESENTATION a
+    dedicated AXIS2_PLACEMENT_3D so downstream rigid transforms that reset rep
+    placements to identity never move geometry faces sharing #13.
+    """
+    txt = output_path.read_text()
+    ids = [int(m) for m in re.findall(r"^#(\d+)=", txt, re.M)]
+    if not ids:
+        return
+    nxt = max(ids) + 1
+    p_orig, d_x, d_z, ax_id = nxt, nxt + 1, nxt + 2, nxt + 3
+    extra = (
+        f"#{p_orig}=CARTESIAN_POINT('',(0.0,0.0,0.0));\n"
+        f"#{d_x}=DIRECTION('',(1.0,0.0,0.0));\n"
+        f"#{d_z}=DIRECTION('',(0.0,0.0,1.0));\n"
+        f"#{ax_id}=AXIS2_PLACEMENT_3D('',#{p_orig},#{d_z},#{d_x});\n"
+    )
+    # Find identity AXIS2_PLACEMENT_3D refs used in SHAPE_REPRESENTATION
+    sr_matches = re.findall(
+        r"^#\d+=SHAPE_REPRESENTATION\([^,]+,\(#(\d+)\),#\d+\);",
+        txt,
+        re.M,
+    )
+    if not sr_matches:
+        return
+    rep_ax = sr_matches[0]
+
+    def _swap_line(line: str) -> str:
+        if line.startswith("#") and (
+            "=SHAPE_REPRESENTATION(" in line
+            or "=ADVANCED_BREP_SHAPE_REPRESENTATION(" in line
+        ):
+            return re.sub(
+                rf"([,(])#{rep_ax}(\))",
+                rf"\1#{ax_id}\2",
+                line,
+            )
+        return line
+
+    lines = [_swap_line(l) for l in txt.splitlines()]
+    out = "\n".join(lines) + "\n"
+    last_end = out.rfind("ENDSEC;")
+    if last_end >= 0:
+        out = out[:last_end] + extra + out[last_end:]
+    if ",.U." in out:
+        out = out.replace(",.U.,", ",.F.,").replace(",.U.,", ",.F.,").replace(",.U.)", ",.F.)")
+    output_path.write_text(out)
+
+
+def evaluate_with_solidcraft(
+    text: str,
+    records: dict[int, Entity],
+    roots: list[int],
+    context_ref: int,
+    schema: str,
+    output_path: Path,
+    timeout: int,
+    layers_path: Path | None,
+) -> str | None:
+    """Evaluates pure boolean CSG trees via ``solidcraft-cli`` (SMLib)."""
+    sc_tool = _solidcraft_tool()
+    if sc_tool is None:
+        return None
+    all_steps: list[Step] = []
+    for root in roots:
+        all_steps.extend(evaluation_plan(records, root))
+    if any(step.kind == "edge" for step in all_steps):
+        return None
+    first_uses: dict[int, int] = {}
+    tool_uses: dict[int, int] = {}
+    for step in all_steps:
+        if step.kind == "boolean":
+            first_uses[step.first] = first_uses.get(step.first, 0) + 1
+            tool_uses[step.second] = tool_uses.get(step.second, 0) + 1
+    for root in roots:
+        first_uses[root] = first_uses.get(root, 0) + 1
+    if any(cnt > 1 for cnt in first_uses.values()):
+        return None
+    if any(ref in tool_uses for ref in first_uses):
+        return None
+
+    with tempfile.TemporaryDirectory(prefix="csg-sc-") as tmp:
+        tmpdir = Path(tmp)
+        script: list[dict] = []
+        body_of: dict[int, str] = {}
+        inserted: set[int] = set()
+        for step in all_steps:
+            if step.kind == "leaf":
+                if step.ref in inserted:
+                    continue
+                inserted.add(step.ref)
+                bname = f"leaf_{step.ref}"
+                leaf_path = tmpdir / f"leaf-{step.ref}.step"
+                write_leaf(
+                    records,
+                    step.ref,
+                    context_ref,
+                    leaf_path,
+                    schema,
+                    leaf_name=bname,
+                )
+                body_of[step.ref] = bname
+                script.append(
+                    {
+                        "command": "file.insert_step",
+                        "params": {"path": str(leaf_path)},
+                    }
+                )
+
+        pending_op: str | None = None
+        pending_target_ref: int | None = None
+        pending_out_ref: int | None = None
+        pending_tools: list[int] = []
+
+        def flush_pending() -> None:
+            nonlocal pending_op, pending_target_ref, pending_out_ref, pending_tools
+            if (
+                pending_op is None
+                or pending_target_ref is None
+                or pending_out_ref is None
+            ):
+                return
+            target_body = body_of[pending_target_ref]
+            keep = any(tool_uses.get(t, 0) > 1 for t in pending_tools)
+            params: dict = {
+                "target": target_body,
+                "tools": [body_of[t] for t in pending_tools],
+                "operation": SC_OP[pending_op],
+            }
+            if keep:
+                params["keep_tools"] = True
+            script.append({"command": "solid.combine", "params": params})
+            for t in pending_tools:
+                if t in tool_uses:
+                    tool_uses[t] -= 1
+            body_of[pending_out_ref] = target_body
+            pending_op = None
+            pending_target_ref = None
+            pending_out_ref = None
+            pending_tools = []
+
+        for step in all_steps:
+            if step.kind != "boolean":
+                continue
+            if (
+                step.op in (".DIFFERENCE.", ".UNION.")
+                and pending_op == step.op
+                and pending_out_ref == step.first
+            ):
+                pending_out_ref = step.ref
+                pending_tools.append(step.second)
+            else:
+                flush_pending()
+                pending_op = step.op
+                pending_target_ref = step.first
+                pending_out_ref = step.ref
+                pending_tools = [step.second]
+        flush_pending()
+
+        root_bodies = [body_of[r] for r in roots]
+        final_body = root_bodies[0]
+        if len(root_bodies) > 1:
+            script.append(
+                {
+                    "command": "solid.combine",
+                    "params": {
+                        "target": final_body,
+                        "tools": root_bodies[1:],
+                        "operation": "join",
+                    },
+                }
+            )
+        script.append(
+            {
+                "command": "file.export_step",
+                "params": {"path": str(output_path), "bodies": [final_body]},
+            }
+        )
+        script_path = tmpdir / "script.json"
+        script_path.write_text(json.dumps(script))
+        try:
+            proc = subprocess.run(
+                [sc_tool, "run", str(script_path), "--validation", "off", "--quiet"],
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired:
+            return None
+
+    if (
+        proc.returncode != 0
+        or not output_path.exists()
+        or output_path.stat().st_size == 0
+    ):
+        return None
+    isolate_rep_placements(output_path)
+    if layers_path is not None:
+        colorize_output(output_path, layers_path)
+    preserve_input_header(text, output_path)
+    return proc.stdout + proc.stderr
+
+
 def evaluate(
     input_path: Path,
     output_path: Path,
@@ -745,13 +972,10 @@ def evaluate(
 ) -> str:
     """Evaluates the CSG tree and writes a flat B-Rep STEP file.
 
-    Returns the combined DRAWEXE output. Raises ``CsgEvalError`` on failure.
+    Prefers ``solidcraft-cli`` (SMLib) for fast boolean evaluation and falls
+    back to OCCT (``DRAWEXE`` / ``occt-draw``) when unavailable or when edge
+    features are present. Raises ``CsgEvalError`` on failure.
     """
-    tool = _draw_tool()
-    if tool is None:
-        raise CsgEvalError(
-            "neither occt-draw nor DRAWEXE is on PATH (install Open CASCADE)"
-        )
     text = input_path.read_text()
     records = parse_records(text)
     roots = csg_roots(records)
@@ -761,6 +985,18 @@ def evaluate(
         )
     context_ref = _find_context(records)
     schema = file_schema(text)
+
+    sc_out = evaluate_with_solidcraft(
+        text, records, roots, context_ref, schema, output_path, timeout, layers_path
+    )
+    if sc_out is not None:
+        return sc_out
+
+    tool = _draw_tool()
+    if tool is None:
+        raise CsgEvalError(
+            "neither solidcraft-cli nor occt-draw / DRAWEXE is on PATH"
+        )
 
     with tempfile.TemporaryDirectory(prefix="csg-eval-") as tmp:
         tmpdir = Path(tmp)

@@ -105,10 +105,21 @@ pub fn GearboxConfig::new(
 
 ///|
 /// Builds the assembled `@cad.Component` for `config` (evaluating boolean
-/// cutouts with OCCT once so assembled/exploded STEPs share crisp solids).
+/// cutouts once so assembled/exploded STEPs share crisp solids).
 pub async fn build_gearbox_component(
   config : GearboxConfig,
   detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
+) -> (@cad.Component, Array[@components.MotorizedStageSpec], String, String) {
+  build_gearbox_component_with_cache(config, detail~, Map([]))
+}
+
+///|
+/// Builds the assembled `@cad.Component` for `config` using a shared boolean
+/// evaluation cache.
+async fn build_gearbox_component_with_cache(
+  config : GearboxConfig,
+  detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
+  bool_cache : Map[String, @step_cad.ImportedStep],
 ) -> (@cad.Component, Array[@components.MotorizedStageSpec], String, String) {
   if config.num_stages < 1 {
     @cli.eprintln("error: --numStages must be at least 1")
@@ -374,7 +385,7 @@ pub async fn build_gearbox_component(
     spec=@cad.JointSpec::merge_rigid(),
   )
   let links_text = @fs.read_file(config.links_path).text() catch { _ => "" }
-  let evaluated = eval_boolean_component(assembly)
+  let evaluated = eval_boolean_component_cached(assembly, bool_cache)
     .with_supplier_links(@cad.parse_supplier_links(links_text))
     .with_param("exploded_view", "exploded.step")
   (evaluated, stage_specs, motor_source, preset)
@@ -509,9 +520,11 @@ pub async fn run_gearbox_cli(defaults : GearboxConfig) -> Unit {
     moteus_shroud: defaults.moteus_shroud && !args.flag("noShroud"),
     motor_deg: args.double("motorDeg"),
   }
-  let (assembly, stage_specs, motor_source, preset) = build_gearbox_component(
+  let bool_cache : Map[String, @step_cad.ImportedStep] = Map([])
+  let (assembly, stage_specs, motor_source, preset) = build_gearbox_component_with_cache(
     cfg,
     detail~,
+    bool_cache,
   )
   let command_joint = assembly.parameters
     .get("command_joint")
@@ -536,7 +549,7 @@ pub async fn run_gearbox_cli(defaults : GearboxConfig) -> Unit {
             motor_source~,
             detail~,
           )
-          let cart_comp = eval_boolean_component(raw_cart)
+          let cart_comp = eval_boolean_component_cached(raw_cart, bool_cache)
           @step_cad.write_text_file(
             cart_comp.to_design().to_step_file(),
             Some(dir + "/printable/MG-STAGE\{k + 1}-CARTRIDGE.step"),

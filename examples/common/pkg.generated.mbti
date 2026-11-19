@@ -13,6 +13,8 @@ pub fn[T] cli_or_abort(Result[T, String]) -> T
 
 pub async fn eval_boolean_component(@gmlewis/cad.Component) -> @gmlewis/cad.Component
 
+pub async fn eval_boolean_component_cached(@gmlewis/cad.Component, Map[String, @gmlewis/step/cad.ImportedStep]) -> @gmlewis/cad.Component
+
 pub fn gearbox_exploded_design(@gmlewis/step/cad.Design, name~ : String) -> @gmlewis/step/cad.Design
 
 pub fn output_paths(@cli.Args) -> OutputPaths

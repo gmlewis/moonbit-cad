@@ -49,7 +49,7 @@ esac
 PREFIX_ARGS=()
 while [[ $# -gt 0 ]]; do
   case "${1:-}" in
-    --view | --view=* | --headless | --no-open)
+    --view | --view=* | --headless | --no-open | --release)
       PREFIX_ARGS+=("$1")
       shift
       ;;
@@ -174,15 +174,20 @@ open_in_solidcraft() {
 
 FORWARD_ARGS=()
 OUT_PATH=""
+PACKAGE_REQUESTED=0
 VIEW_REQUESTED=0
 VIEW_PATH_ARG=""
 VIEW_STEP=""
 HEADLESS_REQUESTED=0
+RELEASE_MODE=0
 i=0
 ARGS=("$@")
 while (( i < ${#ARGS[@]} )); do
   arg="${ARGS[$i]}"
   case "$arg" in
+    --release)
+      RELEASE_MODE=1
+      ;;
     --view)
       VIEW_REQUESTED=1
       ;;
@@ -192,6 +197,18 @@ while (( i < ${#ARGS[@]} )); do
       ;;
     --headless | --no-open)
       HEADLESS_REQUESTED=1
+      ;;
+    --package | -b | --bundle)
+      PACKAGE_REQUESTED=1
+      FORWARD_ARGS+=("$arg")
+      if (( i + 1 < ${#ARGS[@]} )); then
+        i=$((i + 1))
+        FORWARD_ARGS+=("${ARGS[$i]}")
+      fi
+      ;;
+    --package=* | --bundle=*)
+      PACKAGE_REQUESTED=1
+      FORWARD_ARGS+=("$arg")
       ;;
     -o | --out)
       FORWARD_ARGS+=("$arg")
@@ -242,8 +259,8 @@ fi
 
 # --- Headless ---------------------------------------------------------------
 # Agents pass --headless so the run never opens the owner's SolidCraft window.
-# Without -o the STEP still goes to a predictable /tmp path that is printed.
-if (( HEADLESS_REQUESTED )) && (( ! VIEW_REQUESTED )) && [[ -z "$OUT_PATH" ]]; then
+# Without -o (and without --package/--bundle), write to a predictable /tmp path.
+if (( HEADLESS_REQUESTED )) && (( ! VIEW_REQUESTED )) && (( ! PACKAGE_REQUESTED )) && [[ -z "$OUT_PATH" ]]; then
   OUT_PATH="/tmp/$EXAMPLE_NAME.step"
   FORWARD_ARGS+=(-o "$OUT_PATH")
 fi
@@ -253,10 +270,15 @@ if [[ -d "$RUN_PATH/cmd" ]]; then
   RUN_PATH="$RUN_PATH/cmd"
 fi
 
+MOON_RUN_FLAGS=(--quiet)
+if (( RELEASE_MODE )); then
+  MOON_RUN_FLAGS+=(--release)
+fi
+
 if (( ${#FORWARD_ARGS[@]} )); then
-  moon run --quiet "$RUN_PATH" -- "${FORWARD_ARGS[@]}"
+  moon run "${MOON_RUN_FLAGS[@]}" "$RUN_PATH" -- "${FORWARD_ARGS[@]}"
 else
-  moon run --quiet "$RUN_PATH"
+  moon run "${MOON_RUN_FLAGS[@]}" "$RUN_PATH"
 fi
 
 if (( HEADLESS_REQUESTED )); then

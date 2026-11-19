@@ -76,10 +76,118 @@ fn split_step_top_args(s : String) -> Array[String] {
 }
 
 ///|
+/// Replaces STEP unknown logical `.U.` (outside strings, e.g. from SMLib
+/// `B_SPLINE_*` entities) with `.F.` because `gmlewis/step/parse` only accepts
+/// `.T.` and `.F.` for spline closed/self-intersect flags.
+fn normalize_step_logical_unknown(s : String) -> String {
+  if !s.contains(".U.") {
+    return s
+  }
+  s
+  .replace_all(old=",.U.,", new=",.F.,")
+  .replace_all(old=",.U.,", new=",.F.,")
+  .replace_all(old=",.U.)", new=",.F.)")
+}
+
+///|
+/// Ensures `SHAPE_REPRESENTATION` and `ADVANCED_BREP_SHAPE_REPRESENTATION` use a
+/// dedicated identity `AXIS2_PLACEMENT_3D` so `ImportedStep::transformed` never
+/// resets a placement shared with `PLANE` or `CIRCLE` geometry.
+fn isolate_rep_placements(text : String) -> String {
+  let key = "=SHAPE_REPRESENTATION("
+  let idx = match text.find(key) {
+    Some(i) => i
+    None => return text
+  }
+  let mut line_end = text.length()
+  let tail = text.exact_view(start=idx, end=text.length())
+  match tail.find(";") {
+    Some(rel) => line_end = idx + rel + 1
+    None => return text
+  }
+  let sr_line = text.exact_view(start=idx, end=line_end).to_owned()
+  let lp = match sr_line.find(",(#") {
+    Some(i) => i + 3
+    None => return text
+  }
+  let mut rp = lp
+  while rp < sr_line.length() &&
+        sr_line.unsafe_get(rp) >= '0' &&
+        sr_line.unsafe_get(rp) <= '9' {
+    rp += 1
+  }
+  if rp == lp || rp >= sr_line.length() || sr_line.unsafe_get(rp) != ')' {
+    return text
+  }
+  let rep_ax = sr_line.exact_view(start=lp, end=rp).to_owned()
+  let mut max_id = 0
+  let mut pos = 0
+  while pos < text.length() {
+    match text.exact_view(start=pos, end=text.length()).find("\n#") {
+      None => break
+      Some(rel) => {
+        let mut q = pos + rel + 2
+        let mut num = 0
+        while q < text.length() &&
+              text.unsafe_get(q) >= '0' &&
+              text.unsafe_get(q) <= '9' {
+          num = num * 10 + (text.unsafe_get(q).to_int() - '0'.to_int())
+          q += 1
+        }
+        if num > max_id {
+          max_id = num
+        }
+        pos = q
+      }
+    }
+  }
+  if max_id <= 0 {
+    return text
+  }
+  let p_orig = max_id + 1
+  let d_x = max_id + 2
+  let d_z = max_id + 3
+  let ax_id = max_id + 4
+  let extra = "#\{p_orig}=CARTESIAN_POINT('',(0.0,0.0,0.0));\n#\{d_x}=DIRECTION('',(1.0,0.0,0.0));\n#\{d_z}=DIRECTION('',(0.0,0.0,1.0));\n#\{ax_id}=AXIS2_PLACEMENT_3D('',#\{p_orig},#\{d_z},#\{d_x});\n"
+  let sb = StringBuilder()
+  let mut seen_data = false
+  let mut inserted = false
+  for line in text.split("\n") {
+    let s = line.to_owned()
+    if s.trim() == "DATA;" {
+      seen_data = true
+    }
+    if s.has_prefix("#") &&
+      (
+        s.contains("=SHAPE_REPRESENTATION(") ||
+        s.contains("=ADVANCED_BREP_SHAPE_REPRESENTATION(")
+      ) {
+      let replaced = s
+        .replace_all(old="(#\{rep_ax})", new="(#\{ax_id})")
+        .replace_all(old=",#\{rep_ax})", new=",#\{ax_id})")
+      sb.write_string(replaced)
+    } else if seen_data && !inserted && s.trim() == "ENDSEC;" {
+      inserted = true
+      sb.write_string(extra)
+      sb.write_string(s)
+    } else {
+      sb.write_string(s)
+    }
+    sb.write_char('\n')
+  }
+  sb.to_string()
+}
+
+///|
 /// Rewrites standalone 13-arg `B_SPLINE_SURFACE_WITH_KNOTS(...)` statements
-/// written by OCCT into standard ISO 10303-21 AP214 complex entity instances so
-/// `ImportedStep::from_string` parses trimmed swept gear solids cleanly.
-fn normalize_bspline_surface_entities(text : String) -> String {
+/// written by OCCT/SMLib into standard ISO 10303-21 AP214 complex entity
+/// instances so `ImportedStep::from_string` parses trimmed swept gear solids
+/// cleanly.
+fn normalize_bspline_surface_entities(raw_text : String) -> String {
+  let text = normalize_step_logical_unknown(raw_text)
+  if !text.contains("B_SPLINE_SURFACE_WITH_KNOTS(") {
+    return text
+  }
   let out = StringBuilder()
   let n = text.length()
   let mut pos = 0
@@ -167,11 +275,29 @@ fn normalize_bspline_surface_entities(text : String) -> String {
 }
 
 ///|
-/// Evaluates a `Difference` whose base is an `ImportedStep` or `SweptProfile`
-/// via OCCT DRAWEXE.
-async fn eval_imported_difference(
+/// Minimal JSON string literal escaping for local file paths.
+fn json_quote(s : String) -> String {
+  let b = StringBuilder()
+  b.write_char('"')
+  for ch in s {
+    if ch == '\\' {
+      b.write_string("\\\\")
+    } else if ch == '"' {
+      b.write_string("\\\"")
+    } else {
+      b.write_char(ch)
+    }
+  }
+  b.write_char('"')
+  b.to_string()
+}
+
+///|
+/// Extracts `(base_step, cut_step, cache_key, cutter_names)` when `node.shape`
+/// is a `Difference` whose base is an `ImportedStep` or `SweptProfile`.
+fn imported_diff_spec(
   node : @step_cad.SceneNode,
-) -> @step_cad.SceneNode? {
+) -> (String, String, String, Array[String])? {
   let diff = match node.shape {
     @step_cad.Shape::Difference(d) =>
       match d.base.shape {
@@ -183,7 +309,32 @@ async fn eval_imported_difference(
   if diff.cutters.is_empty() {
     return None
   }
-  let temp_dir = @fs.tmpdir(prefix="occt-imp-diff-") catch {
+  let base_design = @step_cad.Design::new(name="base").add(
+    diff.base.with_name("base"),
+  )
+  let mut cut_design = @step_cad.Design::new(name="cut")
+  let cutter_names : Array[String] = []
+  for idx, cutter in diff.cutters {
+    let cname = "cutter_\{idx}"
+    cutter_names.push(cname)
+    cut_design = cut_design.add(cutter.with_name(cname))
+  }
+  let base_step = base_design.to_step_file()
+  let cut_step = cut_design.to_step_file()
+  let cache_key = base_step + "\n---CUTTERS---\n" + cut_step
+  Some((base_step, cut_step, cache_key, cutter_names))
+}
+
+///|
+/// Evaluates one `ImportedStep`/`SweptProfile` difference from its nominal
+/// `base_step` and `cut_step` using `solidcraft-cli` (with `DRAWEXE` fallback).
+async fn run_imported_difference(
+  source_name : String,
+  base_step : String,
+  cut_step : String,
+  cutter_names : Array[String],
+) -> @step_cad.ImportedStep? {
+  let temp_dir = @fs.tmpdir(prefix="sc-imp-diff-") catch {
     err => {
       @cli.eprintln("eval_imported_difference tmpdir failed: \{err}")
       return None
@@ -192,41 +343,51 @@ async fn eval_imported_difference(
   let base_path = temp_dir + "/base.step"
   let cut_path = temp_dir + "/cut.step"
   let out_path = temp_dir + "/out.step"
+  let script_path = temp_dir + "/script.json"
   let tcl_path = temp_dir + "/script.tcl"
-  let base_design = @step_cad.Design::new(name="base").add(
-    diff.base.with_name("base"),
-  )
-  let mut cut_design = @step_cad.Design::new(name="cut")
-  for idx, cutter in diff.cutters {
-    cut_design = cut_design.add(cutter.with_name("cutter_\{idx}"))
-  }
-  let base_step = base_design.to_step_file()
   @step_cad.write_text_file(base_step, Some(base_path))
-  @step_cad.write_text_file(cut_design.to_step_file(), Some(cut_path))
-  let tcl = [
-    "pload ALL",
-    "testreadstep \"\{base_path}\" b",
-    "testreadstep \"\{cut_path}\" c",
-    "bcut r b c",
-    "testwritestep \"\{out_path}\" r",
-    "",
-  ].join("\n")
-  @step_cad.write_text_file(tcl, Some(tcl_path))
-  let (code, proc_out) = @process.collect_output_merged("sh", [
-    "-c",
-    "DRAWEXE -b < \"\{tcl_path}\"",
-  ]) catch {
-    err => {
-      @cli.eprintln("eval_imported_difference DRAWEXE spawn failed: \{err}")
-      @fs.rmdir(temp_dir, recursive=true) catch {
-        _ => ()
+  @step_cad.write_text_file(cut_step, Some(cut_path))
+  let tools_json = cutter_names.map(json_quote).join(",")
+  let script =
+    $|[{"command":"file.insert_step","params":{"path":\{json_quote(base_path)}}},{"command":"file.insert_step","params":{"path":\{json_quote(cut_path)}}},{"command":"solid.combine","params":{"target":"base","tools":[\{tools_json}],"operation":"cut"}},{"command":"file.export_step","params":{"path":\{json_quote(out_path)},"bodies":["base"]}}]
+  @step_cad.write_text_file(script, Some(script_path))
+  let sc_res = Some(
+    @process.collect_output_merged("solidcraft-cli", [
+      "run", script_path, "--validation", "off", "--quiet",
+    ]),
+  ) catch {
+    _ => None
+  }
+  let (code, proc_out) = match sc_res {
+    Some((sc_code, sc_out)) if sc_code == 0 && @fs.exists(out_path) =>
+      (sc_code, sc_out)
+    _ => {
+      let tcl = [
+        "pload ALL",
+        "testreadstep \"\{base_path}\" b",
+        "testreadstep \"\{cut_path}\" c",
+        "bcut r b c",
+        "testwritestep \"\{out_path}\" r",
+        "",
+      ].join("\n")
+      @step_cad.write_text_file(tcl, Some(tcl_path))
+      @process.collect_output_merged("sh", [
+        "-c",
+        "DRAWEXE -b < \"\{tcl_path}\"",
+      ]) catch {
+        err => {
+          @cli.eprintln("eval_imported_difference DRAWEXE spawn failed: \{err}")
+          @fs.rmdir(temp_dir, recursive=true) catch {
+            _ => ()
+          }
+          return None
+        }
       }
-      return None
     }
   }
   let res = if code == 0 && @fs.exists(out_path) {
     let raw_out = @fs.read_file(out_path).text() catch { _ => "" }
-    let norm_out = raw_out.replace(old="\r\n", new="\n")
+    let norm_out = raw_out.replace_all(old="\r\n", new="\n")
     let out_text = match
       (
         base_step.find("HEADER;"),
@@ -241,31 +402,25 @@ async fn eval_imported_difference(
           .exact_view(start=oe + 7, end=norm_out.length())
           .to_owned()
         normalize_bspline_surface_entities(prefix + base_hdr + suffix)
+        |> isolate_rep_placements
       }
-      _ => normalize_bspline_surface_entities(norm_out)
+      _ =>
+        normalize_bspline_surface_entities(norm_out) |> isolate_rep_placements
     }
     if out_text != "" {
-      match @step_cad.ImportedStep::from_string(out_text, source=node.name) {
-        Ok(imported) =>
-          Some(
-            imported
-            .as_shape()
-            .with_name(node.name)
-            .with_color(node.color)
-            .rotate_x(node.rx)
-            .rotate_y(node.ry)
-            .rotate_z(node.rz)
-            .translate(x=node.tx, y=node.ty, z=node.tz),
-          )
+      match @step_cad.ImportedStep::from_string(out_text, source=source_name) {
+        Ok(imported) => Some(imported)
         Err(e) => {
           @cli.eprintln(
-            "eval_imported_difference parse failed for \{node.name}: \{e.message}",
+            "eval_imported_difference parse failed for \{source_name}: \{e.message}",
           )
           None
         }
       }
     } else {
-      @cli.eprintln("eval_imported_difference empty out.step for \{node.name}")
+      @cli.eprintln(
+        "eval_imported_difference empty out.step for \{source_name}",
+      )
       None
     }
   } else {
@@ -281,28 +436,108 @@ async fn eval_imported_difference(
 }
 
 ///|
-/// Evaluates only the boolean / edge-modified bodies of `comp` (recursing into
-/// attached child components) with OCCT once, keeping non-boolean swept/STEP
-/// bodies untouched so `assembled.step`, `exploded.step`, `--posed-parts`, and
-/// `printable/*.step` all share crisp trimmed B-Rep solids quickly.
-pub async fn eval_boolean_component(comp : @cad.Component) -> @cad.Component {
+/// Evaluates a standard CSG boolean/edge node using `to_step_evaluated`.
+async fn run_csg_difference(
+  body_name : String,
+  node : @step_cad.SceneNode,
+) -> @step_cad.ImportedStep? {
+  let design = @step_cad.Design::new(name=body_name).add(node)
+  let evaluated = Some(design.to_step_evaluated()) catch { _ => None }
+  match evaluated {
+    Some(raw_text) => {
+      let step_text = normalize_bspline_surface_entities(
+          raw_text.replace_all(old="\r\n", new="\n"),
+        )
+        |> isolate_rep_placements
+      match @step_cad.ImportedStep::from_string(step_text, source=body_name) {
+        Ok(imported) => Some(imported)
+        Err(e) => {
+          @cli.eprintln(
+            "run_csg_difference parse failed for \{body_name}: \{e.message}",
+          )
+          None
+        }
+      }
+    }
+    None => None
+  }
+}
+
+///|
+/// Collects all uncached boolean evaluations across `comp` into `tasks` so they
+/// can execute concurrently before populating `cache`.
+fn collect_boolean_tasks(
+  comp : @cad.Component,
+  cache : Map[String, @step_cad.ImportedStep],
+  queued : Map[String, Bool],
+  csg_results : Map[String, @step_cad.ImportedStep?],
+  tasks : Array[async () -> (String, Bool, @step_cad.ImportedStep?)],
+) -> Unit {
+  for body in comp.bodies {
+    if shape_has_boolean(body.node.shape) {
+      match imported_diff_spec(body.node) {
+        Some((base_step, cut_step, cache_key, cutter_names)) =>
+          if !cache.contains(cache_key) && !queued.contains(cache_key) {
+            queued.set(cache_key, true)
+            let name = body.node.name
+            tasks.push(async fn() {
+              (
+                cache_key,
+                true,
+                run_imported_difference(name, base_step, cut_step, cutter_names),
+              )
+            })
+          }
+        None => {
+          let csg_key = comp.name + "::" + body.name
+          if !csg_results.contains(csg_key) && !queued.contains(csg_key) {
+            queued.set(csg_key, true)
+            let node = body.node
+            let bname = body.name
+            tasks.push(async fn() {
+              (csg_key, false, run_csg_difference(bname, node))
+            })
+          }
+        }
+      }
+    }
+  }
+  for att in comp.attachments {
+    collect_boolean_tasks(att.child, cache, queued, csg_results, tasks)
+  }
+}
+
+///|
+/// Rebuilds `comp` synchronously using already-evaluated `ImportedStep` caches.
+fn apply_boolean_caches(
+  comp : @cad.Component,
+  cache : Map[String, @step_cad.ImportedStep],
+  csg_results : Map[String, @step_cad.ImportedStep?],
+) -> @cad.Component {
   let bodies : Array[@cad.BodyPart] = []
   for body in comp.bodies {
     if shape_has_boolean(body.node.shape) {
-      match eval_imported_difference(body.node) {
-        Some(node) => {
-          bodies.push({ ..body, node, })
-          continue
-        }
-        None => ()
-      }
-      let design = @step_cad.Design::new(name=body.name).add(body.node)
-      let evaluated = Some(design.to_step_evaluated()) catch { _ => None }
-      match evaluated {
-        Some(step_text) =>
-          match
-            @step_cad.ImportedStep::from_string(step_text, source=body.name) {
-            Ok(imported) => {
+      match imported_diff_spec(body.node) {
+        Some((_, _, cache_key, _)) =>
+          match cache.get(cache_key) {
+            Some(imported) => {
+              let node = imported
+                .as_shape()
+                .with_name(body.node.name)
+                .with_color(body.node.color)
+                .rotate_x(body.node.rx)
+                .rotate_y(body.node.ry)
+                .rotate_z(body.node.rz)
+                .translate(x=body.node.tx, y=body.node.ty, z=body.node.tz)
+              bodies.push({ ..body, node, })
+              continue
+            }
+            None => ()
+          }
+        None => {
+          let csg_key = comp.name + "::" + body.name
+          match csg_results.get(csg_key) {
+            Some(Some(imported)) => {
               let node = imported
                 .as_shape()
                 .with_name(body.name)
@@ -310,18 +545,58 @@ pub async fn eval_boolean_component(comp : @cad.Component) -> @cad.Component {
               bodies.push({ ..body, node, })
               continue
             }
-            Err(_) => ()
+            _ => ()
           }
-        None => ()
+        }
       }
     }
     bodies.push(body)
   }
   let attachments : Array[@cad.Attachment] = []
   for att in comp.attachments {
-    attachments.push({ ..att, child: eval_boolean_component(att.child), })
+    attachments.push({
+      ..att,
+      child: apply_boolean_caches(att.child, cache, csg_results),
+    })
   }
   { ..comp, bodies, attachments, }
+}
+
+///|
+/// Evaluates all uncached boolean / edge-modified bodies of `comp` concurrently
+/// using a shared cache for identical operands.
+pub async fn eval_boolean_component_cached(
+  comp : @cad.Component,
+  cache : Map[String, @step_cad.ImportedStep],
+) -> @cad.Component {
+  let queued : Map[String, Bool] = Map([])
+  let csg_results : Map[String, @step_cad.ImportedStep?] = Map([])
+  let tasks : Array[async () -> (String, Bool, @step_cad.ImportedStep?)] = []
+  collect_boolean_tasks(comp, cache, queued, csg_results, tasks)
+  if !tasks.is_empty() {
+    let completed = @async.all(tasks, max_concurrent=8)
+    for item in completed {
+      let (key, is_imp, res) = item
+      if is_imp {
+        match res {
+          Some(imported) => cache.set(key, imported)
+          None => ()
+        }
+      } else {
+        csg_results.set(key, res)
+      }
+    }
+  }
+  apply_boolean_caches(comp, cache, csg_results)
+}
+
+///|
+/// Evaluates only the boolean / edge-modified bodies of `comp` (recursing into
+/// attached child components) once, keeping non-boolean swept/STEP bodies
+/// untouched so `assembly.step`, `exploded.step`, `--posed-parts`, and
+/// `printable/*.step` all share crisp trimmed B-Rep solids quickly.
+pub async fn eval_boolean_component(comp : @cad.Component) -> @cad.Component {
+  eval_boolean_component_cached(comp, Map([]))
 }
 
 ///|
