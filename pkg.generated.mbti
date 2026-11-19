@@ -33,6 +33,8 @@ pub fn makerpipe_connector(String, String) -> Result[Component, String]
 
 pub fn merge_supplier_links(Array[SupplierLink], Array[SupplierLink]) -> Array[SupplierLink]
 
+pub fn orient_print_design(@gmlewis/step/cad.Design, orient? : PrintBedOrient) -> @gmlewis/step/cad.Design
+
 pub fn parse_detail_level(String) -> @common.DetailLevel?
 
 pub fn parse_double_list(String, Int32, String) -> Result[Array[Double], String]
@@ -215,14 +217,14 @@ pub fn Component::add_mate(Self, @common.MateConnector) -> Self
 pub fn Component::add_mate_mm_deg(Self, String, x? : Double, y? : Double, z? : Double, rx_deg? : Double, ry_deg? : Double, rz_deg? : Double, axis? : (Double, Double, Double)) -> Self
 pub fn Component::add_port(Self, Port) -> Self
 pub fn Component::add_wire_run(Self, WireRun) -> Self
-pub fn Component::assembly_checks(Self) -> Array[String]
+pub fn Component::assembly_checks(Self, bed? : PrintBedSpec) -> Array[String]
 pub fn Component::assembly_plan(Self) -> Array[AssemblyStep]
 pub fn Component::assembly_plan_text(Self) -> String
 pub fn Component::attach(Self, String, parent_mate~ : String, Self, child_mate? : String, spec? : JointSpec, bom_external? : Bool, explode? : ExplodeSpec?) -> Self
 pub fn Component::attach_to(Self, String, String, parent_mate~ : String, Self, child_mate? : String, spec? : JointSpec, bom_external? : Bool, explode? : ExplodeSpec?) -> Self
 pub fn Component::bom(Self) -> Bom
 pub fn Component::build_manifest(Self, name? : String) -> String
-pub fn Component::build_package_files(Self, name? : String) -> Array[BuildFile]
+pub fn Component::build_package_files(Self, name? : String, bed? : PrintBedSpec) -> Array[BuildFile]
 pub fn Component::build_procedure_text(Self) -> String
 pub fn Component::cable_routes(Self) -> Array[CableRoute]
 pub fn Component::collision_checks(Self, joint_positions? : Map[String, Double], tol? : @collision.TolerancePolicy, policy? : @collision.ContactPolicy) -> Array[String]
@@ -248,11 +250,11 @@ pub fn Component::new(String, description? : String) -> Self
 pub fn Component::pcb_placements_csv(Self) -> String
 pub fn Component::placed_shapes(Self, joint_positions? : Map[String, Double]) -> Array[@collision.PlacedShape]
 pub fn Component::power_budget(Self) -> PowerBudget
-pub fn Component::print_list_csv(Self) -> String
+pub fn Component::print_list_csv(Self, bed? : PrintBedSpec) -> String
 pub fn Component::printable_parts(Self) -> Array[PrintablePart]
 pub fn Component::report_text(Self) -> String
 pub fn Component::sourcing_csv(Self) -> String
-pub fn Component::start_here_text(Self, name? : String) -> String
+pub fn Component::start_here_text(Self, name? : String, bed? : PrintBedSpec) -> String
 pub fn Component::to_assembly_step(Self, joint_positions? : Map[String, Double]) -> String
 pub fn Component::to_blender_python(Self, joint_positions? : Map[String, Double], segments? : Int32) -> String
 pub fn Component::to_bom_csv(Self) -> String
@@ -272,6 +274,7 @@ pub fn Component::with_description(Self, String) -> Self
 pub fn Component::with_param(Self, String, String) -> Self
 pub fn Component::with_part(Self, PartMeta) -> Self
 pub fn Component::with_pcb(Self, PcbSpec) -> Self
+pub fn Component::with_print_bed_orient(Self, PrintBedOrient) -> Self
 pub fn Component::with_robot_name(Self, String) -> Self
 pub fn Component::with_sensor(Self, SensorSpec) -> Self
 pub fn Component::with_supplier_links(Self, Array[SupplierLink]) -> Self
@@ -373,9 +376,11 @@ pub(all) struct PartMeta {
   finish : String
   unit_cost_usd : Double
   notes : String
+  print_bed_orient : PrintBedOrient
 }
-pub fn PartMeta::new(String, description? : String, supplier? : String, supplier_url? : String, material? : String, process? : String, finish? : String, unit_cost_usd? : Double, notes? : String) -> Self
+pub fn PartMeta::new(String, description? : String, supplier? : String, supplier_url? : String, material? : String, process? : String, finish? : String, unit_cost_usd? : Double, notes? : String, print_bed_orient? : PrintBedOrient) -> Self
 pub fn PartMeta::with_notes(Self, String) -> Self
+pub fn PartMeta::with_print_bed_orient(Self, PrintBedOrient) -> Self
 pub fn PartMeta::with_supplier_url(Self, String) -> Self
 
 pub(all) struct PcbPlacement {
@@ -436,12 +441,38 @@ pub(all) struct PowerBudget {
 pub fn PowerBudget::new() -> Self
 pub fn PowerBudget::to_text(Self) -> String
 
+#derive(Eq, @debug.Debug)
+pub(all) enum PrintBedOrient {
+  KeepAsIs
+  AutoFlatLargestFace
+  RotateDeg(Double, Double, Double)
+}
+
+#derive(Eq, @debug.Debug)
+pub(all) struct PrintBedSpec {
+  width_mm : Double
+  depth_mm : Double
+  height_mm : Double
+}
+pub fn PrintBedSpec::default() -> Self
+pub fn PrintBedSpec::describe(Self) -> String
+pub fn PrintBedSpec::fits(Self, Double, Double, Double) -> Bool
+pub fn PrintBedSpec::new(width_mm? : Double, depth_mm? : Double, height_mm? : Double) -> Self
+pub fn PrintBedSpec::parse(String) -> Self?
+
 pub(all) struct PrintablePart {
   part_number : String
   component_name : String
   meta : PartMeta
   design : @gmlewis/step/cad.Design
+  volume_mm3 : Double
+  mass_kg : Double
 }
+pub fn PrintablePart::bbox_label(Self) -> String
+pub fn PrintablePart::bbox_mm(Self) -> (Double, Double, Double)?
+pub fn PrintablePart::est_mass_g(Self, BomLine) -> Double
+pub fn PrintablePart::est_print_min(Self, BomLine) -> Double
+pub fn PrintablePart::fits_bed(Self, PrintBedSpec) -> Bool
 
 pub(all) struct RouteLine {
   path : String

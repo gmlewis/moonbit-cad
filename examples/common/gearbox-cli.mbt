@@ -566,7 +566,7 @@ pub async fn run_gearbox_cli(defaults : GearboxConfig) -> Unit {
           )
           let cart_comp = eval_boolean_component_cached(raw_cart, bool_cache)
           @step_cad.write_text_file(
-            cart_comp.to_design().to_step_file(),
+            @cad.orient_print_design(cart_comp.to_design()).to_step_file(),
             Some(dir + "/printable/MG-STAGE\{k + 1}-CARTRIDGE.step"),
           )
         }

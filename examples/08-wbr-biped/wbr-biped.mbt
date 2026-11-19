@@ -1942,7 +1942,7 @@ pub async fn run_cli() -> Unit {
     Some(dir) => {
       let cart = build_planetary_cartridge(params)
       @step_cad.write_text_file(
-        cart.to_design().to_step_file(),
+        @cad.orient_print_design(cart.to_design()).to_step_file(),
         Some(dir + "/printable/WBR-GEAR-CARTRIDGE.step"),
       )
     }

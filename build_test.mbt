@@ -155,6 +155,166 @@ test "start-here guide covers print, buy, and assemble" {
 }
 
 ///|
+fn design_bbox(
+  design : @step_cad.Design,
+) -> (Double, Double, Double, Double, Double, Double)? {
+  let mut first = true
+  let mut min_x = 0.0
+  let mut max_x = 0.0
+  let mut min_y = 0.0
+  let mut max_y = 0.0
+  let mut min_z = 0.0
+  let mut max_z = 0.0
+  for node in design.nodes {
+    let (x0, x1, y0, y1, z0, z1) = node.bounding_box()
+    if first {
+      min_x = x0
+      max_x = x1
+      min_y = y0
+      max_y = y1
+      min_z = z0
+      max_z = z1
+      first = false
+    } else {
+      min_x = if x0 < min_x { x0 } else { min_x }
+      max_x = if x1 > max_x { x1 } else { max_x }
+      min_y = if y0 < min_y { y0 } else { min_y }
+      max_y = if y1 > max_y { y1 } else { max_y }
+      min_z = if z0 < min_z { z0 } else { min_z }
+      max_z = if z1 > max_z { z1 } else { max_z }
+    }
+  }
+  if first {
+    None
+  } else {
+    Some((min_x, max_x, min_y, max_y, min_z, max_z))
+  }
+}
+
+///|
+fn vertical_plate_component(orient : @cad.PrintBedOrient) -> @cad.Component {
+  let profile : Array[(Double, Double)] = [
+    (-50.0, -50.0),
+    (50.0, -50.0),
+    (50.0, 50.0),
+    (-50.0, 50.0),
+  ]
+  @cad.Component::new("plate").add_body(
+    @cad.BodyPart::extruded_profile_mm(
+      "plate_body",
+      profile,
+      8.0,
+      rx_deg=90.0,
+      density=@urdf.Density::pla(),
+    ).with_part(
+      @cad.PartMeta::new(
+        "PLATE-V",
+        description="vertical plate",
+        material="PLA",
+        process="print",
+        print_bed_orient=orient,
+      ),
+    ),
+  )
+}
+
+///|
+fn printed_box_component(
+  part_number : String,
+  sx : Double,
+  sy : Double,
+  sz : Double,
+) -> @cad.Component {
+  @cad.Component::new(part_number.to_lower()).add_body(
+    @cad.BodyPart::box_mm(
+      part_number.to_lower() + "_body",
+      sx,
+      sy,
+      sz,
+      density=@urdf.Density::pla(),
+    ).with_part(
+      @cad.PartMeta::new(
+        part_number,
+        description="printed box",
+        material="PLA",
+        process="print",
+      ),
+    ),
+  )
+}
+
+///|
+test "printable parts auto-orient flat on the print bed" {
+  let comp = vertical_plate_component(@cad.PrintBedOrient::AutoFlatLargestFace)
+  let parts = comp.printable_parts()
+  assert_eq(parts.length(), 1)
+  let box = design_bbox(parts[0].design).unwrap()
+  assert_true((box.4 - 0.0).abs() < 1.0e-6)
+  assert_true((box.5 - 8.0).abs() < 1.0e-6)
+  assert_true(((box.0 + box.1) / 2.0).abs() < 1.0e-6)
+  assert_true(((box.2 + box.3) / 2.0).abs() < 1.0e-6)
+}
+
+///|
+test "explicit print bed rotation lays the plate flat" {
+  let comp = vertical_plate_component(
+    @cad.PrintBedOrient::RotateDeg(-90.0, 0.0, 0.0),
+  )
+  let box = design_bbox(comp.printable_parts()[0].design).unwrap()
+  assert_true((box.4 - 0.0).abs() < 1.0e-6)
+  assert_true((box.5 - 8.0).abs() < 1.0e-6)
+  assert_true(((box.0 + box.1) / 2.0).abs() < 1.0e-6)
+  assert_true(((box.2 + box.3) / 2.0).abs() < 1.0e-6)
+}
+
+///|
+test "keep-as-is still normalizes z and centers xy" {
+  let comp = vertical_plate_component(@cad.PrintBedOrient::KeepAsIs)
+  let box = design_bbox(comp.printable_parts()[0].design).unwrap()
+  assert_true((box.4 - 0.0).abs() < 1.0e-6)
+  assert_true((box.5 - 100.0).abs() < 1.0e-6)
+  assert_true(((box.0 + box.1) / 2.0).abs() < 1.0e-6)
+  assert_true(((box.2 + box.3) / 2.0).abs() < 1.0e-6)
+}
+
+///|
+test "print bed spec parses WxDxH" {
+  let bed = @cad.PrintBedSpec::parse("220x220x250").unwrap()
+  assert_true((bed.width_mm - 220.0).abs() < 1.0e-9)
+  assert_true((bed.depth_mm - 220.0).abs() < 1.0e-9)
+  assert_true((bed.height_mm - 250.0).abs() < 1.0e-9)
+  assert_true(@cad.PrintBedSpec::parse("nope") is None)
+  assert_true(@cad.PrintBedSpec::parse("220x0x250") is None)
+}
+
+///|
+test "print list reports size, bed fit, mass, and time" {
+  let bed = @cad.PrintBedSpec::new(
+    width_mm=220.0,
+    depth_mm=220.0,
+    height_mm=250.0,
+  )
+  let fits = printed_box_component("FITS-1", 100.0, 80.0, 10.0)
+  let csv = fits.print_list_csv(bed~)
+  assert_true(csv.contains("100.0x80.0x10.0"))
+  assert_true(csv.contains("\"YES\""))
+  // 80 cm^3 PLA at 20% infill: 99.2 g solid -> 19.8 g printed.
+  assert_true(csv.contains("19.8"))
+  assert_true(csv.contains("23.8"))
+  assert_true(fits.assembly_checks(bed~).length() == 0)
+
+  let big = printed_box_component("BIG-1", 260.0, 80.0, 10.0)
+  let big_csv = big.print_list_csv(bed~)
+  assert_true(big_csv.contains("260.0x80.0x10.0"))
+  assert_true(big_csv.contains("\"NO\""))
+  let warnings = big.assembly_checks(bed~)
+  let has_bed_warning = warnings.fold(init=false, fn(acc, warning) {
+    acc || warning.contains("exceeds the print bed")
+  })
+  assert_true(has_bed_warning)
+}
+
+///|
 test "start-here guide embeds a visual overview gallery" {
   let root = build_test_component()
   let guide = root.start_here_text(name="demo")

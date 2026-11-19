@@ -52,6 +52,111 @@ pub fn Component::has_explode_spec(self : Component) -> Bool {
 }
 
 ///|
+/// How a printable part is oriented on the print bed.
+#derive(Debug, Eq)
+pub(all) enum PrintBedOrient {
+  /// Keep the modeled orientation; still lift it to `z = 0` and center XY.
+  KeepAsIs
+  /// Rotate so the smallest bounding-box extent is vertical (the largest flat
+  /// face lands on the bed), then lift and center.
+  AutoFlatLargestFace
+  /// Rotate by these extrinsic XYZ Euler angles in degrees, then lift and
+  /// center.
+  RotateDeg(Double, Double, Double)
+}
+
+///|
+/// The printer's usable build volume in millimetres.
+#derive(Debug, Eq)
+pub(all) struct PrintBedSpec {
+  width_mm : Double
+  depth_mm : Double
+  height_mm : Double
+}
+
+///|
+pub fn PrintBedSpec::new(
+  width_mm~ : Double = 220.0,
+  depth_mm~ : Double = 220.0,
+  height_mm~ : Double = 250.0,
+) -> PrintBedSpec {
+  { width_mm, depth_mm, height_mm, }
+}
+
+///|
+/// The common 220 x 220 x 250 mm desktop-printer bed.
+pub fn PrintBedSpec::default() -> PrintBedSpec {
+  PrintBedSpec::new()
+}
+
+///|
+/// Parses `WxDxH` in millimetres, returning `None` for malformed or
+/// non-positive dimensions.
+pub fn PrintBedSpec::parse(text : String) -> PrintBedSpec? {
+  let parts = text.to_lower().split("x").collect()
+  if parts.length() != 3 {
+    return None
+  }
+  let values : Array[Double] = []
+  for part in parts {
+    let value = @string.parse_double(part.trim().to_owned()) catch {
+      _ => return None
+    }
+    if value <= 0.0 {
+      return None
+    }
+    values.push(value)
+  }
+  Some({ width_mm: values[0], depth_mm: values[1], height_mm: values[2], })
+}
+
+///|
+pub fn PrintBedSpec::fits(
+  self : PrintBedSpec,
+  width_mm : Double,
+  depth_mm : Double,
+  height_mm : Double,
+) -> Bool {
+  width_mm <= self.width_mm &&
+  depth_mm <= self.depth_mm &&
+  height_mm <= self.height_mm
+}
+
+///|
+fn print_bed_dim(value : Double) -> String {
+  value.round().to_int().to_string()
+}
+
+///|
+pub fn PrintBedSpec::describe(self : PrintBedSpec) -> String {
+  print_bed_dim(self.width_mm) +
+  "x" +
+  print_bed_dim(self.depth_mm) +
+  "x" +
+  print_bed_dim(self.height_mm)
+}
+
+///|
+/// Sets the print-bed orientation on this component's part metadata and its
+/// bodies' part metadata.
+pub fn Component::with_print_bed_orient(
+  self : Component,
+  orient : PrintBedOrient,
+) -> Component {
+  let part = match self.part {
+    Some(meta) => Some(meta.with_print_bed_orient(orient))
+    None => None
+  }
+  let bodies = self.bodies.map(fn(body) {
+    match body.part {
+      Some(meta) => { ..body, part: Some(meta.with_print_bed_orient(orient)), }
+      None => body
+    }
+  })
+  { ..self, part, bodies, }
+}
+
+///|
 /// Purchasing and manufacturing metadata for one part.
 pub(all) struct PartMeta {
   part_number : String
@@ -63,6 +168,8 @@ pub(all) struct PartMeta {
   finish : String
   unit_cost_usd : Double
   notes : String
+  /// How this part is oriented when exported for printing.
+  print_bed_orient : PrintBedOrient
 }
 
 ///|
@@ -76,6 +183,7 @@ pub fn PartMeta::new(
   finish~ : String = "",
   unit_cost_usd~ : Double = 0.0,
   notes~ : String = "",
+  print_bed_orient~ : PrintBedOrient = AutoFlatLargestFace,
 ) -> PartMeta {
   {
     part_number,
@@ -87,7 +195,16 @@ pub fn PartMeta::new(
     finish,
     unit_cost_usd,
     notes,
+    print_bed_orient,
   }
+}
+
+///|
+pub fn PartMeta::with_print_bed_orient(
+  self : PartMeta,
+  orient : PrintBedOrient,
+) -> PartMeta {
+  { ..self, print_bed_orient: orient, }
 }
 
 ///|
@@ -795,9 +912,30 @@ fn Component::collect_assembly_steps(
 /// unbuildable: bad fastener lengths/engagement/torque, missing parts, invalid
 /// fits, and duplicate names.  Returns one message per problem; an empty array
 /// means the data is consistent.
-pub fn Component::assembly_checks(self : Component) -> Array[String] {
+pub fn Component::assembly_checks(
+  self : Component,
+  bed~ : PrintBedSpec = PrintBedSpec::default(),
+) -> Array[String] {
   let warnings : Array[String] = []
   self.collect_assembly_checks(self.name, false, warnings)
+  for part in self.printable_parts() {
+    match part.bbox_mm() {
+      Some((w, d, h)) =>
+        if !bed.fits(w, d, h) {
+          warnings.push(
+            self.name +
+            ": printable part '" +
+            part.part_number +
+            "' bbox " +
+            part.bbox_label() +
+            " mm exceeds the print bed " +
+            bed.describe() +
+            " mm",
+          )
+        }
+      None => ()
+    }
+  }
   warnings
 }
 

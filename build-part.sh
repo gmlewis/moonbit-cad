@@ -26,6 +26,8 @@ Options:
   --check-interferences        Run the exact SMLib solid-solid overlap check
   --min-overlap=MM3            Ignore overlaps below this volume (default 1.0)
   --exclude-pattern=REGEX      Body-name pattern for intentional contacts
+  --meshes                     Export printable/*.3mf and printable/*.stl
+  --fast                       With --meshes, skip large gear cartridges
   -h, --help                   Show this help and exit
 
 Every build also renders views/{iso,front,left,top,exploded}.png when
@@ -43,6 +45,8 @@ fi
 CHECK_INTERFERENCES=0
 MIN_OVERLAP=1.0
 EXCLUDE_PATTERN=""
+EXPORT_MESHES=0
+FAST_MESHES=0
 EXAMPLE=""
 for arg in "$@"; do
   case "$arg" in
@@ -58,6 +62,12 @@ for arg in "$@"; do
       ;;
     --exclude-pattern=*)
       EXCLUDE_PATTERN="${arg#*=}"
+      ;;
+    --meshes)
+      EXPORT_MESHES=1
+      ;;
+    --fast)
+      FAST_MESHES=1
       ;;
     --)
       ;;
@@ -156,6 +166,18 @@ if [[ -f scripts/render_views.py ]]; then
   fi
 fi
 
+# Optional slicer-ready meshes. Parts are already laid flat by the CAD
+# exporter; --fast skips the large print-in-place cartridges.
+if (( EXPORT_MESHES )); then
+  MESH_ARGS=("${OUT}")
+  if (( FAST_MESHES )); then
+    MESH_ARGS+=(--fast)
+  fi
+  if ! python3 scripts/export_printable_meshes.py "${MESH_ARGS[@]}"; then
+    echo "warning: some mesh exports failed." >&2
+  fi
+fi
+
 # Render the beginner guide as a self-contained HTML page so it opens with
 # proper typography and tables in any browser.
 START_HTML="${OUT}/START-HERE.md"
@@ -174,6 +196,7 @@ Done. Everything you need is in: ${OUT}/
   3. ASSEMBLE ${START_HTML}           (section 3)
   4. VIEW     ${OUT}/exploded.step    (exploded, color-coded)
   5. VIEWS    ${OUT}/views/           (iso, front, left, top, exploded PNGs)
+  6. MESHES   ${OUT}/printable/       (*.3mf / *.stl when built with --meshes)
 
 Open it now:
   open ${START_HTML}

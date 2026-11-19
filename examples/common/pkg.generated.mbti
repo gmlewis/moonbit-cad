@@ -86,12 +86,14 @@ pub(all) struct OutputPaths {
   posed_parts : String?
   detail : String
   threads : String
+  bed_size : String
   check : Bool
   collisions : Bool
   validate : Bool
   validate_meshes : Bool
 }
 pub fn OutputPaths::detail_level(Self) -> @gmlewis/step/components/common.DetailLevel
+pub fn OutputPaths::print_bed(Self) -> @gmlewis/cad.PrintBedSpec
 pub fn OutputPaths::thread_rep(Self) -> @gmlewis/step/components/common.ThreadRepresentation?
 
 // Type aliases

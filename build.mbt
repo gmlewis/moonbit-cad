@@ -20,7 +20,12 @@ pub(all) struct PrintablePart {
   part_number : String
   component_name : String
   meta : PartMeta
+  /// The print-ready design: oriented, lifted to `z = 0`, and centered in XY.
   design : @step_cad.Design
+  /// Solid volume of the selected bodies, in mm^3.
+  volume_mm3 : Double
+  /// Solid mass at 100% infill, in kg.
+  mass_kg : Double
 }
 
 ///|
@@ -39,6 +44,15 @@ pub fn sanitize_part_number(part_number : String) -> String {
 }
 
 ///|
+/// Returns true when `body` belongs to the printable part `part_number`.
+fn body_matches_part(body : BodyPart, part_number : String) -> Bool {
+  match body.part {
+    Some(meta) => meta.part_number == part_number || meta.part_number == ""
+    None => true
+  }
+}
+
+///|
 /// Builds a local-frame design from the bodies of one component.
 fn design_from_bodies(
   name : String,
@@ -49,15 +63,211 @@ fn design_from_bodies(
 ) -> @step_cad.Design {
   let mut design = @step_cad.Design::new(name~, description~, documentation~)
   for body in bodies {
-    match body.part {
-      Some(meta) =>
-        if meta.part_number == part_number || meta.part_number == "" {
-          design = design.add(body.node)
-        }
-      None => design = design.add(body.node)
+    if body_matches_part(body, part_number) {
+      design = design.add(body.node)
     }
   }
   design
+}
+
+///|
+/// Bounding box of every node in a design, or `None` for an empty design.
+fn design_bbox(
+  design : @step_cad.Design,
+) -> (Double, Double, Double, Double, Double, Double)? {
+  let mut first = true
+  let mut min_x = 0.0
+  let mut max_x = 0.0
+  let mut min_y = 0.0
+  let mut max_y = 0.0
+  let mut min_z = 0.0
+  let mut max_z = 0.0
+  for node in design.nodes {
+    let (x0, x1, y0, y1, z0, z1) = node.bounding_box()
+    if first {
+      min_x = x0
+      max_x = x1
+      min_y = y0
+      max_y = y1
+      min_z = z0
+      max_z = z1
+      first = false
+    } else {
+      min_x = if x0 < min_x { x0 } else { min_x }
+      max_x = if x1 > max_x { x1 } else { max_x }
+      min_y = if y0 < min_y { y0 } else { min_y }
+      max_y = if y1 > max_y { y1 } else { max_y }
+      min_z = if z0 < min_z { z0 } else { min_z }
+      max_z = if z1 > max_z { z1 } else { max_z }
+    }
+  }
+  if first {
+    None
+  } else {
+    Some((min_x, max_x, min_y, max_y, min_z, max_z))
+  }
+}
+
+///|
+/// Chooses the rotation that puts the smallest bounding-box extent on Z for
+/// `AutoFlatLargestFace`, or the explicit angles for `RotateDeg`.
+fn print_rotation_deg(
+  orient : PrintBedOrient,
+  design : @step_cad.Design,
+) -> (Double, Double, Double) {
+  match orient {
+    KeepAsIs => (0.0, 0.0, 0.0)
+    RotateDeg(rx, ry, rz) => (rx, ry, rz)
+    AutoFlatLargestFace =>
+      match design_bbox(design) {
+        None => (0.0, 0.0, 0.0)
+        Some((x0, x1, y0, y1, z0, z1)) => {
+          let ex = x1 - x0
+          let ey = y1 - y0
+          let ez = z1 - z0
+          if ez <= ex && ez <= ey {
+            (0.0, 0.0, 0.0)
+          } else if ey <= ex {
+            // Rx(-90 deg) maps the Y extent onto Z.
+            (-90.0, 0.0, 0.0)
+          } else {
+            // Ry(90 deg) maps the X extent onto Z.
+            (0.0, 90.0, 0.0)
+          }
+        }
+      }
+  }
+}
+
+///|
+/// Orients a printable design on the print bed: apply the requested rotation,
+/// then translate so `min_z == 0` and the XY bounding-box center is `(0, 0)`.
+pub fn orient_print_design(
+  design : @step_cad.Design,
+  orient~ : PrintBedOrient = AutoFlatLargestFace,
+) -> @step_cad.Design {
+  let (rx, ry, rz) = print_rotation_deg(orient, design)
+  let rot = @step_common.Placement::rotation_deg(rx, ry, rz)
+  let rot_xform : @step_cad.Transform = {
+    rot: rot.rot,
+    trans: (0.0, 0.0, 0.0),
+  }
+  let mut rotated = @step_cad.Design::new(
+    name=design.name,
+    description=design.description,
+    documentation=design.documentation,
+  )
+  for node in design.nodes {
+    rotated = rotated.add(transform_scene_node(node, rot_xform))
+  }
+  let (dx, dy, dz) = match design_bbox(rotated) {
+    None => (0.0, 0.0, 0.0)
+    Some((x0, x1, y0, y1, z0, _z1)) => (-(x0 + x1) / 2.0, -(y0 + y1) / 2.0, -z0)
+  }
+  let mut out = @step_cad.Design::new(
+    name=design.name,
+    description=design.description,
+    documentation=design.documentation,
+  )
+  for node in rotated.nodes {
+    out = out.add(node.translate(x=dx, y=dy, z=dz))
+  }
+  out
+}
+
+///|
+fn round1(value : Double) -> Double {
+  (value * 10.0).round() / 10.0
+}
+
+///|
+/// Formats a non-negative dimension with exactly one decimal place.
+fn fmt1(value : Double) -> String {
+  let scaled = (value * 10.0).round().to_int()
+  let whole = scaled / 10
+  let tenths = (scaled % 10).abs()
+  whole.to_string() + "." + tenths.to_string()
+}
+
+///|
+fn bbox_label(bbox : (Double, Double, Double)) -> String {
+  let (w, d, h) = bbox
+  fmt1(w) + "x" + fmt1(d) + "x" + fmt1(h)
+}
+
+///|
+fn printable_infill_fraction(line : BomLine) -> Double {
+  let text = print_infill(line)
+  if text == "" {
+    return 1.0
+  }
+  let percent = @string.parse_double(text) catch { _ => 100.0 }
+  percent / 100.0
+}
+
+///|
+/// Rough print-time factor: minutes per gram of deposited material.
+const PRINT_MIN_PER_GRAM : Double = 1.2
+
+///|
+pub fn PrintablePart::bbox_mm(
+  self : PrintablePart,
+) -> (Double, Double, Double)? {
+  match design_bbox(self.design) {
+    Some((x0, x1, y0, y1, z0, z1)) => Some((x1 - x0, y1 - y0, z1 - z0))
+    None => None
+  }
+}
+
+///|
+pub fn PrintablePart::bbox_label(self : PrintablePart) -> String {
+  match self.bbox_mm() {
+    Some(bbox) => bbox_label(bbox)
+    None => ""
+  }
+}
+
+///|
+pub fn PrintablePart::fits_bed(
+  self : PrintablePart,
+  bed : PrintBedSpec,
+) -> Bool {
+  match self.bbox_mm() {
+    Some((w, d, h)) => bed.fits(w, d, h)
+    None => false
+  }
+}
+
+///|
+/// Estimated printed mass in grams: solid mass scaled by the line's infill.
+pub fn PrintablePart::est_mass_g(
+  self : PrintablePart,
+  line : BomLine,
+) -> Double {
+  round1(self.mass_kg * 1000.0 * printable_infill_fraction(line))
+}
+
+///|
+/// Rough print time in minutes; zero for non-print processes.
+pub fn PrintablePart::est_print_min(
+  self : PrintablePart,
+  line : BomLine,
+) -> Double {
+  if !line.process.contains("print") {
+    return 0.0
+  }
+  round1(self.est_mass_g(line) * PRINT_MIN_PER_GRAM)
+}
+
+///|
+fn printable_part_map(
+  parts : Array[PrintablePart],
+) -> Map[String, PrintablePart] {
+  let map : Map[String, PrintablePart] = Map([])
+  for part in parts {
+    map.set(part.part_number, part)
+  }
+  map
 }
 
 ///|
@@ -75,6 +285,42 @@ pub fn Component::printable_parts(self : Component) -> Array[PrintablePart] {
 }
 
 ///|
+fn make_printable_part(
+  component_name : String,
+  documentation : String,
+  bodies : Array[BodyPart],
+  meta : PartMeta,
+) -> PrintablePart {
+  let selected = bodies.filter(fn(body) {
+    body_matches_part(body, meta.part_number)
+  })
+  let design = design_from_bodies(
+    meta.part_number,
+    meta.description,
+    documentation,
+    selected,
+    meta.part_number,
+  )
+  let mut volume_mm3 = 0.0
+  let mut mass_kg = 0.0
+  for body in selected {
+    mass_kg = mass_kg + body.inertial.mass
+    let density = body.density.to_kg_per_m3()
+    if density > 0.0 {
+      volume_mm3 = volume_mm3 + body.inertial.mass / density * 1.0e9
+    }
+  }
+  {
+    part_number: meta.part_number,
+    component_name,
+    meta,
+    design: orient_print_design(design, orient=meta.print_bed_orient),
+    volume_mm3,
+    mass_kg,
+  }
+}
+
+///|
 fn Component::collect_printable_parts(
   self : Component,
   out : Array[PrintablePart],
@@ -86,18 +332,14 @@ fn Component::collect_printable_parts(
         self.bodies.length() > 0 &&
         !seen.contains(meta.part_number) {
         seen.push(meta.part_number)
-        out.push({
-          part_number: meta.part_number,
-          component_name: self.name,
-          meta,
-          design: design_from_bodies(
-            meta.part_number,
-            meta.description,
+        out.push(
+          make_printable_part(
+            self.name,
             self.format_documentation(),
             self.bodies,
-            meta.part_number,
+            meta,
           ),
-        })
+        )
       }
     None => ()
   }
@@ -106,18 +348,14 @@ fn Component::collect_printable_parts(
       Some(meta) =>
         if is_fabricated_part(meta) && !seen.contains(meta.part_number) {
           seen.push(meta.part_number)
-          out.push({
-            part_number: meta.part_number,
-            component_name: self.name,
-            meta,
-            design: design_from_bodies(
-              meta.part_number,
-              meta.description,
+          out.push(
+            make_printable_part(
+              self.name,
               self.format_documentation(),
               self.bodies,
-              meta.part_number,
+              meta,
             ),
-          })
+          )
         }
       None => ()
     }
@@ -252,20 +490,43 @@ fn manufacturing_notes(line : BomLine) -> String {
 }
 
 ///|
-/// Manufactured (non-purchased) parts with print/cut settings.
-pub fn Component::print_list_csv(self : Component) -> String {
+/// Manufactured (non-purchased) parts with print/cut settings, print-bed fit,
+/// and rough mass/time estimates.
+pub fn Component::print_list_csv(
+  self : Component,
+  bed~ : PrintBedSpec = PrintBedSpec::default(),
+) -> String {
   let header : Array[String] = [
     "part_number", "description", "quantity", "material", "process", "orientation",
-    "layer_height_mm", "infill_percent", "support", "notes",
+    "layer_height_mm", "infill_percent", "support", "notes", "bbox_mm", "fits_bed",
+    "est_mass_g", "est_print_min",
   ]
   let rows : Array[String] = [csv_row(header.map(fn(v) { csv_field(v) }))]
   let cartridges = parse_cartridges(
     self.parameters.get("print_in_place_gearset").unwrap_or(""),
   )
+  let parts = printable_part_map(self.printable_parts())
   for line in self.bom().lines {
     if line.process != "purchased" {
       if is_gearset_layer_for(line.part_number, cartridges) {
         continue
+      }
+      let (bbox_cell, fits_cell, mass_cell, time_cell) = match
+        parts.get(line.part_number) {
+        Some(part) =>
+          (
+            csv_field(part.bbox_label()),
+            csv_field(if part.fits_bed(bed) { "YES" } else { "NO" }),
+            csv_field(fmt1(part.est_mass_g(line))),
+            csv_field(
+              if line.process.contains("print") {
+                fmt1(part.est_print_min(line))
+              } else {
+                ""
+              },
+            ),
+          )
+        None => (csv_field(""), csv_field(""), csv_field(""), csv_field(""))
       }
       rows.push(
         csv_row([
@@ -279,6 +540,10 @@ pub fn Component::print_list_csv(self : Component) -> String {
           csv_field(print_infill(line)),
           csv_field(print_support(line)),
           csv_field(manufacturing_notes(line)),
+          bbox_cell,
+          fits_cell,
+          mass_cell,
+          time_cell,
         ]),
       )
     }
@@ -296,6 +561,10 @@ pub fn Component::print_list_csv(self : Component) -> String {
         "40",
         "none",
         csv_field("print in place; do not assemble the gears afterward"),
+        csv_field(""),
+        csv_field(""),
+        csv_field(""),
+        csv_field(""),
       ]),
     )
   }
@@ -719,6 +988,7 @@ fn view_gallery_html() -> String {
 pub fn Component::start_here_text(
   self : Component,
   name~ : String = "",
+  bed~ : PrintBedSpec = PrintBedSpec::default(),
 ) -> String {
   let package_name = if name == "" { self.display_name() } else { name }
   let bom = self.bom()
@@ -754,8 +1024,10 @@ pub fn Component::start_here_text(
     "Open the `printable/` folder. Print one copy of each file unless the Qty column says more. " +
     "Use the material and infill below, and put the largest flat face on the build plate.\n\n"
   out = out +
-    "| File to print | What it is | Qty | Material | Process | Infill | Orientation |\n"
-  out = out + "| --- | --- | --- | --- | --- | --- | --- |\n"
+    "| File to print | What it is | Qty | Material | Process | Infill | Orientation | Size (mm) | Fits bed | Est. mass | Est. time |\n"
+  out = out +
+    "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n"
+  let part_map = printable_part_map(printable)
   let mut printed_count = 0
   for line in bom.lines {
     if is_gearset_layer_for(line.part_number, cartridges) {
@@ -765,6 +1037,28 @@ pub fn Component::start_here_text(
       printable_files.contains(sanitize_part_number(line.part_number)) {
       printed_count = printed_count + line.quantity
       let infill = print_infill(line)
+      let (size, bed_fit, mass, time) = match part_map.get(line.part_number) {
+        Some(part) =>
+          (
+            part.bbox_label(),
+            if part.fits_bed(bed) {
+              "YES"
+            } else {
+              "**NO**"
+            },
+            if line.process.contains("print") {
+              fmt1(part.est_mass_g(line)) + " g"
+            } else {
+              "—"
+            },
+            if line.process.contains("print") {
+              fmt1(part.est_print_min(line)) + " min"
+            } else {
+              "—"
+            },
+          )
+        None => ("—", "—", "—", "—")
+      }
       out = out +
         "| `printable/" +
         sanitize_part_number(line.part_number) +
@@ -780,6 +1074,14 @@ pub fn Component::start_here_text(
         (if infill == "" { "—" } else { infill + "%" }) +
         " | " +
         md_cell(print_orientation(line)) +
+        " | " +
+        size +
+        " | " +
+        bed_fit +
+        " | " +
+        mass +
+        " | " +
+        time +
         " |\n"
     }
   }
@@ -788,7 +1090,7 @@ pub fn Component::start_here_text(
     out = out +
       "| `printable/" +
       cartridge +
-      ".step` | Print-in-place herringbone gear set (sun + planets + ring) | 1 | PETG / carbon fiber nylon | 3D print | 40% | flat on the build plate, gears already in place |\n"
+      ".step` | Print-in-place herringbone gear set (sun + planets + ring) | 1 | PETG / carbon fiber nylon | 3D print | 40% | flat on the build plate, gears already in place | — | — | — | — |\n"
   }
   out = out +
     "\nThat is **" +
@@ -1014,14 +1316,15 @@ pub fn Component::build_manifest(
 pub fn Component::build_package_files(
   self : Component,
   name~ : String = "",
+  bed~ : PrintBedSpec = PrintBedSpec::default(),
 ) -> Array[BuildFile] {
   let files : Array[BuildFile] = [
-    BuildFile::new("START-HERE.md", self.start_here_text(name~)),
+    BuildFile::new("START-HERE.md", self.start_here_text(name~, bed~)),
     BuildFile::new("NAME-KEY.md", self.name_key_text(name~)),
     BuildFile::new("README.md", self.build_manifest(name~)),
     BuildFile::new("bom.csv", self.to_bom_csv()),
     BuildFile::new("sourcing.csv", self.sourcing_csv()),
-    BuildFile::new("print-list.csv", self.print_list_csv()),
+    BuildFile::new("print-list.csv", self.print_list_csv(bed~)),
     BuildFile::new("fasteners.csv", self.fastener_table_csv()),
     BuildFile::new("assembly.txt", self.build_procedure_text()),
     BuildFile::new("report.txt", self.report_text()),

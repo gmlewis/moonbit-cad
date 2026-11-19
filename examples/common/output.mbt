@@ -26,6 +26,7 @@ pub(all) struct OutputPaths {
   posed_parts : String?
   detail : String
   threads : String
+  bed_size : String
   check : Bool
   collisions : Bool
   validate : Bool
@@ -167,6 +168,12 @@ pub fn with_output_args(spec : Map[String, @cli.Arg]) -> Map[String, @cli.Arg] {
     ),
   )
   spec.set(
+    "bedSize",
+    @cli.opt_string(
+      help="Print bed size WxDxH in mm for the fit check (default 220x220x250)",
+    ),
+  )
+  spec.set(
     "threads",
     @cli.opt_string(help="Thread mode override: none, cosmetic, or helical"),
   )
@@ -216,6 +223,7 @@ pub fn output_paths(args : @cli.Args) -> OutputPaths {
     posed_parts: args.string_opt("posed-parts"),
     detail: args.string_opt("detail").unwrap_or("simplified"),
     threads: args.string_opt("threads").unwrap_or(""),
+    bed_size: args.string_opt("bedSize").unwrap_or(""),
     check: args.flag("check"),
     collisions: args.flag("collisions"),
     validate: args.flag("validate"),
@@ -235,6 +243,23 @@ pub fn OutputPaths::detail_level(
         "error: invalid --detail '" +
         self.detail +
         "' (expected simplified, detailed, or fully-modeled)",
+      )
+  }
+}
+
+///|
+/// Parses `--bedSize WxDxH`, falling back to the 220 x 220 x 250 mm default.
+pub fn OutputPaths::print_bed(self : OutputPaths) -> @cad.PrintBedSpec {
+  if self.bed_size == "" {
+    return @cad.PrintBedSpec::default()
+  }
+  match @cad.PrintBedSpec::parse(self.bed_size) {
+    Some(bed) => bed
+    None =>
+      abort(
+        "error: invalid --bedSize '" +
+        self.bed_size +
+        "' (expected WxDxH in mm, e.g. 220x220x250)",
       )
   }
 }
@@ -374,8 +399,9 @@ pub async fn write_output(
       " indeterminate",
     )
   }
+  let bed = output.print_bed()
   if output.check {
-    let warnings = comp.assembly_checks()
+    let warnings = comp.assembly_checks(bed~)
     for warning in warnings {
       @cli.eprintln("warning: " + warning)
     }
@@ -542,7 +568,7 @@ pub async fn write_output(
         )
       }
       @step_cad.write_text_file(
-        comp.print_list_csv(),
+        comp.print_list_csv(bed~),
         Some(dir + "/print-list.csv"),
       )
     }
@@ -557,7 +583,7 @@ pub async fn write_output(
       }
       @fs.mkdir(dir + "/printable", recursive=true, allow_exist=true)
       let written : Array[String] = []
-      for file in comp.build_package_files() {
+      for file in comp.build_package_files(bed~) {
         @step_cad.write_text_file(file.content, Some(dir + "/" + file.path))
         written.push(file.path)
       }

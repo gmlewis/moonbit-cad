@@ -623,7 +623,7 @@ async fn main {
           detail~,
         )
         @step_cad.write_text_file(
-          cartridge.to_step_file(),
+          @cad.orient_print_design(cartridge.to_design()).to_step_file(),
           Some(dir + "/printable/PGB-CARTRIDGE.step"),
         )
       }
