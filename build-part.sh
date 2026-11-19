@@ -10,7 +10,7 @@ usage() {
 build-part.sh — build one example's complete build package.
 
 Usage:
-  ./build-part.sh [example]
+  ./build-part.sh [example] [options]
 
 Examples:
   ./build-part.sh 01      # motorized wheel (1-stage 5.33:1 for Galileo X feet)
@@ -22,23 +22,60 @@ Examples:
   ./build-part.sh 07      # Roadrunner bipedal wheeled robot
   ./build-part.sh 08      # Ascento-inspired 4-bar wheeled bipedal robot (A12 + 4-elbow)
 
+Options:
+  --check-interferences        Run the exact SMLib solid-solid overlap check
+  --min-overlap=MM3            Ignore overlaps below this volume (default 1.0)
+  --exclude-pattern=REGEX      Body-name pattern for intentional contacts
+  -h, --help                   Show this help and exit
+
+Every build also renders views/{iso,front,left,top,exploded}.png when
+solidcraft-cli is on PATH, and START-HERE.html embeds them.
+
 Everything is written to build/<example>/. Open START-HERE.html first.
 EOF
 }
-
-case "${1:-}" in
-  -h | --help)
-    usage
-    exit 0
-    ;;
-esac
 
 if [[ ! -d "examples" ]]; then
   echo "error: run this from the repository root." >&2
   exit 2
 fi
 
-EXAMPLE="${1:-02}"
+CHECK_INTERFERENCES=0
+MIN_OVERLAP=1.0
+EXCLUDE_PATTERN=""
+EXAMPLE=""
+for arg in "$@"; do
+  case "$arg" in
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    --check-interferences)
+      CHECK_INTERFERENCES=1
+      ;;
+    --min-overlap=*)
+      MIN_OVERLAP="${arg#*=}"
+      ;;
+    --exclude-pattern=*)
+      EXCLUDE_PATTERN="${arg#*=}"
+      ;;
+    --)
+      ;;
+    -*)
+      echo "error: unknown option: ${arg}" >&2
+      usage >&2
+      exit 2
+      ;;
+    *)
+      if [[ -n "${EXAMPLE}" ]]; then
+        echo "error: only one example may be given (got '${EXAMPLE}' and '${arg}')" >&2
+        exit 2
+      fi
+      EXAMPLE="${arg}"
+      ;;
+  esac
+done
+EXAMPLE="${EXAMPLE:-02}"
 
 # Discover the example directory the same way run-example.sh does, so a new
 # examples/NN-* directory needs no edit here. Accepts a single digit (`8`), a
@@ -92,6 +129,33 @@ if [[ -f scripts/check_supplier_links.py ]]; then
   fi
 fi
 
+# Optional exact solid-solid interference check. Opt-in because a large
+# assembly (hundreds of solids) can take a while; --exclude-pattern suppresses
+# intentional fastener-in-hole or print-in-place contacts.
+if (( CHECK_INTERFERENCES )); then
+  CHECK_ARGS=(
+    "${OUT}/assembly.step"
+    --min-volume "${MIN_OVERLAP}"
+    --json "${OUT}/interference.json"
+  )
+  if [[ -n "${EXCLUDE_PATTERN}" ]]; then
+    CHECK_ARGS+=(--exclude-pattern "${EXCLUDE_PATTERN}")
+  fi
+  if ! python3 scripts/check_interference.py "${CHECK_ARGS[@]}"; then
+    echo "error: interference check found unexpected overlaps." >&2
+    echo "See ${OUT}/interference.json and adjust the design or --exclude-pattern." >&2
+    exit 1
+  fi
+fi
+
+# Multi-angle contact sheet referenced by START-HERE.html's visual overview.
+# render_views.py warns and succeeds when solidcraft-cli is unavailable.
+if [[ -f scripts/render_views.py ]]; then
+  if ! python3 scripts/render_views.py "${OUT}"; then
+    echo "warning: view rendering did not complete." >&2
+  fi
+fi
+
 # Render the beginner guide as a self-contained HTML page so it opens with
 # proper typography and tables in any browser.
 START_HTML="${OUT}/START-HERE.md"
@@ -109,6 +173,7 @@ Done. Everything you need is in: ${OUT}/
   2. BUY      ${START_HTML}           (section 2)
   3. ASSEMBLE ${START_HTML}           (section 3)
   4. VIEW     ${OUT}/exploded.step    (exploded, color-coded)
+  5. VIEWS    ${OUT}/views/           (iso, front, left, top, exploded PNGs)
 
 Open it now:
   open ${START_HTML}

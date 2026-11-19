@@ -183,6 +183,34 @@ img {
   height: auto;
 }
 
+/* Visual overview gallery written by scripts/render_views.py. */
+.view-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin: 1.25rem 0 2rem;
+}
+
+.view-grid figure {
+  margin: 0;
+}
+
+.view-grid img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.view-grid figcaption {
+  margin-top: 0.35rem;
+  color: var(--muted);
+  font-size: 0.88rem;
+  text-align: center;
+}
+
 @media (max-width: 640px) {
   body {
     padding: 1.5rem 1rem 3rem;

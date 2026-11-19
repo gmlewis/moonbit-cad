@@ -155,6 +155,21 @@ test "start-here guide covers print, buy, and assemble" {
 }
 
 ///|
+test "start-here guide embeds a visual overview gallery" {
+  let root = build_test_component()
+  let guide = root.start_here_text(name="demo")
+  assert_true(guide.contains("## Visual overview"))
+  for
+    view in [
+      "views/iso.png", "views/front.png", "views/left.png", "views/top.png", "views/exploded.png",
+    ] {
+    assert_true(guide.contains(view))
+  }
+  // Missing renders are hidden rather than shown as broken images.
+  assert_true(guide.contains("onerror"))
+}
+
+///|
 test "printable parts exclude purchased and include fabricated" {
   let root = build_test_component()
   let parts = root.printable_parts()

@@ -682,6 +682,40 @@ fn collect_name_key(
 /// It answers exactly three questions in order: what to print, what to buy,
 /// and how to assemble it. The engineering manifest, CSVs, and bundle remain
 /// available for advanced users.
+
+///|
+/// Markdown/HTML gallery of the multi-angle renders written by
+/// `scripts/render_views.py`. Missing images hide their figure instead of
+/// showing a broken icon, so a build without `solidcraft-cli` still reads well.
+fn view_gallery_html() -> String {
+  let views : Array[(String, String)] = [
+    ("iso", "Isometric"),
+    ("front", "Front"),
+    ("left", "Left"),
+    ("top", "Top"),
+    ("exploded", "Exploded"),
+  ]
+  let mut out = "## Visual overview\n\n"
+  out = out +
+    "Shaded renders of the assembled package (and the exploded view when one is generated). " +
+    "`scripts/render_views.py` refreshes these images on every build when `solidcraft-cli` is on `PATH`.\n\n"
+  out = out + "<div class=\"view-grid\">\n"
+  for view in views {
+    out = out +
+      "<figure><a href=\"views/" +
+      view.0 +
+      ".png\"><img src=\"views/" +
+      view.0 +
+      ".png\" alt=\"" +
+      view.1 +
+      " view\" onerror=\"this.closest('figure').style.display='none'\"></a><figcaption>" +
+      view.1 +
+      "</figcaption></figure>\n"
+  }
+  out + "</div>\n\n"
+}
+
+///|
 pub fn Component::start_here_text(
   self : Component,
   name~ : String = "",
@@ -705,6 +739,7 @@ pub fn Component::start_here_text(
       exploded_view +
       "` in a STEP viewer for the exploded, color-coded view.\n\n"
   }
+  out = out + view_gallery_html()
   out = out + "## 1. 3D-print these files\n\n"
   if cartridges.contains("PGB-CARTRIDGE") {
     out = out +
