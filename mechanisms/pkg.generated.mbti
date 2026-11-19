@@ -1,0 +1,64 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "gmlewis/cad/mechanisms"
+
+// Values
+pub fn loop_closure_residual(FourBarParams, FourBarSolution) -> Double
+
+pub fn solve_four_bar(FourBarParams, Double) -> Result[FourBarSolution, FourBarError]
+
+pub fn sweep_four_bar(FourBarParams, start_deg~ : Double, end_deg~ : Double, steps? : Int32) -> FourBarSweep
+
+// Errors
+
+// Types and methods
+pub(all) enum FourBarError {
+  DeadPoint(String)
+  OutOfReach(String)
+}
+pub fn FourBarError::message(Self) -> String
+
+pub(all) struct FourBarParams {
+  ax : Double
+  az : Double
+  cx : Double
+  cz : Double
+  crank_len_mm : Double
+  coupler_len_mm : Double
+  guide_len_mm : Double
+  output_len_mm : Double
+  output_beta_deg : Double
+}
+pub fn FourBarParams::grashof(Self) -> Bool
+pub fn FourBarParams::new(ax~ : Double, az~ : Double, cx~ : Double, cz~ : Double, crank_len_mm~ : Double, coupler_len_mm~ : Double, guide_len_mm~ : Double, output_len_mm~ : Double, output_beta_deg? : Double) -> Self
+
+pub(all) struct FourBarSolution {
+  ax : Double
+  az : Double
+  cx : Double
+  cz : Double
+  bx : Double
+  bz : Double
+  dx : Double
+  dz : Double
+  wx : Double
+  wz : Double
+  hip_deg : Double
+  hip_joint_rad : Double
+  knee_joint_rad : Double
+  guide_joint_rad : Double
+  transmission_deg : Double
+}
+
+pub(all) struct FourBarSweep {
+  solutions : Array[FourBarSolution]
+  errors : Array[String]
+  min_transmission_deg : Double
+  max_transmission_deg : Double
+  grashof : Bool
+  warnings : Array[String]
+}
+pub fn FourBarSweep::has_warnings(Self) -> Bool
+
+// Type aliases
+
+// Traits

@@ -207,25 +207,6 @@ pub fn WbrParams::new(
 }
 
 ///|
-/// Derived 4-bar linkage closure solution in the sagittal X-Z plane.
-pub(all) struct FourBarSolution {
-  ax : Double
-  az : Double
-  cx : Double
-  cz : Double
-  bx : Double
-  bz : Double
-  dx : Double
-  dz : Double
-  wx : Double
-  wz : Double
-  hip_joint_rad : Double
-  knee_joint_rad : Double
-  guide_joint_rad : Double
-  transmission_deg : Double
-}
-
-///|
 /// Calf angular offset from the `B -> D` coupler ray to the `B -> W` wheel ray.
 fn wbr_calf_beta_rad() -> Double {
   -4.0 * @math.PI / 180.0
@@ -243,80 +224,32 @@ pub fn wbr_chassis_pivots(
 }
 
 ///|
+/// Maps the WBR dimensions onto the reusable planar four-bar parameters.
+pub fn wbr_four_bar_params(params : WbrParams) -> @mechanisms.FourBarParams {
+  let (ax, az, cx, cz) = wbr_chassis_pivots(params)
+  @mechanisms.FourBarParams::new(
+    ax~,
+    az~,
+    cx~,
+    cz~,
+    crank_len_mm=params.crank_len_mm,
+    coupler_len_mm=params.coupler_len_mm,
+    guide_len_mm=params.guide_len_mm,
+    output_len_mm=params.calf_len_mm,
+    output_beta_deg=wbr_calf_beta_rad() * 180.0 / @math.PI,
+  )
+}
+
+///|
 /// Solves the planar 4-bar closed-chain linkage (`A-B-D-C`) for a requested
 /// hip crank depression angle `hip_deg` (measured downward from `-X`).
-pub fn solve_four_bar(params : WbrParams, hip_deg : Double) -> FourBarSolution {
-  let (ax, az, cx, cz) = wbr_chassis_pivots(params)
-  let l1 = params.crank_len_mm
-  let l2 = params.coupler_len_mm
-  let l3 = params.guide_len_mm
-  let l_calf = params.calf_len_mm
-  let hip_rad = hip_deg * @math.PI / 180.0
-  let bx = ax - l1 * @math.cos(hip_rad)
-  let bz = az - l1 * @math.sin(hip_rad)
-  let dx_bc = cx - bx
-  let dz_bc = cz - bz
-  let dist = Double::sqrt(dx_bc * dx_bc + dz_bc * dz_bc)
-  if dist >= l2 + l3 - 1.0e-4 || dist <= (l2 - l3).abs() + 1.0e-4 {
-    abort(
-      "4-bar linkage cannot close at hipDeg=\{hip_deg} (dist=\{dist}, L2=\{l2}, L3=\{l3})",
-    )
-  }
-  let a = (l2 * l2 - l3 * l3 + dist * dist) / (2.0 * dist)
-  let h_sq = l2 * l2 - a * a
-  let h = if h_sq > 0.0 { Double::sqrt(h_sq) } else { 0.0 }
-  let mx = bx + a * dx_bc / dist
-  let mz = bz + a * dz_bc / dist
-  let c1x = mx + h * (-dz_bc / dist)
-  let c1z = mz + h * (dx_bc / dist)
-  let c2x = mx - h * (-dz_bc / dist)
-  let c2z = mz - h * (dx_bc / dist)
-  // Pick the lower-Z branch so D sits below B (Ascento knee posture).
-  let (dx, dz) = if c1z < c2z { (c1x, c1z) } else { (c2x, c2z) }
-  let phi = @math.atan2(dz - bz, dx - bx)
-  let psi = @math.atan2(dz - cz, dx - cx)
-  let w_ang = phi + wbr_calf_beta_rad()
-  let wx = bx + l_calf * @math.cos(w_ang)
-  let wz = bz + l_calf * @math.sin(w_ang)
-  let v1x = bx - dx
-  let v1z = bz - dz
-  let v2x = cx - dx
-  let v2z = cz - dz
-  let denom = Double::sqrt(v1x * v1x + v1z * v1z) *
-    Double::sqrt(v2x * v2x + v2z * v2z)
-  let raw_cos = if denom > 1.0e-9 {
-    (v1x * v2x + v1z * v2z) / denom
-  } else {
-    0.0
-  }
-  let clamped_cos = if raw_cos > 1.0 {
-    1.0
-  } else if raw_cos < -1.0 {
-    -1.0
-  } else {
-    raw_cos
-  }
-  let trans_deg = @math.acos(clamped_cos) * 180.0 / @math.PI
-  // Revolute axis is +Y: R_y(q) maps (-1,0,0) -> (-cos(q),0,sin(q)) and
-  // (+1,0,0) -> (cos(q),0,-sin(q)).
-  let hip_joint_rad = -hip_rad
-  let knee_joint_rad = hip_rad - phi
-  let guide_joint_rad = -psi
-  {
-    ax,
-    az,
-    cx,
-    cz,
-    bx,
-    bz,
-    dx,
-    dz,
-    wx,
-    wz,
-    hip_joint_rad,
-    knee_joint_rad,
-    guide_joint_rad,
-    transmission_deg: trans_deg,
+pub fn solve_four_bar(
+  params : WbrParams,
+  hip_deg : Double,
+) -> @mechanisms.FourBarSolution {
+  match @mechanisms.solve_four_bar(wbr_four_bar_params(params), hip_deg) {
+    Ok(solution) => solution
+    Err(error) => abort("4-bar linkage: " + error.message())
   }
 }
 

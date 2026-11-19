@@ -17,6 +17,7 @@ import {
 
 import {
   "gmlewis/cad/components",
+  "gmlewis/step/cad" @step_cad,
   "gmlewis/urdf",
   "moonbitlang/core/math",
   "moonbitlang/core/string",

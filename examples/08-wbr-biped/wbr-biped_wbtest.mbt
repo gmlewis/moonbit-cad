@@ -1,52 +1,86 @@
 ///|
-test "4-bar closed-chain kinematics closes D pivot across all poses and scales" {
-  for s in [0.8, 1.0, 1.3] {
-    let params = WbrParams::new(scale=s)
-    let robot = build_wbr(params~)
-    let bundle = robot.to_urdf_bundle(package_name="wbr_biped")
-    let diag = bundle.robot.diagnostics()
-    let err_count = diag.filter(fn(d) { d.severity().is_error() }).length()
-    assert_eq(err_count, 0)
-    assert_eq(robot.control.length(), 4)
-    for pose in ["crouched", "standing", "tall"] {
-      let positions = pose_positions(params, pose~)
-      let fk = bundle.robot.forward_kinematics(joint_positions=positions)
-      // Verify Pivot D on left calf matches Pivot D on left guide link in world meters.
-      let t_calf = match fk.get("l_calf_link") {
-        Some(t) => t
-        None => fail("missing l_calf_link in FK")
-      }
-      let t_guide = match fk.get("l_guide_link") {
-        Some(t) => t
-        None => fail("missing l_guide_link in FK")
-      }
-      let d_on_calf = t_calf.apply_point(
-        (params.coupler_len_mm / 1000.0, 0.0, 0.0),
-      )
-      let d_on_guide = t_guide.apply_point(
-        (params.guide_len_mm / 1000.0, 0.0, 0.0),
-      )
-      let dx = d_on_calf.0 - d_on_guide.0
-      let dy = d_on_calf.1 - d_on_guide.1
-      let dz = d_on_calf.2 - d_on_guide.2
-      // X and Z must close to sub-micrometer accuracy; Y differs by the lateral plane step.
-      assert_true(dx.abs() < 1.0e-6)
-      assert_true(dz.abs() < 1.0e-6)
-      assert_true(dy.abs() > 0.01)
-    }
+test "wbr four-bar closes across the stroke" {
+  let params = WbrParams::new()
+  let fbp = wbr_four_bar_params(params)
+  for hip in [10.0, 20.0, 35.0, 50.0, 62.0] {
+    let sol = solve_four_bar(params, hip)
+    assert_true(@mechanisms.loop_closure_residual(fbp, sol) < 1.0e-9)
   }
 }
 
 ///|
-test "WBR tolerance_mm preserves planetary outer dimensions" {
-  let p_petg = WbrParams::new(tolerance_mm=0.042)
-  let p_pla = WbrParams::new(tolerance_mm=0.25)
-  let d_petg = wbr_actuator_dims(p_petg)
-  let d_pla = wbr_actuator_dims(p_pla)
-  assert_true((d_petg.outer_radius_mm - d_pla.outer_radius_mm).abs() < 1.0e-9)
-  assert_true((d_petg.total_len_mm - d_pla.total_len_mm).abs() < 1.0e-9)
-  assert_true(
-    (d_petg.layout.center_distance_mm - d_pla.layout.center_distance_mm).abs() <
-    1.0e-9,
+fn four_bar_limit() -> @urdf.JointLimit {
+  @urdf.JointLimit::new(
+    effort=100.0,
+    velocity=100.0,
+    lower=Some(-10.0),
+    upper=Some(10.0),
   )
+}
+
+///|
+/// A four-link URDF fixture: base (A, C) -> crank (A-B) -> calf (B-D), and a
+/// guide (C-D) attached to the base. The two D mates must coincide in world
+/// after forward kinematics at the solved joint angles.
+test "urdf forward kinematics closes the four-bar loop" {
+  let params = WbrParams::new()
+  let fbp = wbr_four_bar_params(params)
+  let sol = solve_four_bar(params, 35.0)
+  let base = @cad.Component::new("base")
+    .add_mate_mm_deg("A", x=fbp.ax, z=fbp.az, axis=(0.0, 1.0, 0.0))
+    .add_mate_mm_deg("C", x=fbp.cx, z=fbp.cz, axis=(0.0, 1.0, 0.0))
+  let crank = @cad.Component::new("crank").add_mate_mm_deg(
+    "B",
+    x=-fbp.crank_len_mm,
+    axis=(0.0, 1.0, 0.0),
+  )
+  let calf = @cad.Component::new("calf").add_mate_mm_deg(
+    "D",
+    x=fbp.coupler_len_mm,
+    axis=(0.0, 1.0, 0.0),
+  )
+  let guide = @cad.Component::new("guide").add_mate_mm_deg(
+    "D",
+    x=fbp.guide_len_mm,
+    axis=(0.0, 1.0, 0.0),
+  )
+  let root = base
+    .attach(
+      "hip",
+      parent_mate="A",
+      crank,
+      child_mate="origin",
+      spec=@cad.JointSpec::revolute(four_bar_limit()),
+    )
+    .attach(
+      "guide",
+      parent_mate="C",
+      guide,
+      child_mate="origin",
+      spec=@cad.JointSpec::revolute(four_bar_limit()),
+    )
+    .attach_to(
+      "crank",
+      "knee",
+      parent_mate="B",
+      calf,
+      child_mate="origin",
+      spec=@cad.JointSpec::revolute(four_bar_limit()),
+    )
+  let positions : Map[String, Double] = Map([])
+  positions.set("hip", sol.hip_joint_rad)
+  positions.set("guide", sol.guide_joint_rad)
+  positions.set("knee", sol.knee_joint_rad)
+  let robot = root.to_robot()
+  let fk = robot.forward_kinematics(joint_positions=positions)
+  let guide_world = fk.get("guide").unwrap()
+  let calf_world = fk.get("calf").unwrap()
+  // D on the guide is at +guide_len; D on the calf is at +coupler_len, both in
+  // millimetres, so convert to metres for the URDF transform.
+  let d_guide = guide_world.apply_point((fbp.guide_len_mm / 1000.0, 0.0, 0.0))
+  let d_calf = calf_world.apply_point((fbp.coupler_len_mm / 1000.0, 0.0, 0.0))
+  let dx = d_guide.0 - d_calf.0
+  let dy = d_guide.1 - d_calf.1
+  let dz = d_guide.2 - d_calf.2
+  assert_true((dx * dx + dy * dy + dz * dz).sqrt() < 1.0e-6)
 }

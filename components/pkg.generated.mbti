@@ -3,6 +3,7 @@ package "gmlewis/cad/components"
 
 import {
   "gmlewis/step/components/common",
+  "gmlewis/step/components/planetary",
   "gmlewis/step/components/profiles",
   "gmlewis/step/components/standards",
   "gmlewis/step/components/stock",
@@ -10,6 +11,8 @@ import {
 }
 
 // Values
+pub fn a12_planetary_actuator(A12ActuatorParams) -> @gmlewis/cad.Component
+
 pub fn actuator_pod_geometry(String, preset? : String, ring_outer_mm? : Double, gear_length_mm? : Double, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
 
 pub fn angle_bar_part(name? : String, leg_a_mm? : Double, leg_b_mm? : Double, thickness_mm? : Double, root_radius_mm? : Double, toe_radius_mm? : Double, length_mm? : Double) -> @gmlewis/cad.Component
@@ -185,6 +188,25 @@ pub fn vslot_joining_plate_part(name? : String, length_mm? : Double, width_mm? :
 // Errors
 
 // Types and methods
+pub(all) struct A12ActuatorParams {
+  gear_module_mm : Double
+  gear_length_mm : Double
+  num_elbows : Int32
+  tolerance_mm : Double
+  hub_offset_mm : Double
+  flange_start_deg : Double
+  detail : @common.DetailLevel
+  sun_teeth : Int32
+  planet_teeth : Int32
+  planet_count : Int32
+  name : String
+}
+pub fn A12ActuatorParams::center_distance_mm(Self) -> Double
+pub fn A12ActuatorParams::layout(Self) -> @planetary.HerringbonePlanetaryLayout
+pub fn A12ActuatorParams::new(gear_module_mm? : Double, gear_length_mm? : Double, num_elbows? : Int32, tolerance_mm? : Double, hub_offset_mm? : Double, flange_start_deg? : Double, detail? : @common.DetailLevel, sun_teeth? : Int32, planet_teeth? : Int32, planet_count? : Int32, name? : String) -> Self
+pub fn A12ActuatorParams::outer_radius_mm(Self) -> Double
+pub fn A12ActuatorParams::total_len_mm(Self) -> Double
+
 pub(all) struct BldcPreset {
   name : String
   diameter_mm : Double
