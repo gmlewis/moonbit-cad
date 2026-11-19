@@ -114,6 +114,7 @@ pub(all) struct Attachment {
   child : Component
   spec : JointSpec
   bom_external : Bool
+  explode : ExplodeSpec?
 }
 
 pub(all) struct BodyPart {
@@ -217,8 +218,8 @@ pub fn Component::add_wire_run(Self, WireRun) -> Self
 pub fn Component::assembly_checks(Self) -> Array[String]
 pub fn Component::assembly_plan(Self) -> Array[AssemblyStep]
 pub fn Component::assembly_plan_text(Self) -> String
-pub fn Component::attach(Self, String, parent_mate~ : String, Self, child_mate? : String, spec? : JointSpec, bom_external? : Bool) -> Self
-pub fn Component::attach_to(Self, String, String, parent_mate~ : String, Self, child_mate? : String, spec? : JointSpec, bom_external? : Bool) -> Self
+pub fn Component::attach(Self, String, parent_mate~ : String, Self, child_mate? : String, spec? : JointSpec, bom_external? : Bool, explode? : ExplodeSpec?) -> Self
+pub fn Component::attach_to(Self, String, String, parent_mate~ : String, Self, child_mate? : String, spec? : JointSpec, bom_external? : Bool, explode? : ExplodeSpec?) -> Self
 pub fn Component::bom(Self) -> Bom
 pub fn Component::build_manifest(Self, name? : String) -> String
 pub fn Component::build_package_files(Self, name? : String) -> Array[BuildFile]
@@ -239,6 +240,7 @@ pub fn Component::from_step_layer(String, @common.Component, String, density? : 
 pub fn Component::from_step_layers(String, @common.Component, Array[String], label? : String, density? : @urdf.Density, part? : PartMeta?, connector_prefix? : String, include_connectors? : Bool, apply_placement? : Bool, x_mm? : Double, y_mm? : Double, z_mm? : Double, rx_deg? : Double, ry_deg? : Double, rz_deg? : Double) -> Self
 pub fn Component::get_mate(Self, String) -> @common.MateConnector?
 pub fn Component::harness_checks(Self) -> Array[String]
+pub fn Component::has_explode_spec(Self) -> Bool
 pub fn Component::link_design(Self, String) -> @gmlewis/step/cad.Design?
 pub fn Component::link_parts_csv(Self) -> String
 pub fn Component::name_key_text(Self, name? : String) -> String
@@ -255,6 +257,7 @@ pub fn Component::to_assembly_step(Self, joint_positions? : Map[String, Double])
 pub fn Component::to_blender_python(Self, joint_positions? : Map[String, Double], segments? : Int32) -> String
 pub fn Component::to_bom_csv(Self) -> String
 pub fn Component::to_design(Self, joint_positions? : Map[String, Double]) -> @gmlewis/step/cad.Design
+pub fn Component::to_exploded_design(Self, joint_positions? : Map[String, Double], scale? : Double, trace_lines? : Bool) -> @gmlewis/step/cad.Design
 pub fn Component::to_gltf(Self, joint_positions? : Map[String, Double]) -> String
 pub fn Component::to_pin_map_csv(Self) -> String
 pub fn Component::to_robot(Self, package_name? : String?) -> @urdf.Robot
@@ -296,6 +299,14 @@ pub(all) struct ControlBinding {
   limit_input : String?
 }
 pub fn ControlBinding::new(String, actuator? : String, channel? : String, mcu_pins? : String, direction? : String, gear_ratio? : Double, soft_lower? : Double?, soft_upper? : Double?, homing_input? : String?, limit_input? : String?) -> Self
+
+#derive(Eq, @debug.Debug)
+pub(all) enum ExplodeSpec {
+  AlongMate(Double, Int32)
+  OffsetMm(Double, Double, Double, Int32)
+}
+pub fn ExplodeSpec::along_mate(distance_mm~ : Double, order? : Int32) -> Self
+pub fn ExplodeSpec::offset_mm(dx~ : Double, dy~ : Double, dz~ : Double, order? : Int32) -> Self
 
 pub(all) struct Fastener {
   name : String

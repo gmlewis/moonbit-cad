@@ -37,11 +37,6 @@ fn housing_slate() -> @step_cad.Rgb {
 }
 
 ///|
-fn gear_teal() -> @step_cad.Rgb {
-  @step_cad.Rgb::new(0.12, 0.56, 0.62)
-}
-
-///|
 fn hub_amber() -> @step_cad.Rgb {
   @step_cad.Rgb::new(0.92, 0.54, 0.14)
 }
@@ -1450,6 +1445,9 @@ pub fn build_wbr(
         parent_mate=prefix + "_hip_act_mount",
         hip_act,
         spec=@cad.JointSpec::fixed(),
+        explode=Some(
+          @cad.ExplodeSpec::offset_mm(dx=0.0, dy=sign * 50.0, dz=0.0),
+        ),
       )
 
     // Passive Pivot C bearing & pin on chassis side wall.
@@ -1627,6 +1625,9 @@ pub fn build_wbr(
         parent_mate="wheel_act_mount",
         wheel_act,
         spec=@cad.JointSpec::fixed(),
+        explode=Some(
+          @cad.ExplodeSpec::offset_mm(dx=0.0, dy=sign * 60.0, dz=0.0),
+        ),
       )
       // Outboard wheel joint at W
       .add_mate_mm_deg(
@@ -1642,6 +1643,7 @@ pub fn build_wbr(
         build_wbr_wheel(prefix + "_wheel_link", params),
         child_mate="axle",
         spec=@cad.JointSpec::continuous_limit(effort=35.0, velocity=30.0),
+        explode=Some(@cad.ExplodeSpec::along_mate(distance_mm=sign * 70.0)),
       )
 
     upper_arm = upper_arm.attach(
@@ -1657,6 +1659,7 @@ pub fn build_wbr(
           velocity=20.0,
         ),
       ),
+      explode=Some(@cad.ExplodeSpec::along_mate(distance_mm=sign * 90.0)),
     )
 
     // 4. Forward Parallel Guide Rocker Link (C -> D) in Plane 1.
@@ -1723,6 +1726,7 @@ pub fn build_wbr(
           effort=90.0,
           velocity=15.0,
         ),
+        explode=Some(@cad.ExplodeSpec::along_mate(distance_mm=sign * 120.0)),
       )
       .add_mate_mm_deg(
         prefix + "_guide_pivot",
@@ -1744,6 +1748,7 @@ pub fn build_wbr(
             velocity=20.0,
           ),
         ),
+        explode=Some(@cad.ExplodeSpec::along_mate(distance_mm=sign * 100.0)),
       )
   }
 
@@ -1808,171 +1813,6 @@ pub fn build_wbr(
       ),
     )
   base
-}
-
-///|
-/// Directional explode offset for every body in the WBR assembly so the
-/// exploded STEP view displays chassis, A12 actuators, 4-elbow planetary
-/// gearboxes, 4-bar linkage arms, and wheels in crisp assembly order.
-fn wbr_explode_offset(node : @step_cad.SceneNode) -> (Double, Double, Double) {
-  let name = node.name
-  let (_, _, y0, y1, _, _) = node.bounding_box()
-  let yc = (y0 + y1) / 2.0
-  let side = if name.has_prefix("l_") ||
-    name.contains("_side_l") ||
-    name.contains("_tof_l") {
-    1.0
-  } else if name.has_prefix("r_") ||
-    name.contains("_side_r") ||
-    name.contains("_tof_r") {
-    -1.0
-  } else if yc >= 0.0 {
-    1.0
-  } else {
-    -1.0
-  }
-
-  // Chassis shell parts explode along +Z / -Z / +X / -X / ±Y
-  if name.contains("chassis_top_lid") {
-    (0.0, 0.0, 95.0)
-  } else if name.contains("front_battery") || name.contains("front_xt60") {
-    (135.0, 0.0, 45.0)
-  } else if name.contains("front_tof") {
-    (115.0, 0.0, 0.0)
-  } else if name.contains("chassis_nose") || name.contains("chassis_front_hood") {
-    (75.0, 0.0, 0.0)
-  } else if name.contains("belly_imu") {
-    (0.0, 0.0, -125.0)
-  } else if name.contains("chassis_belly") {
-    (0.0, 0.0, -75.0)
-  } else if name.contains("belly_mcu") {
-    (0.0, 0.0, 45.0)
-  } else if name.contains("chassis_rear_bulkhead") {
-    (-90.0, 0.0, 0.0)
-  } else if name.contains("chassis_side_") {
-    (0.0, side * 170.0, 0.0)
-  } else if name.contains("pivot_c_") {
-    (0.0, side * 195.0, 0.0)
-  } else if name.contains("_hip_drive") {
-    // Explode hip A12 + 4-elbow planetary stages cleanly inboard -> side plate -> outboard hub
-    if name.contains("_moteus") {
-      (0.0, side * -35.0, 0.0)
-    } else if name.contains("_backplate") || name.contains("_barrel") {
-      (0.0, side * 5.0, 0.0)
-    } else if name.contains("_a12") {
-      (0.0, side * 25.0, 0.0)
-    } else if name.contains("_sun_adapter") {
-      (0.0, side * 60.0, 0.0)
-    } else if name.contains("planetary") ||
-      name.contains("sun") ||
-      name.contains("planet") ||
-      name.contains("ring") {
-      (0.0, side * 88.0, 0.0)
-    } else if name.contains("_carrier") || name.contains("_output_shaft") {
-      (0.0, side * 116.0, 0.0)
-    } else if name.contains("_output_cap") ||
-      name.contains("_out_bearing") ||
-      name.contains("_flange_bolt") {
-      (0.0, side * 142.0, 0.0)
-    } else {
-      (0.0, side * 208.0, 0.0)
-    }
-  } else if name.contains("_hip_crank") ||
-    name.contains("_pivot_b_") ||
-    name.contains("_guide_bar") ||
-    name.contains("_pivot_d_bearing") {
-    (0.0, side * 245.0, 0.0)
-  } else if name.contains("_calf_strut") || name.contains("_pivot_d_pin") {
-    (0.0, side * 310.0, 0.0)
-  } else if name.contains("_wheel_drive") {
-    // Wheel actuator sits inboard of calf strut; only output_hub explodes outboard
-    if name.contains("_moteus") {
-      (0.0, side * 145.0, 0.0)
-    } else if name.contains("_backplate") || name.contains("_barrel") {
-      (0.0, side * 168.0, 0.0)
-    } else if name.contains("_a12") {
-      (0.0, side * 188.0, 0.0)
-    } else if name.contains("_sun_adapter") {
-      (0.0, side * 214.0, 0.0)
-    } else if name.contains("planetary") ||
-      name.contains("sun") ||
-      name.contains("planet") ||
-      name.contains("ring") {
-      (0.0, side * 236.0, 0.0)
-    } else if name.contains("_carrier") || name.contains("_output_shaft") {
-      (0.0, side * 260.0, 0.0)
-    } else if name.contains("_output_cap") ||
-      name.contains("_out_bearing") ||
-      name.contains("_flange_bolt") {
-      (0.0, side * 282.0, 0.0)
-    } else {
-      (0.0, side * 355.0, 0.0)
-    }
-  } else if name.contains("_wheel_link_rim") {
-    (0.0, side * 395.0, 0.0)
-  } else if name.contains("_wheel_link_tire") {
-    (0.0, side * 430.0, 0.0)
-  } else {
-    (0.0, 0.0, 0.0)
-  }
-}
-
-///|
-fn wbr_explode_color(name : String) -> @step_cad.Rgb {
-  if name.contains("planetary") ||
-    name.contains("/sun") ||
-    name.contains("/planet") ||
-    name.contains("/ring") {
-    gear_teal()
-  } else if name.contains("_carrier") ||
-    name.contains("_output_hub") ||
-    name.contains("_sun_adapter") {
-    hub_amber()
-  } else if name.contains("_backplate") ||
-    name.contains("_barrel") ||
-    name.contains("_output_cap") {
-    housing_slate()
-  } else if name.contains("_tire") ||
-    name.contains("battery") ||
-    name.contains("tof") {
-    dark_matte()
-  } else if name.contains("xt60") {
-    xt60_yellow()
-  } else if name.contains("imu") ||
-    name.contains("mcu") ||
-    name.contains("moteus") {
-    pcb_green()
-  } else if name.contains("bearing") ||
-    name.contains("pin") ||
-    name.contains("shaft") ||
-    name.contains("bolt") {
-    steel_grey()
-  } else if name.contains("hip_crank") ||
-    name.contains("guide_bar") ||
-    name.contains("calf_strut") {
-    link_white()
-  } else {
-    shell_white()
-  }
-}
-
-///|
-/// Builds the display-only exploded, color-coded WBR design.
-pub fn wbr_exploded_design(
-  design : @step_cad.Design,
-  name~ : String = "08-wbr-biped-exploded",
-) -> @step_cad.Design {
-  let mut out = @step_cad.Design::new(
-    name~,
-    description="Exploded, color-coded 4-bar WBR view",
-  )
-  for node in design.nodes() {
-    let (dx, dy, dz) = wbr_explode_offset(node)
-    out = out.add(
-      node.with_color(wbr_explode_color(node.name)).translate(x=dx, y=dy, z=dz),
-    )
-  }
-  out
 }
 
 ///|
@@ -2096,7 +1936,8 @@ pub async fn run_cli() -> Unit {
     joint_positions=positions,
     example_dir="examples/08-wbr-biped",
   )
-  // Write flat print-in-place 4-elbow planetary cartridge and exploded view.
+  // Write the flat print-in-place 4-elbow planetary cartridge. The package's
+  // exploded.step is generated automatically from the tree's `ExplodeSpec`s.
   match output.build_package {
     Some(dir) => {
       let cart = build_planetary_cartridge(params)
@@ -2104,19 +1945,13 @@ pub async fn run_cli() -> Unit {
         cart.to_design().to_step_file(),
         Some(dir + "/printable/WBR-GEAR-CARTRIDGE.step"),
       )
-      let exploded = wbr_exploded_design(
-        robot.to_design(joint_positions=positions),
-      )
-      @step_cad.write_text_file(
-        exploded.to_step_file(),
-        Some(dir + "/exploded.step"),
-      )
     }
     None => ()
   }
   if args.flag("explode") {
-    let exploded = wbr_exploded_design(
-      robot.to_design(joint_positions=positions),
+    let exploded = robot.to_exploded_design(
+      joint_positions=positions,
+      trace_lines=true,
     )
     let target = output.step.unwrap_or("/tmp/08-wbr-biped-exploded.step")
     @step_cad.write_text_file(exploded.to_step_file(), Some(target))

@@ -570,6 +570,13 @@ pub async fn write_output(
         }
       }
       design.write_step_file(Some(dir + "/assembly.step"))
+      // First-class exploded view: whenever the tree declares any
+      // `ExplodeSpec`, write the exploded, role-colored STEP automatically.
+      if comp.has_explode_spec() {
+        comp
+        .to_exploded_design(joint_positions~, trace_lines=true)
+        .write_step_file(Some(dir + "/exploded.step"))
+      }
       comp.to_urdf_bundle().write_to_dir(dir + "/bundle", checked=true)
     }
     None => ()

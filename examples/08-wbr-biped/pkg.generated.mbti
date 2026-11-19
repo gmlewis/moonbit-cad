@@ -2,13 +2,14 @@
 package "gmlewis/cad/examples/08-wbr-biped"
 
 import {
+  "gmlewis/cad",
   "gmlewis/step/components/common",
 }
 
 // Values
-pub fn build_planetary_cartridge(WbrParams) -> @gmlewis/cad.Component
+pub fn build_planetary_cartridge(WbrParams) -> @cad.Component
 
-pub fn build_wbr(params? : WbrParams, board_text? : String) -> @gmlewis/cad.Component
+pub fn build_wbr(params? : WbrParams, board_text? : String) -> @cad.Component
 
 pub fn pose_hip_deg(String) -> Double
 
@@ -19,8 +20,6 @@ pub async fn run_cli() -> Unit
 pub fn solve_four_bar(WbrParams, Double) -> FourBarSolution
 
 pub fn wbr_chassis_pivots(WbrParams) -> (Double, Double, Double, Double)
-
-pub fn wbr_exploded_design(@gmlewis/step/cad.Design, name? : String) -> @gmlewis/step/cad.Design
 
 // Errors
 

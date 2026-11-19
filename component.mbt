@@ -419,6 +419,8 @@ pub(all) struct Attachment {
   /// False for children that belong to the parent as a purchased/assembled
   /// item (e.g. a motor rotor), so the BOM does not count them separately.
   bom_external : Bool
+  /// Optional first-class exploded-view separation for this attachment.
+  explode : ExplodeSpec?
 }
 
 ///|
@@ -592,6 +594,7 @@ pub fn Component::attach(
   child_mate~ : String = "origin",
   spec~ : JointSpec = JointSpec::fixed(),
   bom_external~ : Bool = true,
+  explode~ : ExplodeSpec? = None,
 ) -> Component {
   let pair = @step_common.MatePair::new(
     parent=parent_mate,
@@ -603,7 +606,7 @@ pub fn Component::attach(
     description=spec.pair.description,
   )
   let spec = { ..spec, pair, }
-  self.attachments.push({ joint_name, child, spec, bom_external, })
+  self.attachments.push({ joint_name, child, spec, bom_external, explode, })
   self
 }
 
@@ -622,6 +625,7 @@ pub fn Component::attach_to(
   child_mate~ : String = "origin",
   spec~ : JointSpec = JointSpec::fixed(),
   bom_external~ : Bool = true,
+  explode~ : ExplodeSpec? = None,
 ) -> Component {
   if self.name == target_name {
     return self.attach(
@@ -631,6 +635,7 @@ pub fn Component::attach_to(
       child_mate~,
       spec~,
       bom_external~,
+      explode~,
     )
   }
   for i in 0..<self.attachments.length() {
@@ -643,6 +648,7 @@ pub fn Component::attach_to(
       child_mate~,
       spec~,
       bom_external~,
+      explode~,
     )
     self.attachments[i] = { ..att, child: updated, }
   }

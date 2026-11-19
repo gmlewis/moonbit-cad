@@ -6,6 +6,52 @@
 /// `BodyPart`.
 
 ///|
+/// How an attached child separates from its parent in an exploded view.
+///
+/// `order` is a positive assembly stage; it multiplies the separation so later
+/// stages move further. An `AlongMate` distance may be negative to explode in
+/// the opposite direction of the parent mate's declared axis.
+#derive(Debug, Eq)
+pub(all) enum ExplodeSpec {
+  /// Move the child `distance_mm` along the parent mate's outward axis.
+  AlongMate(Double, Int32)
+  /// Move the child by `(dx, dy, dz)` in the parent's frame.
+  OffsetMm(Double, Double, Double, Int32)
+}
+
+///|
+/// Explodes a child along the parent mate's outward axis.
+pub fn ExplodeSpec::along_mate(
+  distance_mm~ : Double,
+  order~ : Int32 = 1,
+) -> ExplodeSpec {
+  AlongMate(distance_mm, order)
+}
+
+///|
+/// Explodes a child along an explicit vector in the parent's frame.
+pub fn ExplodeSpec::offset_mm(
+  dx~ : Double,
+  dy~ : Double,
+  dz~ : Double,
+  order~ : Int32 = 1,
+) -> ExplodeSpec {
+  OffsetMm(dx, dy, dz, order)
+}
+
+///|
+/// Returns true when any attachment in this component tree carries an
+/// `ExplodeSpec`.
+pub fn Component::has_explode_spec(self : Component) -> Bool {
+  for att in self.attachments {
+    if att.explode is Some(_) || att.child.has_explode_spec() {
+      return true
+    }
+  }
+  false
+}
+
+///|
 /// Purchasing and manufacturing metadata for one part.
 pub(all) struct PartMeta {
   part_number : String
