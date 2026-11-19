@@ -30,6 +30,7 @@ pub(all) struct OutputPaths {
   bed_size : String
   check : Bool
   analyze : Bool
+  inspect_json : Bool
   collisions : Bool
   validate : Bool
   validate_meshes : Bool
@@ -194,6 +195,12 @@ pub fn with_output_args(spec : Map[String, @cli.Arg]) -> Map[String, @cli.Arg] {
     @cli.flag(help="Print statics, CoM, inertia, and joint torque margins"),
   )
   spec.set(
+    "inspect-json",
+    @cli.flag(
+      help="Print a JSON summary of mass, pose, torque margins, printable parts, and interference",
+    ),
+  )
+  spec.set(
     "collisions",
     @cli.flag(help="Analyze placed parts for unintended overlaps"),
   )
@@ -239,6 +246,7 @@ pub fn output_paths(args : @cli.Args) -> OutputPaths {
     bed_size: args.string_opt("bedSize").unwrap_or(""),
     check: args.flag("check"),
     analyze: args.flag("analyze"),
+    inspect_json: args.flag("inspect-json"),
     collisions: args.flag("collisions"),
     validate: args.flag("validate"),
     validate_meshes: args.flag("validate-meshes"),
@@ -318,13 +326,15 @@ fn any_output(output : OutputPaths) -> Bool {
   output.print_parts is Some(_) ||
   output.posed_parts is Some(_) ||
   output.analyze ||
+  output.inspect_json ||
   output.collisions ||
   output.validate ||
   output.validate_meshes
 }
 
 ///|
-/// True when any output writes a file (everything except `--analyze`).
+/// True when any output writes a file (everything except stdout-only
+/// summaries such as `--analyze` and `--inspect-json`).
 fn has_file_output(output : OutputPaths) -> Bool {
   output.step is Some(_) ||
   output.assembly is Some(_) ||
@@ -505,6 +515,9 @@ pub async fn write_output(
     )
   }
   let bed = output.print_bed()
+  if output.inspect_json && output.build_package is None {
+    println(comp.inspect_json(bed~, joint_positions~))
+  }
   if output.analyze {
     print_robot_analysis(
       @cad.analyze_robot(comp, [("default", joint_positions)]),
@@ -717,6 +730,23 @@ pub async fn write_output(
         }
       }
       design.write_step_file(Some(dir + "/assembly.step"))
+      @cad.gltf_safe_design(design).to_gltf_file(Some(dir + "/assembly.gltf"))
+      // The interactive preview: START-HERE.html loads viewer.js, which fetches
+      // assembly.gltf. The static views/iso.png remains the offline fallback.
+      let viewer = @fs.read_file("scripts/viewer.js").text() catch { _ => "" }
+      if viewer == "" {
+        @cli.eprintln(
+          "warning: scripts/viewer.js is missing; START-HERE.html will use the static render",
+        )
+      } else {
+        @step_cad.write_text_file(viewer, Some(dir + "/viewer.js"))
+      }
+      let preview = @fs.read_file("scripts/preview.html").text() catch {
+        _ => ""
+      }
+      if preview != "" {
+        @step_cad.write_text_file(preview, Some(dir + "/preview.html"))
+      }
       // First-class exploded view: whenever the tree declares any
       // `ExplodeSpec`, write the exploded, role-colored STEP automatically.
       if comp.has_explode_spec() {

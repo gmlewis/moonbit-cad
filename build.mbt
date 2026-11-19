@@ -953,6 +953,22 @@ fn collect_name_key(
 /// available for advanced users.
 
 ///|
+/// Interactive 3D panel shown at the top of START-HERE.md.
+///
+/// The panel starts as the isometric render and is replaced by a WebGL canvas
+/// only after `viewer.js` has loaded `assembly.gltf`, so an offline or
+/// `file://` page keeps the static image.
+fn viewer_html() -> String {
+  "<div class=\"model-panel\">\n" +
+  "  <img class=\"model-fallback\" src=\"views/iso.png\" alt=\"Isometric assembly view\">\n" +
+  "  <canvas hidden aria-label=\"Interactive 3D assembly view\"></canvas>\n" +
+  "  <div class=\"model-hint\" hidden></div>\n" +
+  "</div>\n" +
+  "<script type=\"importmap\">{\"imports\":{\"three\":\"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js\",\"three/addons/\":\"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/\"}}</script>\n" +
+  "<script type=\"module\" src=\"viewer.js\"></script>\n\n"
+}
+
+///|
 /// Markdown/HTML gallery of the multi-angle renders written by
 /// `scripts/render_views.py`. Missing images hide their figure instead of
 /// showing a broken icon, so a build without `solidcraft-cli` still reads well.
@@ -1009,6 +1025,10 @@ pub fn Component::start_here_text(
       exploded_view +
       "` in a STEP viewer for the exploded, color-coded view.\n\n"
   }
+  out = out +
+    "**Interactive 3D preview** — drag to orbit and scroll to zoom; the static\n" +
+    "gallery below stays available offline.\n\n"
+  out = out + viewer_html()
   out = out + view_gallery_html()
   out = out + "## 1. 3D-print these files\n\n"
   if cartridges.contains("PGB-CARTRIDGE") {
@@ -1339,6 +1359,7 @@ pub fn Component::build_package_files(
       self.control_params_header(joint_positions~),
     ),
     BuildFile::new("lqr_model.py", self.lqr_model_python(joint_positions~)),
+    BuildFile::new("inspect.json", self.inspect_json(bed~, joint_positions~)),
   ]
   let cartridges = parse_cartridges(
     self.parameters.get("print_in_place_gearset").unwrap_or(""),

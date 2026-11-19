@@ -250,6 +250,7 @@ pub fn Component::from_step_layers(String, @common.Component, Array[String], lab
 pub fn Component::get_mate(Self, String) -> @common.MateConnector?
 pub fn Component::harness_checks(Self) -> Array[String]
 pub fn Component::has_explode_spec(Self) -> Bool
+pub fn Component::inspect_json(Self, bed? : PrintBedSpec, joint_positions? : Map[String, Double]) -> String
 pub fn Component::link_design(Self, String) -> @gmlewis/step/cad.Design?
 pub fn Component::link_parts_csv(Self) -> String
 pub fn Component::lqr_model_python(Self, joint_positions? : Map[String, Double]) -> String

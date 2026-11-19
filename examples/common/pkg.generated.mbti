@@ -90,6 +90,7 @@ pub(all) struct OutputPaths {
   bed_size : String
   check : Bool
   analyze : Bool
+  inspect_json : Bool
   collisions : Bool
   validate : Bool
   validate_meshes : Bool

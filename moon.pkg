@@ -4,6 +4,7 @@ import {
   "gmlewis/step/components/common" @step_common,
   "gmlewis/step/components/makerpipe" @step_makerpipe,
   "gmlewis/urdf",
+  "moonbitlang/core/json",
   "moonbitlang/core/math",
   "moonbitlang/core/string",
 }
@@ -15,4 +16,5 @@ import {
   "gmlewis/step/components/standards" @step_standards,
   "gmlewis/urdf",
   "moonbitlang/core/encoding/utf8" @encoding/utf8,
+  "moonbitlang/core/json",
 } for "test"

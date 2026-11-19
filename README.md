@@ -247,6 +247,8 @@ Every example supports the shared output flags:
 - `--collisions` — conservative OBB/AABB collision and interference audit.
 - `--analyze` — whole-robot mass, CoM, inertia, static joint torque margins, and
   wheel/foot ground-contact alignment.
+- `--inspect-json` — deterministic JSON summary on stdout; `--package` also
+  writes the same document to `inspect.json`.
 - `-o`, `--assembly`, `--gltf`, `--blender`, `--urdf`, `--bundle`,
   `--package`, `--bom`, `--control`, `--pins`, and `--check`.
 
@@ -352,7 +354,11 @@ test one example:
 | `firmware.h` | C header: joint bindings, gear ratios, limits, pins, and sensors. |
 | `control_params.h` | C header: robot mass, CoM, inertia, ground contact, and commandable joint constants. |
 | `lqr_model.py` | Python dataclasses with the same constants and an inverted-pendulum `A`/`B` helper. |
+| `inspect.json` | Machine-readable mass, CoM, inertia, bbox, links, joints, torque margins, printable parts, BOM, interference, and views. |
 | `assembly.step` | Posed assembly STEP. |
+| `assembly.gltf` | Posed glTF used by the interactive preview. |
+| `START-HERE.html` | Print/buy/assemble guide with an interactive 3D panel (falls back to `views/iso.png` offline). |
+| `viewer.js`, `preview.html` | Three.js viewer assets; `preview.html` is a full-window model page. |
 | `bundle/` | URDF, `package.xml`, glTF meshes, and per-link STEP parts. |
 
 ```bash
@@ -360,6 +366,23 @@ test one example:
 python3 scripts/validate_step.py --no-mesh build/05/assembly.step
 python3 scripts/validate_urdf.py --check-meshes build/05/bundle/urdf/*.urdf
 ```
+
+### Customize a design
+
+`./customize.sh <example>` starts a local web page whose sliders are generated
+from the example's own `--help`. Each change rebuilds the package and refreshes
+the interactive 3D preview plus mass, CoM, torque-margin, and BOM metrics from
+`inspect.json`.
+
+```bash
+./customize.sh 08                    # opens http://127.0.0.1:8765/
+python3 scripts/customize.py 8 --params-json
+python3 scripts/customize.py 8 --build-once --set scale=1.3
+```
+
+Scaffold a new example with `scripts/new-example.sh 09-demo-arm`; the generated
+package passes `./test-all.sh` immediately. See `AGENT-CHEATSHEET.md` for the
+builder/CLI quick reference.
 
 ### Drawings
 
