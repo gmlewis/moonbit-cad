@@ -110,6 +110,25 @@ test "urdf bundle contains gltf meshes and step parts" {
 }
 
 ///|
+test "component loop constraints reach the robot in metres" {
+  let comp = @cad.Component::new("base")
+    .add_body(@cad.BodyPart::box_mm("base_body", 10.0, 10.0, 10.0))
+    .add_loop_constraint(
+      name="pivot_d",
+      body1="base",
+      anchor1=(10.0, 0.0, 0.0),
+      body2="base",
+      anchor2=(20.0, 0.0, 0.0),
+    )
+  let robot = comp.to_robot()
+  assert_eq(robot.loop_constraints.length(), 1)
+  let constraint = robot.loop_constraints[0]
+  assert_eq(constraint.name, "pivot_d")
+  assert_true((constraint.anchor1.0 - 0.01).abs() < 1.0e-12)
+  assert_true((constraint.anchor2.0 - 0.02).abs() < 1.0e-12)
+}
+
+///|
 test "link design returns bodies in local frame" {
   let comp = two_link_arm()
   assert_true(comp.link_design("base") is Some(_))

@@ -514,6 +514,9 @@ pub(all) struct Component {
   control : Array[ControlBinding]
   /// Routed cable bundles belonging to this component.
   cables : Array[CableRoute]
+  /// Closed-chain constraints whose anchors are declared on this root
+  /// component (millimetres, converted to metres for URDF/MJCF).
+  loops : Array[@urdf.LoopConstraint]
 }
 
 ///|
@@ -539,7 +542,34 @@ pub fn Component::new(name : String, description~ : String = "") -> Component {
     wiring: [],
     control: [],
     cables: [],
+    loops: [],
   }
+}
+
+///|
+/// Declares a closed-chain constraint between two links.
+///
+/// Anchors are millimetres in each link's local frame and are converted to
+/// metres for the URDF/MJCF robot. Declare loop constraints on the root
+/// component; `to_robot()` carries them into the robot.
+pub fn Component::add_loop_constraint(
+  self : Component,
+  name~ : String,
+  body1~ : String,
+  anchor1~ : (Double, Double, Double),
+  body2~ : String,
+  anchor2~ : (Double, Double, Double),
+) -> Component {
+  let constraint = @urdf.LoopConstraint::connect(
+    name~,
+    body1~,
+    anchor1=(anchor1.0 / 1000.0, anchor1.1 / 1000.0, anchor1.2 / 1000.0),
+    body2~,
+    anchor2=(anchor2.0 / 1000.0, anchor2.1 / 1000.0, anchor2.2 / 1000.0),
+  )
+  let loops = self.loops.copy()
+  loops.push(constraint)
+  { ..self, loops, }
 }
 
 ///|

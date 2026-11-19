@@ -332,6 +332,9 @@ pub fn Component::to_robot(
   for transmission in transmissions {
     robot = robot.add_transmission(transmission)
   }
+  for constraint in self.loops {
+    robot = robot.add_loop_constraint(constraint)
+  }
   robot
 }
 

@@ -1683,6 +1683,15 @@ pub fn build_wbr(
         ),
         explode=Some(@cad.ExplodeSpec::along_mate(distance_mm=sign * 100.0)),
       )
+    // Closed-chain 4-bar: the calf's D pivot and the guide link's D pivot are
+    // the same physical joint.
+    base = base.add_loop_constraint(
+      name=prefix + "_pivot_d_loop",
+      body1=prefix + "_calf_link",
+      anchor1=(params.coupler_len_mm, 0.0, 0.0),
+      body2=prefix + "_guide_link",
+      anchor2=(params.guide_len_mm, 0.0, 0.0),
+    )
   }
 
   // Cable routing + 4-DOF CAN control bindings (LQR wheel torque + IK height)

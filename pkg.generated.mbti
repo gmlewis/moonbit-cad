@@ -207,6 +207,7 @@ pub(all) struct Component {
   wiring : Array[WireRun]
   control : Array[ControlBinding]
   cables : Array[CableRoute]
+  loops : Array[@urdf.LoopConstraint]
 }
 pub fn Component::add_bodies(Self, Array[BodyPart]) -> Self
 pub fn Component::add_body(Self, BodyPart) -> Self
@@ -214,6 +215,7 @@ pub fn Component::add_cable_route(Self, CableRoute) -> Self
 pub fn Component::add_control_binding(Self, ControlBinding) -> Self
 pub fn Component::add_fastener(Self, Fastener) -> Self
 pub fn Component::add_fit(Self, Fit) -> Self
+pub fn Component::add_loop_constraint(Self, name~ : String, body1~ : String, anchor1~ : (Double, Double, Double), body2~ : String, anchor2~ : (Double, Double, Double)) -> Self
 pub fn Component::add_mate(Self, @common.MateConnector) -> Self
 pub fn Component::add_mate_mm_deg(Self, String, x? : Double, y? : Double, z? : Double, rx_deg? : Double, ry_deg? : Double, rz_deg? : Double, axis? : (Double, Double, Double)) -> Self
 pub fn Component::add_port(Self, Port) -> Self
