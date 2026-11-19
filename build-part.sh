@@ -19,6 +19,7 @@ Examples:
   ./build-part.sh 04      # knee joint actuator (2-stage 28.4:1 A12)
   ./build-part.sh 05      # Galileo quadruped
   ./build-part.sh 06      # assistive scooter
+  ./build-part.sh 07      # Roadrunner bipedal wheeled robot
 
 Everything is written to build/<example>/. Open START-HERE.html first.
 EOF
@@ -44,6 +45,7 @@ case "${EXAMPLE}" in
   4 | 04) DIR="04" ;;
   5 | 05) DIR="05" ;;
   6 | 06) DIR="06" ;;
+  7 | 07) DIR="07" ;;
   *) DIR="${EXAMPLE}" ;;
 esac
 OUT="build/${DIR}"

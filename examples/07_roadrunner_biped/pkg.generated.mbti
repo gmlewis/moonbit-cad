@@ -1,0 +1,21 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "gmlewis/cad/examples/07_roadrunner_biped"
+
+import {
+  "gmlewis/cad",
+}
+
+// Values
+pub fn build_roadrunner(drum_diam_mm? : Double, drum_width_mm? : Double, thigh_len_mm? : Double, calf_len_mm? : Double, wheel_diam_mm? : Double) -> @cad.Component
+
+pub fn pose_positions(mode? : String, hip_roll_deg? : Double?, hip_pitch_deg? : Double?, knee_deg? : Double?, wheel_spin_deg? : Double) -> Map[String, Double]
+
+pub async fn run_cli() -> Unit
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

@@ -1,0 +1,6 @@
+import {
+  "gmlewis/cad/examples/07_roadrunner_biped" @roadrunner,
+  "moonbitlang/async",
+}
+
+pkgtype(kind: "executable")
