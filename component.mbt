@@ -517,6 +517,8 @@ pub(all) struct Component {
   /// Closed-chain constraints whose anchors are declared on this root
   /// component (millimetres, converted to metres for URDF/MJCF).
   loops : Array[@urdf.LoopConstraint]
+  /// Optional RL observation/action/reward contract exported as `rl_task.json`.
+  rl_task : RlTaskSpec?
 }
 
 ///|
@@ -543,6 +545,7 @@ pub fn Component::new(name : String, description~ : String = "") -> Component {
     control: [],
     cables: [],
     loops: [],
+    rl_task: None,
   }
 }
 

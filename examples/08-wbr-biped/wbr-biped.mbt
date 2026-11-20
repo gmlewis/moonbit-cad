@@ -1757,7 +1757,38 @@ pub fn build_wbr(
         gear_ratio=reduction,
       ),
     )
-  base
+  base.with_rl_task(
+    @cad.RlTaskSpec::new(
+      kind=@cad.RlTaskKind::Balance,
+      control_dt_s=0.01,
+      episode_len_s=10.0,
+      target_base_height_m=0.28,
+      target_vel_x_mps=0.5,
+      termination_tilt_deg=55.0,
+      termination_min_z_m=0.15,
+      imu_link="base_link",
+      wheel_links=["l_wheel_link", "r_wheel_link"],
+      hip_joints=["l_hip_joint", "r_hip_joint"],
+      wheel_joints=["l_wheel_joint", "r_wheel_joint"],
+      action_scales=wbr_rl_scales(),
+      domain_rand=@cad.DomainRandSpec::new(
+        push_impulse_ns=2.0,
+        obs_noise_std=0.01,
+      ),
+    ),
+  )
+}
+
+///|
+fn wbr_rl_scales() -> Map[String, Double] {
+  let scales : Map[String, Double] = Map([])
+  for joint in ["l_hip_joint", "r_hip_joint"] {
+    scales.set(joint, 0.5)
+  }
+  for joint in ["l_wheel_joint", "r_wheel_joint"] {
+    scales.set(joint, 4.0)
+  }
+  scales
 }
 
 ///|

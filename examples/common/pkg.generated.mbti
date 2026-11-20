@@ -91,6 +91,7 @@ pub(all) struct OutputPaths {
   check : Bool
   analyze : Bool
   inspect_json : Bool
+  rl_task : Bool
   collisions : Bool
   validate : Bool
   validate_meshes : Bool

@@ -1368,6 +1368,11 @@ pub fn Component::build_package_files(
     BuildFile::new("lqr_model.py", self.lqr_model_python(joint_positions~)),
     BuildFile::new("inspect.json", self.inspect_json(bed~, joint_positions~)),
   ]
+  if self.rl_task is Some(_) {
+    files.push(
+      BuildFile::new("rl_task.json", self.rl_task_json(joint_positions~)),
+    )
+  }
   let cartridges = parse_cartridges(
     self.parameters.get("print_in_place_gearset").unwrap_or(""),
   )

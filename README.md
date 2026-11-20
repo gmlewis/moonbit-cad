@@ -249,6 +249,8 @@ Every example supports the shared output flags:
   wheel/foot ground-contact alignment.
 - `--inspect-json` — deterministic JSON summary on stdout; `--package` also
   writes the same document to `inspect.json`.
+- `--rl-task` — print the component's RL observation/action/reward contract
+  (also written to `rl_task.json` by `--package`).
 - `-o`, `--assembly`, `--gltf`, `--blender`, `--urdf`, `--bundle`,
   `--package`, `--bom`, `--control`, `--pins`, and `--check`.
 
@@ -355,6 +357,7 @@ test one example:
 | `control_params.h` | C header: robot mass, CoM, inertia, ground contact, and commandable joint constants. |
 | `lqr_model.py` | Python dataclasses with the same constants and an inverted-pendulum `A`/`B` helper. |
 | `inspect.json` | Machine-readable mass, CoM, inertia, bbox, links, joints, torque margins, printable parts, BOM, interference, and views. |
+| `rl_task.json` | RL task contract: MJCF path, home pose, actuators, observation/action sizes, rewards, and domain randomization (when the example declares one). |
 | `assembly.step` | Posed assembly STEP. |
 | `assembly.gltf` | Posed glTF used by the interactive preview. |
 | `START-HERE.html` | Print/buy/assemble guide with an interactive 3D panel (falls back to `views/iso.png` offline). |

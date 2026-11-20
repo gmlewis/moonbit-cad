@@ -1741,7 +1741,42 @@ pub fn fox_bot(
       robot, params, prefix, is_front, is_left, hip_id, wheel_id, moteus_step, tire_mount_step,
     )
   }
-  robot.with_robot_name("fox_bot")
+  robot
+  .with_robot_name("fox_bot")
+  .with_rl_task(
+    @cad.RlTaskSpec::new(
+      kind=@cad.RlTaskKind::JumpAndLevel,
+      control_dt_s=0.01,
+      episode_len_s=10.0,
+      target_base_height_m=0.42,
+      target_vel_x_mps=0.5,
+      termination_tilt_deg=55.0,
+      termination_min_z_m=0.20,
+      imu_link="bno055_imu",
+      wheel_links=["lf_tire", "rf_tire", "rr_tire", "lr_tire"],
+      hip_joints=[
+        "lf_hip_joint", "rf_hip_joint", "rr_hip_joint", "lr_hip_joint",
+      ],
+      wheel_joints=[
+        "lf_wheel_joint", "rf_wheel_joint", "rr_wheel_joint", "lr_wheel_joint",
+      ],
+      action_scales=fox_rl_scales(),
+      domain_rand=@cad.DomainRandSpec::new(
+        push_impulse_ns=2.0,
+        obs_noise_std=0.01,
+      ),
+    ),
+  )
+}
+
+///|
+fn fox_rl_scales() -> Map[String, Double] {
+  let scales : Map[String, Double] = Map([])
+  for leg in ["lf", "rf", "rr", "lr"] {
+    scales.set(leg + "_hip_joint", 0.5)
+    scales.set(leg + "_wheel_joint", 4.0)
+  }
+  scales
 }
 
 ///|

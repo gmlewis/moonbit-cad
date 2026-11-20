@@ -210,6 +210,7 @@ pub(all) struct Component {
   control : Array[ControlBinding]
   cables : Array[CableRoute]
   loops : Array[@urdf.LoopConstraint]
+  rl_task : RlTaskSpec?
 }
 pub fn Component::add_bodies(Self, Array[BodyPart]) -> Self
 pub fn Component::add_body(Self, BodyPart) -> Self
@@ -262,6 +263,8 @@ pub fn Component::power_budget(Self) -> PowerBudget
 pub fn Component::print_list_csv(Self, bed? : PrintBedSpec) -> String
 pub fn Component::printable_parts(Self) -> Array[PrintablePart]
 pub fn Component::report_text(Self) -> String
+pub fn Component::rl_task_checks(Self) -> Array[String]
+pub fn Component::rl_task_json(Self, joint_positions? : Map[String, Double]) -> String
 pub fn Component::sourcing_csv(Self) -> String
 pub fn Component::start_here_text(Self, name? : String, bed? : PrintBedSpec) -> String
 pub fn Component::to_assembly_step(Self, joint_positions? : Map[String, Double]) -> String
@@ -285,6 +288,7 @@ pub fn Component::with_param(Self, String, String) -> Self
 pub fn Component::with_part(Self, PartMeta) -> Self
 pub fn Component::with_pcb(Self, PcbSpec) -> Self
 pub fn Component::with_print_bed_orient(Self, PrintBedOrient) -> Self
+pub fn Component::with_rl_task(Self, RlTaskSpec) -> Self
 pub fn Component::with_robot_name(Self, String) -> Self
 pub fn Component::with_sensor(Self, SensorSpec) -> Self
 pub fn Component::with_supplier_links(Self, Array[SupplierLink]) -> Self
@@ -344,6 +348,16 @@ pub(all) struct ControlJointConstants {
   effort : Double
   velocity : Double
 }
+
+#derive(Eq, @debug.Debug)
+pub(all) struct DomainRandSpec {
+  mass_scale_range : (Double, Double)
+  friction_range : (Double, Double)
+  kp_scale_range : (Double, Double)
+  push_impulse_ns : Double
+  obs_noise_std : Double
+}
+pub fn DomainRandSpec::new(mass_scale_range? : (Double, Double), friction_range? : (Double, Double), kp_scale_range? : (Double, Double), push_impulse_ns? : Double, obs_noise_std? : Double) -> Self
 
 #derive(Eq, @debug.Debug)
 pub(all) enum ExplodeSpec {
@@ -540,6 +554,46 @@ pub fn PrintablePart::bbox_mm(Self) -> (Double, Double, Double)?
 pub fn PrintablePart::est_mass_g(Self, BomLine) -> Double
 pub fn PrintablePart::est_print_min(Self, BomLine) -> Double
 pub fn PrintablePart::fits_bed(Self, PrintBedSpec) -> Bool
+
+#derive(Eq, @debug.Debug)
+pub(all) struct RewardWeights {
+  forward_vel : Double
+  target_height : Double
+  upright : Double
+  energy : Double
+  smoothness : Double
+  alive : Double
+}
+pub fn RewardWeights::new(forward_vel? : Double, target_height? : Double, upright? : Double, energy? : Double, smoothness? : Double, alive? : Double) -> Self
+
+#derive(Eq, @debug.Debug)
+pub(all) enum RlTaskKind {
+  Balance
+  WheeledLocomotion
+  QuadrupedWalk
+  JumpAndLevel
+  Custom(String)
+}
+pub fn RlTaskKind::to_string(Self) -> String
+
+#derive(Eq, @debug.Debug)
+pub(all) struct RlTaskSpec {
+  kind : RlTaskKind
+  control_dt_s : Double
+  episode_len_s : Double
+  target_base_height_m : Double
+  target_vel_x_mps : Double
+  termination_tilt_deg : Double
+  termination_min_z_m : Double
+  imu_link : String
+  wheel_links : Array[String]
+  hip_joints : Array[String]
+  wheel_joints : Array[String]
+  action_scales : Map[String, Double]
+  rewards : RewardWeights
+  domain_rand : DomainRandSpec
+}
+pub fn RlTaskSpec::new(kind? : RlTaskKind, control_dt_s? : Double, episode_len_s? : Double, target_base_height_m? : Double, target_vel_x_mps? : Double, termination_tilt_deg? : Double, termination_min_z_m? : Double, imu_link? : String, wheel_links? : Array[String], hip_joints? : Array[String], wheel_joints? : Array[String], action_scales? : Map[String, Double], rewards? : RewardWeights, domain_rand? : DomainRandSpec) -> Self
 
 #derive(Eq, @debug.Debug)
 pub(all) struct RobotAnalysis {

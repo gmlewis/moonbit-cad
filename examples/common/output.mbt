@@ -31,6 +31,7 @@ pub(all) struct OutputPaths {
   check : Bool
   analyze : Bool
   inspect_json : Bool
+  rl_task : Bool
   collisions : Bool
   validate : Bool
   validate_meshes : Bool
@@ -201,6 +202,12 @@ pub fn with_output_args(spec : Map[String, @cli.Arg]) -> Map[String, @cli.Arg] {
     ),
   )
   spec.set(
+    "rl-task",
+    @cli.flag(
+      help="Print the component's RL observation/action/reward contract as JSON",
+    ),
+  )
+  spec.set(
     "collisions",
     @cli.flag(help="Analyze placed parts for unintended overlaps"),
   )
@@ -247,6 +254,7 @@ pub fn output_paths(args : @cli.Args) -> OutputPaths {
     check: args.flag("check"),
     analyze: args.flag("analyze"),
     inspect_json: args.flag("inspect-json"),
+    rl_task: args.flag("rl-task"),
     collisions: args.flag("collisions"),
     validate: args.flag("validate"),
     validate_meshes: args.flag("validate-meshes"),
@@ -327,6 +335,7 @@ fn any_output(output : OutputPaths) -> Bool {
   output.posed_parts is Some(_) ||
   output.analyze ||
   output.inspect_json ||
+  output.rl_task ||
   output.collisions ||
   output.validate ||
   output.validate_meshes
@@ -523,6 +532,18 @@ pub async fn write_output(
   let bed = output.print_bed()
   if output.inspect_json && output.build_package is None {
     println(comp.inspect_json(bed~, joint_positions~))
+  }
+  if output.rl_task {
+    match comp.rl_task {
+      Some(_) =>
+        if output.build_package is None {
+          println(comp.rl_task_json(joint_positions~))
+        }
+      None => {
+        @cli.eprintln("error: this component has no RL task")
+        abort("")
+      }
+    }
   }
   if output.analyze {
     print_robot_analysis(

@@ -968,6 +968,9 @@ pub fn Component::assembly_checks(
       None => ()
     }
   }
+  for warning in self.rl_task_checks() {
+    warnings.push(warning)
+  }
   warnings
 }
 
