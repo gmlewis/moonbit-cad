@@ -586,6 +586,47 @@ pub fn Component::with_robot_name(self : Component, name : String) -> Component 
 }
 
 ///|
+/// Replaces the component's own collision primitives with one exact rolling
+/// cylinder (axis local Z, oriented by the millimetre/degree pose). Use for
+/// wheels and tires so simulators get a true cylinder instead of a bounding
+/// box; attached child bodies keep their own collisions.
+pub fn Component::with_collision_cylinder_mm(
+  self : Component,
+  radius_mm~ : Double,
+  length_mm~ : Double,
+  x_mm~ : Double = 0.0,
+  y_mm~ : Double = 0.0,
+  z_mm~ : Double = 0.0,
+  rx_deg~ : Double = 0.0,
+  ry_deg~ : Double = 0.0,
+  rz_deg~ : Double = 0.0,
+) -> Component {
+  let origin = @urdf.Origin::from_mm_deg(
+    x=x_mm,
+    y=y_mm,
+    z=z_mm,
+    rx_deg~,
+    ry_deg~,
+    rz_deg~,
+  )
+  let collision = @urdf.Collision::new(
+    @urdf.Geometry::cylinder_mm(radius_mm, length_mm),
+    name=Some(self.name + "_cylinder"),
+    origin~,
+  )
+  let bodies : Array[BodyPart] = []
+  for i in 0..<self.bodies.length() {
+    let body = self.bodies[i]
+    if i == 0 {
+      bodies.push({ ..body, collisions: [collision], })
+    } else {
+      bodies.push({ ..body, collisions: [], })
+    }
+  }
+  { ..self, bodies, }
+}
+
+///|
 /// Replaces the component description.
 pub fn Component::with_description(
   self : Component,

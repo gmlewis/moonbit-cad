@@ -1189,6 +1189,10 @@ fn build_fox_wheel(
       part=Some(tire_part),
     ),
     prefix + "_tire",
+  ).with_collision_cylinder_mm(
+    radius_mm=tire_spec.tire_outer_diameter_mm / 2.0,
+    length_mm=tire_spec.tire_width_mm,
+    ry_deg=90.0,
   )
   let bolt_r = mount_spec.bolt_hole_circle_diameter_mm / 2.0
   let bolt_plate_x = -(tire_spec.hub_inset_mm + tire_spec.inset_thickness_mm)

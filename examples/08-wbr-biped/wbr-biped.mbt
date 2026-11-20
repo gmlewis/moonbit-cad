@@ -1011,6 +1011,7 @@ fn build_wbr_wheel(name : String, params : WbrParams) -> @cad.Component {
       color=dark_matte(),
     ).with_part(tire_part),
   )
+  .with_collision_cylinder_mm(radius_mm=r_outer, length_mm=w, rx_deg=90.0)
   .add_mate_mm_deg("axle", axis=(0.0, 1.0, 0.0))
 }
 
@@ -1684,13 +1685,15 @@ pub fn build_wbr(
         explode=Some(@cad.ExplodeSpec::along_mate(distance_mm=sign * 100.0)),
       )
     // Closed-chain 4-bar: the calf's D pivot and the guide link's D pivot are
-    // the same physical joint.
+    // the same physical joint. The calf rides on plane2 and the guide on
+    // plane1, so shift the guide anchor laterally to the calf's pin plane.
+    let pin_y_offset = sign * (y_plane2 - y_plane1)
     base = base.add_loop_constraint(
       name=prefix + "_pivot_d_loop",
       body1=prefix + "_calf_link",
       anchor1=(params.coupler_len_mm, 0.0, 0.0),
       body2=prefix + "_guide_link",
-      anchor2=(params.guide_len_mm, 0.0, 0.0),
+      anchor2=(params.guide_len_mm, pin_y_offset, 0.0),
     )
   }
 

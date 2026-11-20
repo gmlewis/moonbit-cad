@@ -358,16 +358,107 @@ pub fn Component::link_design(
 }
 
 ///|
+/// Builds the simulation-oriented MJCF options from the tree: standing pose
+/// for the home keyframe, position servos for revolute joints, velocity
+/// servos for wheels, and frozen cosmetic rotor joints.
+fn Component::mjcf_options(
+  self : Component,
+  joint_positions : Map[String, Double],
+) -> @urdf.MjcfOptions {
+  let robot = self.to_robot()
+  let bindings = self.control_bindings()
+  let bound : Array[String] = bindings.map(fn(binding) { binding.joint })
+  let actuators : Array[@urdf.MjcfActuator] = []
+  for binding in bindings {
+    match robot.get_joint(binding.joint) {
+      Some(joint) => {
+        let (effort, velocity, lower, upper) = match joint.limit {
+          Some(limit) =>
+            (limit.effort, limit.velocity, limit.lower, limit.upper)
+          None => (0.0, 0.0, None, None)
+        }
+        let forcerange = if effort > 0.0 { Some(effort) } else { None }
+        match joint.joint_type {
+          Continuous => {
+            let vmax = if velocity > 0.0 { velocity } else { 10.0 }
+            actuators.push(
+              @urdf.MjcfActuator::velocity(
+                joint=joint.name,
+                name=binding.actuator,
+                kv=2.0,
+                ctrl_min=-vmax,
+                ctrl_max=vmax,
+                forcerange?,
+              ),
+            )
+          }
+          Revolute | Prismatic => {
+            let lo = match lower {
+              Some(value) => value
+              None => -3.141592653589793
+            }
+            let hi = match upper {
+              Some(value) => value
+              None => 3.141592653589793
+            }
+            actuators.push(
+              @urdf.MjcfActuator::position(
+                joint=joint.name,
+                name=binding.actuator,
+                kp=70.0,
+                kv=3.0,
+                ctrl_min=lo,
+                ctrl_max=hi,
+                forcerange?,
+              ),
+            )
+          }
+          _ =>
+            actuators.push(
+              @urdf.MjcfActuator::motor(
+                joint=joint.name,
+                name=binding.actuator,
+                ctrl_min=-effort,
+                ctrl_max=effort,
+                gear=binding.gear_ratio,
+              ),
+            )
+        }
+      }
+      None => ()
+    }
+  }
+  let freeze_joints : Array[String] = []
+  for joint in robot.joints {
+    if joint.name.contains("_rotor_joint") && !bound.contains(joint.name) {
+      freeze_joints.push(joint.name)
+    }
+  }
+  @urdf.MjcfOptions::new(
+    mesh_dir="../meshes",
+    home_qpos=joint_positions,
+    actuators~,
+    freeze_joints~,
+    default_damping=0.5,
+    default_armature=0.01,
+    exclude_adjacent_contacts=true,
+  )
+}
+
+///|
 /// Builds a ROS 2 URDF bundle with per-link glTF meshes and printable STEP
 /// parts.
 pub fn Component::to_urdf_bundle(
   self : Component,
   package_name~ : String = "",
   include_step_parts~ : Bool = true,
+  joint_positions~ : Map[String, Double] = Map([]),
 ) -> @urdf.UrdfBundle {
   let pkg = if package_name == "" { self.display_name() } else { package_name }
   let robot = self.to_robot(package_name=Some(pkg))
-  let mut bundle = @urdf.UrdfBundle::new(pkg, robot)
+  let mut bundle = @urdf.UrdfBundle::new(pkg, robot).with_mjcf_options(
+    self.mjcf_options(joint_positions),
+  )
   let (links, _, _) = self.compile_links(package_name=Some(pkg))
   for link in links {
     if link.bodies.length() > 0 {

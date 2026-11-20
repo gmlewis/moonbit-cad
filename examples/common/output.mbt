@@ -644,7 +644,8 @@ pub async fn write_output(
     None => ()
   }
   match output.bundle {
-    Some(dir) => comp.to_urdf_bundle().write_to_dir(dir, checked=true)
+    Some(dir) =>
+      comp.to_urdf_bundle(joint_positions~).write_to_dir(dir, checked=true)
     None => ()
   }
   match output.bom {
@@ -778,7 +779,9 @@ pub async fn write_output(
           exp_design.write_step_file(Some(dir + "/exploded.step"))
         }
       }
-      comp.to_urdf_bundle().write_to_dir(dir + "/bundle", checked=true)
+      comp
+      .to_urdf_bundle(joint_positions~)
+      .write_to_dir(dir + "/bundle", checked=true)
     }
     None => ()
   }

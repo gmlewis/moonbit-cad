@@ -274,11 +274,12 @@ pub fn Component::to_pin_map_csv(Self) -> String
 pub fn Component::to_robot(Self, package_name? : String?) -> @urdf.Robot
 pub fn Component::to_ros2_control_yaml(Self, controller_name? : String, update_rate_hz? : Double) -> String
 pub fn Component::to_step_file(Self, joint_positions? : Map[String, Double]) -> String
-pub fn Component::to_urdf_bundle(Self, package_name? : String, include_step_parts? : Bool) -> @urdf.UrdfBundle
+pub fn Component::to_urdf_bundle(Self, package_name? : String, include_step_parts? : Bool, joint_positions? : Map[String, Double]) -> @urdf.UrdfBundle
 pub fn Component::total_mass_kg(Self) -> Double
 pub fn Component::wiring_checks(Self) -> Array[String]
 pub fn Component::with_actuator(Self, ActuatorSpec) -> Self
 pub fn Component::with_cable_route(Self, CableRoute) -> Self
+pub fn Component::with_collision_cylinder_mm(Self, radius_mm~ : Double, length_mm~ : Double, x_mm? : Double, y_mm? : Double, z_mm? : Double, rx_deg? : Double, ry_deg? : Double, rz_deg? : Double) -> Self
 pub fn Component::with_description(Self, String) -> Self
 pub fn Component::with_param(Self, String, String) -> Self
 pub fn Component::with_part(Self, PartMeta) -> Self

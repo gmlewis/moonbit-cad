@@ -145,3 +145,45 @@ test "robot_name names the exported robot and bundle, not the root link" {
   assert_eq(bundle.package_name, "arm_robot")
   assert_eq(bundle.robot.name, "arm_robot")
 }
+
+///|
+test "with_collision_cylinder replaces body collisions" {
+  let comp = @cad.Component::new("wheel")
+    .add_body(@cad.BodyPart::box_mm("rim", 50.0, 50.0, 20.0))
+    .add_body(@cad.BodyPart::box_mm("tire", 100.0, 100.0, 30.0))
+    .with_collision_cylinder_mm(radius_mm=50.0, length_mm=20.0, rx_deg=90.0)
+  let robot = comp.to_robot()
+  let link = robot.get_link("wheel").unwrap()
+  assert_eq(link.collisions.length(), 1)
+  match link.collisions[0].geometry {
+    @urdf.Geometry::Cylinder(radius, length) => {
+      assert_true((radius - 0.05).abs() < 1.0e-9)
+      assert_true((length - 0.02).abs() < 1.0e-9)
+    }
+    _ => fail("expected a cylinder collision")
+  }
+}
+
+///|
+test "bundle MJCF options follow the control bindings and home pose" {
+  let mut comp = two_link_arm().add_control_binding(
+    @cad.ControlBinding::new(
+      "shoulder_joint",
+      actuator="shoulder_drive",
+      channel="can0:1",
+    ),
+  )
+  comp = comp.with_robot_name("arm_robot")
+  let positions : Map[String, Double] = Map([])
+  positions.set("shoulder_joint", 0.5)
+  let bundle = comp.to_urdf_bundle(joint_positions=positions)
+  let options = bundle.mjcf_options.unwrap()
+  assert_eq(options.actuators.length(), 1)
+  assert_true(
+    (options.home_qpos.get("shoulder_joint").unwrap() - 0.5).abs() < 1.0e-12,
+  )
+  assert_eq(options.default_damping, 0.5)
+  assert_eq(options.default_armature, 0.01)
+  assert_true(options.exclude_adjacent_contacts)
+  assert_eq(bundle.robot.name, "arm_robot")
+}
