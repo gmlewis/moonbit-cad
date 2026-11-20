@@ -1117,41 +1117,35 @@ fn build_fox_chassis(params : FoxBotParams) -> @cad.Component {
 }
 
 ///|
-/// Builds the `moteus C1` rear controller component (using vendor STEP when
-/// provided by CLI, or a lightweight exact-envelope PCB block for fast tests).
+/// Builds the `moteus C1` rear controller component using `@components.moteus_c1_board`
+/// (which centers and orients the vendor STEP cleanly onto its `"mount"` mate),
+/// or a lightweight exact-envelope PCB block for fast tests.
 fn build_moteus_c1(name : String, moteus_step : String?) -> @cad.Component {
-  let part = fox_purchased(
-    "MOTEUS-C1-R1.2", "mjbots moteus C1 r1.2 FOC brushless controller with AS5047P encoder",
-    "FR4 PCB", 69.0,
-  )
-  let body = match moteus_step {
-    Some(step_text) =>
-      @cad.BodyPart::imported_step(
-        name + "_pcb",
-        step_text,
-        source="components/vendor/20240305-moteus-c1-r1_2.step",
-        z_mm=8.0,
-        density=@urdf.Density::fr4_pcb(),
-        color=fox_dark(),
-        part=Some(part),
+  match moteus_step {
+    Some(step_text) => @components.moteus_c1_board(step_text, name~)
+    None => {
+      let part = fox_purchased(
+        "MOTEUS-C1-R1.2", "mjbots moteus C1 r1.2 FOC brushless controller with AS5047P encoder",
+        "FR4 PCB", 69.0,
       )
-    None =>
-      @cad.BodyPart::box_mm(
-        name + "_pcb",
-        46.0,
-        46.0,
-        10.0,
-        z_mm=8.0,
-        density=@urdf.Density::fr4_pcb(),
-        color=fox_dark(),
-      ).with_part(part)
+      @cad.Component::new(
+        name,
+        description="moteus C1 r1.2 FOC brushless motor controller",
+      )
+      .add_body(
+        @cad.BodyPart::box_mm(
+          name + "_pcb",
+          38.0,
+          38.0,
+          9.5,
+          z_mm=-4.75,
+          density=@urdf.Density::fr4_pcb(),
+          color=fox_dark(),
+        ).with_part(part),
+      )
+      .add_mate_mm_deg("mount", z=0.0, axis=(0.0, 0.0, 1.0))
+    }
   }
-  @cad.Component::new(
-    name,
-    description="moteus C1 r1.2 FOC brushless motor controller",
-  )
-  .add_body(body)
-  .add_mate_mm_deg("mount_face", z=0.0, axis=(0.0, 0.0, -1.0))
 }
 
 ///|
@@ -1347,20 +1341,22 @@ fn attach_fox_leg(
     9.0,
   )
 
-  // 1. Hip A12 + 4-elbow planetary actuator + rear moteus C1
+  // 1. Hip A12 + 4-elbow planetary actuator + rear moteus C1 (centered & flat)
   let hip_act_params = fox_hip_actuator_params(
     params,
     prefix + "_hip_act",
     bracket_t,
   )
   let hip_moteus = build_moteus_c1(prefix + "_hip_moteus", moteus_step)
-  let hip_act = @components.a12_planetary_actuator(hip_act_params).attach(
-    prefix + "_hip_moteus_mount",
-    parent_mate="motor_rear",
-    hip_moteus,
-    child_mate="mount_face",
-    spec=@cad.JointSpec::merge_rigid(),
-  )
+  let hip_act = @components.a12_planetary_actuator(hip_act_params)
+    .add_mate_mm_deg("moteus_mount", z=-2.4, axis=(0.0, 0.0, -1.0))
+    .attach(
+      prefix + "_hip_moteus_mount",
+      parent_mate="moteus_mount",
+      hip_moteus,
+      child_mate="mount",
+      spec=@cad.JointSpec::merge_rigid(),
+    )
 
   // 2. Wheel A12 + 4-elbow planetary actuator (with 80 mm TIRE-MOUNT-86.3 hub!)
   let wheel_act_params = fox_wheel_actuator_params(
@@ -1369,13 +1365,15 @@ fn attach_fox_leg(
     calf_t,
   )
   let wheel_moteus = build_moteus_c1(prefix + "_wheel_moteus", moteus_step)
-  let wheel_act = @components.a12_planetary_actuator(wheel_act_params).attach(
-    prefix + "_wheel_moteus_mount",
-    parent_mate="motor_rear",
-    wheel_moteus,
-    child_mate="mount_face",
-    spec=@cad.JointSpec::merge_rigid(),
-  )
+  let wheel_act = @components.a12_planetary_actuator(wheel_act_params)
+    .add_mate_mm_deg("moteus_mount", z=-2.4, axis=(0.0, 0.0, -1.0))
+    .attach(
+      prefix + "_wheel_moteus_mount",
+      parent_mate="moteus_mount",
+      wheel_moteus,
+      child_mate="mount",
+      spec=@cad.JointSpec::merge_rigid(),
+    )
 
   // 3. Wheel link (TIRE-MOUNT-86.3 + WHEEL-7IN + 3x M4x30 bolts)
   let wheel_comp = build_fox_wheel(prefix, params.detail, tire_mount_step)
@@ -1406,7 +1404,35 @@ fn attach_fox_leg(
         centered=true,
         density=@urdf.Density::cf_nylon(),
         color=fox_carbon(),
-      ).with_part(calf_part),
+      )
+      .with_collisions([
+        // Elbow beam B(0,0) -> D(L2,0)
+        @urdf.Collision::new(
+          @urdf.Geometry::box_mm(params.coupler_len_mm + 44.0, calf_t, 44.0),
+          name=Some(prefix + "_calf_body"),
+          origin=@urdf.Origin::from_mm_deg(x=params.coupler_len_mm / 2.0),
+        ),
+        // Main calf strut beam B(0,0) -> W(wx, wz) rotated along calf_beta_deg
+        @urdf.Collision::new(
+          @urdf.Geometry::box_mm(params.calf_len_mm + 36.0, calf_t, 52.0),
+          name=Some(prefix + "_calf_body"),
+          origin=@urdf.Origin::from_mm_deg(
+            x=wx / 2.0,
+            z=wz / 2.0,
+            ry_deg=-params.calf_beta_deg,
+          ),
+        ),
+        // Round wheel-actuator mounting boss at W(wx, wz)
+        @urdf.Collision::new(
+          @urdf.Geometry::cylinder_mm(
+            wheel_act_params.outer_radius_mm() + 10.0,
+            calf_t,
+          ),
+          name=Some(prefix + "_calf_body"),
+          origin=@urdf.Origin::from_mm_deg(x=wx, z=wz, rx_deg=90.0),
+        ),
+      ])
+      .with_part(calf_part),
     )
     // Bearings & pivot pins at B (0,0) and D (L2,0) spanning crank/guide -> calf
     .add_body(

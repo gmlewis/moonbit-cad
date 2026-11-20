@@ -389,7 +389,15 @@ pub fn a12_planetary_actuator(params : A12ActuatorParams) -> @cad.Component {
         z_mm=2.0,
         density=@urdf.Density::petg(),
         color=a12_shell_color(),
-      ).with_part(housing_part),
+      )
+      .with_collisions([
+        @urdf.Collision::new(
+          @urdf.Geometry::cylinder_mm(outer_r, 4.0),
+          name=Some(params.name + "_backplate"),
+          origin=@urdf.Origin::from_mm_deg(z=2.0),
+        ),
+      ])
+      .with_part(housing_part),
     )
     .add_body(
       @cad.BodyPart::tube_mm(
@@ -422,7 +430,15 @@ pub fn a12_planetary_actuator(params : A12ActuatorParams) -> @cad.Component {
         z_mm=carrier_z0 + 4.0,
         density=@urdf.Density::petg(),
         color=a12_hub_color(),
-      ).with_part(carrier_part),
+      )
+      .with_collisions([
+        @urdf.Collision::new(
+          @urdf.Geometry::cylinder_mm(carrier_r, 8.0),
+          name=Some(params.name + "_carrier"),
+          origin=@urdf.Origin::from_mm_deg(z=carrier_z0 + 4.0),
+        ),
+      ])
+      .with_part(carrier_part),
     )
     .add_body(
       @cad.BodyPart::extruded_profile_mm(
@@ -433,7 +449,15 @@ pub fn a12_planetary_actuator(params : A12ActuatorParams) -> @cad.Component {
         z_mm=cap_z0 + 5.0,
         density=@urdf.Density::petg(),
         color=a12_shell_color(),
-      ).with_part(cap_part),
+      )
+      .with_collisions([
+        @urdf.Collision::new(
+          @urdf.Geometry::cylinder_mm(flange_r, 10.0),
+          name=Some(params.name + "_output_cap"),
+          origin=@urdf.Origin::from_mm_deg(z=cap_z0 + 5.0),
+        ),
+      ])
+      .with_part(cap_part),
     )
     .add_body(
       @cad.BodyPart::tube_mm(
@@ -465,7 +489,15 @@ pub fn a12_planetary_actuator(params : A12ActuatorParams) -> @cad.Component {
         z_mm=hub_z + 4.0,
         density=@urdf.Density::petg(),
         color=a12_hub_color(),
-      ).with_part(hub_part),
+      )
+      .with_collisions([
+        @urdf.Collision::new(
+          @urdf.Geometry::cylinder_mm(hub_r, 8.0),
+          name=Some(params.name + "_output_hub"),
+          origin=@urdf.Origin::from_mm_deg(z=hub_z + 4.0),
+        ),
+      ])
+      .with_part(hub_part),
     )
     .add_mate_mm_deg("a12_mount", z=motor_z0, axis=(0.0, 0.0, -1.0))
     .attach(
@@ -484,6 +516,10 @@ pub fn a12_planetary_actuator(params : A12ActuatorParams) -> @cad.Component {
         step_gb,
         density=@urdf.Density::petg(),
         part=Some(cartridge_part),
+      ).with_collision_cylinder_mm(
+        radius_mm=outer_r,
+        length_mm=params.gear_length_mm,
+        z_mm=params.gear_length_mm / 2.0,
       ),
       spec=@cad.JointSpec::merge_rigid(),
     )

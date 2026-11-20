@@ -61,4 +61,12 @@ test "a12 actuator supports flush tire-mount hub interface" {
     }
   })
   assert_true(has_hub_80)
+  // Round actuator discs must emit cylindrical (not square box) collisions.
+  for suffix in ["_backplate", "_carrier", "_output_cap", "_output_hub"] {
+    let found = act.bodies.filter(fn(b) { b.name.has_suffix(suffix) })
+    assert_eq(found.length(), 1)
+    assert_true(
+      found[0].collisions[0].geometry is @urdf.Geometry::Cylinder(_, _),
+    )
+  }
 }

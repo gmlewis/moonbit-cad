@@ -132,6 +132,8 @@ python3 scripts/rl_env_test.py
 python3 scripts/train_rl_test.py
 ./train-rl.sh 09 --iterations 15 --directions 8 --top-k 4 --episode-steps 150
 python3 scripts/train_rl.py --example 09 --eval-only
+./watch-rl.sh 09                       # interactive 3D MuJoCo viewer (uses mjpython)
+./watch-rl.sh 09 --zero --speed 0.5    # hold home pose in slow motion
 ```
 
 - `scripts/rl_env.py` → `CadRlEnv(build_dir)`: Gym-style `reset()`/`step()`,

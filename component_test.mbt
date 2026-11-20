@@ -96,3 +96,29 @@ test "box body matches its inertial and collision" {
   assert_true((bbox.0 + 50.0).abs() < 1.0e-9)
   assert_true((bbox.1 - 50.0).abs() < 1.0e-9)
 }
+
+///|
+test "extruded sketch centers collision and inertial on asymmetric profile" {
+  // Asymmetric link from x = -100..0 in XZ plane (center at x = -50, y = 0, z = 0)
+  let sk = @step_cad.Sketch2D::stadium_link(
+    (0.0, 0.0),
+    (-100.0, 0.0),
+    10.0,
+    10.0,
+  )
+  let body = @cad.BodyPart::extruded_sketch_mm(
+    "arm",
+    sk,
+    @step_cad.Plane::XZ,
+    12.0,
+    centered=true,
+    density=@urdf.Density::pla(),
+  )
+  let (x0, x1, y0, y1, z0, z1) = body.node.bounding_box()
+  let col_xyz = body.collisions[0].origin.xyz
+  let in_xyz = body.inertial.origin.xyz
+  assert_true((col_xyz.0 - (x0 + x1) / 2000.0).abs() < 1.0e-6)
+  assert_true((col_xyz.1 - (y0 + y1) / 2000.0).abs() < 1.0e-6)
+  assert_true((col_xyz.2 - (z0 + z1) / 2000.0).abs() < 1.0e-6)
+  assert_true((in_xyz.0 - col_xyz.0).abs() < 1.0e-9)
+}

@@ -184,6 +184,21 @@ class TrainRlTest(unittest.TestCase):
                 max_err = float(np.max(np.abs(py_act - c_act)))
                 self.assertLess(max_err, 1.0e-5, f"{policy} C99 parity err={max_err}")
 
+    def test_watch_rl_headless_zero_and_policy(self):
+        watch_sh = ROOT / "watch-rl.sh"
+        for extra in (["--zero"], []):
+            proc = subprocess.run(
+                [str(watch_sh), "09", "--headless", "--episode-steps", "40", *extra],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            result = json.loads(proc.stdout)
+            self.assertTrue(result["finite"])
+            self.assertEqual(result["steps"], 40)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

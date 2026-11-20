@@ -191,17 +191,24 @@ pub fn BodyPart::extruded_profile_mm(
   }
   let dx = max_x - min_x
   let dy = max_y - min_y
+  let cx = (min_x + max_x) / 2.0
+  let cy = (min_y + max_y) / 2.0
+  let center_origin = @urdf.Transform::from_origin(origin)
+    .compose(
+      @urdf.Transform::from_origin(@urdf.Origin::from_mm_deg(x=cx, y=cy)),
+    )
+    .to_origin()
   let inertial = @urdf.Inertial::from_box(
     dx / 1000.0,
     dy / 1000.0,
     height_mm / 1000.0,
     mass~,
-    origin~,
+    origin=center_origin,
   )
   let collision = @urdf.Collision::new(
     @urdf.Geometry::box_mm(dx, dy, height_mm),
     name=Some(name),
-    origin~,
+    origin=center_origin,
   )
   { name, node, density, inertial, collisions: [collision], part: None, }
 }
@@ -234,11 +241,13 @@ pub fn BodyPart::extruded_sketch_mm(
     ry_deg~,
     rz_deg~,
   )
-  let node = transform_scene_node_urdf(
-    sketch
+  let raw_node = sketch
     .extrude_on(plane, thickness_mm, centered~)
     .with_name(name)
-    .with_color(color),
+    .with_color(color)
+  let (lx0, lx1, ly0, ly1, lz0, lz1) = raw_node.bounding_box()
+  let node = transform_scene_node_urdf(
+    raw_node,
     @urdf.Transform::from_origin(origin),
   )
   let mut area_mm2 = @step_cad.polygon_area_2d(sketch.outer).abs()
@@ -246,20 +255,40 @@ pub fn BodyPart::extruded_sketch_mm(
     area_mm2 = area_mm2 - @step_cad.polygon_area_2d(hole).abs()
   }
   let mass = area_mm2 / 1.0e6 * (thickness_mm / 1000.0) * density.to_kg_per_m3()
-  let (x0, x1, y0, y1, z0, z1) = node.bounding_box()
+  let center_origin = @urdf.Transform::from_origin(origin)
+    .compose(
+      @urdf.Transform::from_origin(
+        @urdf.Origin::from_mm_deg(
+          x=(lx0 + lx1) / 2.0,
+          y=(ly0 + ly1) / 2.0,
+          z=(lz0 + lz1) / 2.0,
+        ),
+      ),
+    )
+    .to_origin()
   let inertial = @urdf.Inertial::from_box(
-    (x1 - x0) / 1000.0,
-    (y1 - y0) / 1000.0,
-    (z1 - z0) / 1000.0,
+    (lx1 - lx0) / 1000.0,
+    (ly1 - ly0) / 1000.0,
+    (lz1 - lz0) / 1000.0,
     mass~,
-    origin~,
+    origin=center_origin,
   )
   let collision = @urdf.Collision::new(
-    @urdf.Geometry::box_mm(x1 - x0, y1 - y0, z1 - z0),
+    @urdf.Geometry::box_mm(lx1 - lx0, ly1 - ly0, lz1 - lz0),
     name=Some(name),
-    origin~,
+    origin=center_origin,
   )
   { name, node, density, inertial, collisions: [collision], part: None, }
+}
+
+///|
+/// Replaces a body's URDF/MJCF collision geometry while preserving its exact
+/// STEP visual geometry, mass, inertia, and part metadata.
+pub fn BodyPart::with_collisions(
+  self : BodyPart,
+  collisions : Array[@urdf.Collision],
+) -> BodyPart {
+  { ..self, collisions, }
 }
 
 ///|
