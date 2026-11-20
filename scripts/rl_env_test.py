@@ -80,6 +80,62 @@ class RlEnvTest(unittest.TestCase):
         env = self.rl_env.CadRlEnv(ROOT / "build" / "08", randomize=False)
         env.reset(seed=3)
         self.assertTrue(np.allclose(env.model.body_mass, env._base_mass))
+        self.assertTrue(np.allclose(env.model.body_inertia, env._base_inertia))
+
+    def test_unseeded_reset_advances_rng_and_scales_inertia_and_velocity_bias(self):
+        env = self.rl_env.CadRlEnv(ROOT / "build" / "09", randomize=True)
+        obs_a, _ = env.reset(seed=10)
+        mass_a = env.model.body_mass.copy()
+        inertia_a = env.model.body_inertia.copy()
+        bias_a = env.model.actuator_biasprm.copy()
+        # Unseeded reset must draw a fresh domain-randomization sample.
+        obs_b, _ = env.reset()
+        self.assertFalse(np.allclose(mass_a, env.model.body_mass))
+        self.assertFalse(np.allclose(inertia_a, env.model.body_inertia))
+        self.assertFalse(np.allclose(bias_a[:, 2], env.model.actuator_biasprm[:, 2]))
+        # obs_noise_std > 0 must perturb observations across resets.
+        self.assertFalse(np.allclose(obs_a, obs_b))
+
+    def test_nested_termination_limits_and_single_step_push(self):
+        env = self.rl_env.CadRlEnv(ROOT / "build" / "09", randomize=True, episode_steps=50)
+        max_tilt, min_z = env._termination_limits()
+        self.assertAlmostEqual(max_tilt, 55.0)
+        self.assertAlmostEqual(min_z, 0.2)
+        env.reset(seed=5)
+        # Force push to fire on step 0 and confirm xfrc_applied is cleared
+        # immediately after the step so only 1x impulse is delivered.
+        env.push_time_s = 0.0
+        env.step(np.zeros(env.act_dim))
+        self.assertTrue(env.push_applied)
+        self.assertTrue(
+            np.allclose(env.data.xfrc_applied[env.root_body], 0.0)
+        )
+
+    def test_body_frame_velocity_and_target_vel_reward(self):
+        env = self.rl_env.CadRlEnv(ROOT / "build" / "08", randomize=False)
+        env.reset(seed=0)
+        # Rotate robot 90 deg about Z (facing +Y) and move +1 m/s along world +Y.
+        env.data.qpos[env.root_qadr + 3 : env.root_qadr + 7] = [
+            np.cos(np.pi / 4.0),
+            0.0,
+            0.0,
+            np.sin(np.pi / 4.0),
+        ]
+        env.data.qvel[env.root_dadr : env.root_dadr + 3] = [0.0, 1.0, 0.0]
+        obs, rot = env._observation()
+        # obs[7:10] is body_lin_vel * base_lin_vel_scale (0.5): forward body_vx = +1.0 -> +0.5
+        self.assertAlmostEqual(float(obs[7]), 0.5, places=4)
+        self.assertAlmostEqual(float(obs[8]), 0.0, places=4)
+        # Moving at target_vel_x_mps (0.5 m/s) in body +X must score higher
+        # than standing still (0.0 m/s) or overshooting (1.5 m/s).
+        env.data.qvel[env.root_dadr : env.root_dadr + 3] = [0.0, 0.5, 0.0]
+        r_target = env._reward(np.zeros(env.act_dim), rot)
+        env.data.qvel[env.root_dadr : env.root_dadr + 3] = [0.0, 0.0, 0.0]
+        r_still = env._reward(np.zeros(env.act_dim), rot)
+        env.data.qvel[env.root_dadr : env.root_dadr + 3] = [0.0, 1.5, 0.0]
+        r_overshoot = env._reward(np.zeros(env.act_dim), rot)
+        self.assertGreater(r_target, r_still)
+        self.assertGreater(r_target, r_overshoot)
 
 
 if __name__ == "__main__":

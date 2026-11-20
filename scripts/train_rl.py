@@ -230,8 +230,12 @@ def write_c_header(path: Path, payload, obs_dim, act_dim):
             "",
             "void rl_policy_step(const float *obs, float *act) {",
             "  float n[RL_OBS_DIM];",
-            "  for (int i = 0; i < RL_OBS_DIM; ++i)",
-            "    n[i] = (obs[i] - RL_OBS_MEAN[i]) / RL_OBS_STD[i];",
+            "  for (int i = 0; i < RL_OBS_DIM; ++i) {",
+            "    float v = (obs[i] - RL_OBS_MEAN[i]) / RL_OBS_STD[i];",
+            "    if (v < -10.0f) v = -10.0f;",
+            "    if (v > 10.0f) v = 10.0f;",
+            "    n[i] = v;",
+            "  }",
             "  for (int j = 0; j < RL_ACT_DIM; ++j) {",
             "    float acc = RL_B[j];",
             "    for (int i = 0; i < RL_OBS_DIM; ++i)",
@@ -268,8 +272,12 @@ def write_c_header(path: Path, payload, obs_dim, act_dim):
             "void rl_policy_step(const float *obs, float *act) {",
             "  float n[RL_OBS_DIM];",
             "  float h[RL_HIDDEN];",
-            "  for (int i = 0; i < RL_OBS_DIM; ++i)",
-            "    n[i] = (obs[i] - RL_OBS_MEAN[i]) / RL_OBS_STD[i];",
+            "  for (int i = 0; i < RL_OBS_DIM; ++i) {",
+            "    float v = (obs[i] - RL_OBS_MEAN[i]) / RL_OBS_STD[i];",
+            "    if (v < -10.0f) v = -10.0f;",
+            "    if (v > 10.0f) v = 10.0f;",
+            "    n[i] = v;",
+            "  }",
             "  for (int k = 0; k < RL_HIDDEN; ++k) {",
             "    float acc = RL_B1[k];",
             "    for (int i = 0; i < RL_OBS_DIM; ++i)",
@@ -304,6 +312,11 @@ def train_ars(args, runner, build_dir):
     rng = np.random.default_rng(args.seed)
     size = theta_size(args.policy, runner.obs_dim, runner.act_dim, args.hidden)
     theta = np.zeros(size, dtype=np.float64)
+    if args.policy == "mlp":
+        # Small non-zero input weights give non-zero hidden activations on step
+        # 1 while W2=0, b2=0 still keeps initial actions identically zero.
+        w1_count = args.hidden * runner.obs_dim
+        theta[:w1_count] = rng.normal(0.0, 0.05, size=w1_count)
     mean, std = collect_obs_stats(runner)
 
     def evaluate(theta, episodes, seed):
@@ -332,6 +345,7 @@ def train_ars(args, runner, build_dir):
     )
 
     for iteration in range(1, args.iterations + 1):
+        iter_seed = args.seed + iteration * 1000
         deltas = [
             rng.standard_normal(size) for _ in range(args.directions)
         ]
@@ -340,8 +354,8 @@ def train_ars(args, runner, build_dir):
         for delta in deltas:
             plus_theta = theta + args.noise * delta
             minus_theta = theta - args.noise * delta
-            plus_return, _f, _s = evaluate(plus_theta, args.episodes, args.seed)
-            minus_return, _f, _s = evaluate(minus_theta, args.episodes, args.seed)
+            plus_return, _f, _s = evaluate(plus_theta, args.episodes, iter_seed)
+            minus_return, _f, _s = evaluate(minus_theta, args.episodes, iter_seed)
             rewards_plus.append(plus_return)
             rewards_minus.append(minus_return)
         scores = np.maximum(rewards_plus, rewards_minus)

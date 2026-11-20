@@ -142,6 +142,7 @@ class CadRlEnv:
 
     def _save_model_defaults(self):
         self._base_mass = self.model.body_mass.copy()
+        self._base_inertia = self.model.body_inertia.copy()
         self._base_friction = self.model.geom_friction.copy()
         self._base_gain = self.model.actuator_gainprm.copy()
         self._base_bias = self.model.actuator_biasprm.copy()
@@ -163,6 +164,7 @@ class CadRlEnv:
         friction_scale = float(self.rng.uniform(friction_range[0], friction_range[1]))
         kp_scale = float(self.rng.uniform(kp_range[0], kp_range[1]))
         self.model.body_mass[1:] = self._base_mass[1:] * mass_scale
+        self.model.body_inertia[1:] = self._base_inertia[1:] * mass_scale
         for gid in self._friction_geoms:
             self.model.geom_friction[gid, 0] = (
                 self._base_friction[gid, 0] * friction_scale
@@ -174,6 +176,10 @@ class CadRlEnv:
             if abs(self._base_bias[aid, 1]) > 0.0:
                 self.model.actuator_biasprm[aid, 1] = (
                     self._base_bias[aid, 1] * kp_scale
+                )
+            if abs(self._base_bias[aid, 2]) > 0.0:
+                self.model.actuator_biasprm[aid, 2] = (
+                    self._base_bias[aid, 2] * kp_scale
                 )
         mujoco.mj_setConst(self.model, self.data)
 
@@ -188,15 +194,17 @@ class CadRlEnv:
             self.data.qpos[self.root_qadr + 3 : self.root_qadr + 7]
         )
         base_z = np.array([self.data.qpos[self.root_qadr + 2]])
-        gravity = self._projected_gravity() * self.obs_scales["projected_gravity"]
+        gravity = (rotation.T @ np.array([0.0, 0.0, -1.0])) * self.obs_scales[
+            "projected_gravity"
+        ]
         ang_vel = (
             self.data.qvel[self.root_dadr + 3 : self.root_dadr + 6]
             * self.obs_scales["base_ang_vel"]
         )
-        lin_vel = (
-            self.data.qvel[self.root_dadr : self.root_dadr + 3]
-            * self.obs_scales["base_lin_vel"]
-        )
+        # Convert world-frame freejoint linear velocity into heading-invariant
+        # body frame to match body-frame angular velocity and projected gravity.
+        body_lin_vel = rotation.T @ self.data.qvel[self.root_dadr : self.root_dadr + 3]
+        lin_vel = body_lin_vel * self.obs_scales["base_lin_vel"]
         joint_pos = np.array(
             [
                 (self.data.qpos[a["qadr"]] - a["home"]) * self.obs_scales["joint_pos"]
@@ -220,6 +228,12 @@ class CadRlEnv:
                 self.prev_action * self.obs_scales["prev_action"],
             ]
         )
+        if self.randomize:
+            noise_std = float(
+                self.task.get("domain_rand", {}).get("obs_noise_std", 0.0)
+            )
+            if noise_std > 0.0:
+                obs = obs + self.rng.normal(0.0, noise_std, size=obs.shape)
         return np.clip(obs, -10.0, 10.0).astype(np.float32), rotation
 
     def _map_action(self, action):
@@ -236,11 +250,16 @@ class CadRlEnv:
 
     def _reward(self, action, rotation):
         weights = self.task.get("rewards", {})
-        lin_vel_x = float(self.data.qvel[self.root_dadr])
+        body_vel = rotation.T @ self.data.qvel[self.root_dadr : self.root_dadr + 3]
+        body_vx = float(body_vel[0])
+        target_vx = float(self.task.get("target_vel_x_mps", 0.0))
         base_z = float(self.data.qpos[self.root_qadr + 2])
         target_z = float(self.task.get("target_base_height_m", base_z))
         upright = float(rotation[2, 2])
-        forward = float(weights.get("forward_vel", 1.0)) * lin_vel_x
+        vel_sigma = 0.35 if abs(target_vx) > 1.0e-6 else 0.25
+        forward = float(weights.get("forward_vel", 1.0)) * math.exp(
+            -((body_vx - target_vx) / vel_sigma) ** 2
+        )
         height = float(weights.get("target_height", 1.0)) * math.exp(
             -((base_z - target_z) / 0.15) ** 2
         )
@@ -254,12 +273,23 @@ class CadRlEnv:
         alive = float(weights.get("alive", 0.0))
         return forward + height + upright_term + energy + smoothness + alive
 
+    def _termination_limits(self):
+        term = self.task.get("termination", {})
+        max_tilt = float(
+            term.get("tilt_deg", self.task.get("termination_tilt_deg", 88.0))
+        )
+        min_z = float(
+            term.get("min_z_m", self.task.get("termination_min_z_m", -1.0))
+        )
+        return max_tilt, min_z
+
     # --------------------------------------------------------------------- API
     def reset(self, seed=None):
         if seed is not None:
             self.seed = int(seed)
-        self.rng = np.random.default_rng(self.seed)
+            self.rng = np.random.default_rng(self.seed)
         self.model.body_mass[:] = self._base_mass
+        self.model.body_inertia[:] = self._base_inertia
         self.model.geom_friction[:] = self._base_friction
         self.model.actuator_gainprm[:] = self._base_gain
         self.model.actuator_biasprm[:] = self._base_bias
@@ -284,35 +314,43 @@ class CadRlEnv:
             target = 0.0 if actuator["kind"] != "position" else actuator["home"]
             target = max(actuator["ctrl_min"], min(actuator["ctrl_max"], target))
             self.data.ctrl[actuator["actuator"]] = target
-        obs, _rotation = self._observation()
+        obs, rotation = self._observation()
+        body_vx = float(
+            (rotation.T @ self.data.qvel[self.root_dadr : self.root_dadr + 3])[0]
+        )
         return obs, {
             "time_s": 0.0,
             "base_z": float(self.data.qpos[self.root_qadr + 2]),
-            "forward_vel": float(self.data.qvel[self.root_dadr]),
+            "forward_vel": body_vx,
         }
 
     def step(self, action):
         action = self._map_action(action)
         push = float(self.task.get("domain_rand", {}).get("push_impulse_ns", 0.0))
-        if self.push_time_s is not None:
-            just_before = self.time_s <= self.push_time_s
-            just_after = self.time_s + self.control_dt > self.push_time_s
-            if just_before and just_after and not self.push_applied and push > 0.0:
-                direction = self.rng.normal(size=2)
-                norm = max(1.0e-9, float(np.linalg.norm(direction)))
-                force = push / self.control_dt
-                self.data.xfrc_applied[self.root_body, 0] = (
-                    direction[0] / norm * force
-                )
-                self.data.xfrc_applied[self.root_body, 1] = (
-                    direction[1] / norm * force
-                )
-                self.push_applied = True
-            elif self.push_applied and self.time_s >= self.push_time_s + self.control_dt:
-                self.data.xfrc_applied[self.root_body, :] = 0.0
+        pushed_this_step = False
+        if (
+            self.push_time_s is not None
+            and not self.push_applied
+            and push > 0.0
+            and self.time_s <= self.push_time_s < self.time_s + self.control_dt
+        ):
+            direction = self.rng.normal(size=2)
+            norm = max(1.0e-9, float(np.linalg.norm(direction)))
+            force = push / self.control_dt
+            self.data.xfrc_applied[self.root_body, 0] = (
+                direction[0] / norm * force
+            )
+            self.data.xfrc_applied[self.root_body, 1] = (
+                direction[1] / norm * force
+            )
+            self.push_applied = True
+            pushed_this_step = True
 
         for _ in range(self.substeps):
             mujoco.mj_step(self.model, self.data)
+
+        if pushed_this_step:
+            self.data.xfrc_applied[self.root_body, :] = 0.0
 
         self.step_count += 1
         self.time_s += self.control_dt
@@ -320,18 +358,18 @@ class CadRlEnv:
         reward = self._reward(action, rotation)
         tilt = tilt_deg(rotation)
         base_z = float(self.data.qpos[self.root_qadr + 2])
-        finite = bool(np.isfinite(self.data.qpos).all() and np.isfinite(reward))
-        terminated = (
-            not finite
-            or tilt > float(self.task.get("termination_tilt_deg", 88.0))
-            or base_z < float(self.task.get("termination_min_z_m", -1.0))
+        body_vx = float(
+            (rotation.T @ self.data.qvel[self.root_dadr : self.root_dadr + 3])[0]
         )
+        max_tilt, min_z = self._termination_limits()
+        finite = bool(np.isfinite(self.data.qpos).all() and np.isfinite(reward))
+        terminated = not finite or tilt > max_tilt or base_z < min_z
         truncated = self.step_count >= self.episode_steps
         self.prev_action = action
         info = {
             "time_s": self.time_s,
             "base_z": base_z,
-            "forward_vel": float(self.data.qvel[self.root_dadr]),
+            "forward_vel": body_vx,
             "tilt_deg": tilt,
             "survival_s": self.time_s,
         }
