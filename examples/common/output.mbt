@@ -395,9 +395,15 @@ fn print_robot_analysis(analysis : @cad.RobotAnalysis) -> Unit {
         "  " +
         analysis_number(joint.tau_rated_nm) +
         "  " +
-        analysis_number(joint.safety_factor) +
+        (if joint.passive { "-" } else { analysis_number(joint.safety_factor) }) +
         "  " +
-        (if joint.ok { "OK" } else { "LOW" }),
+        (if joint.passive {
+          "PASSIVE"
+        } else if joint.ok {
+          "OK"
+        } else {
+          "LOW"
+        }),
       )
     }
     for contact in pose.contacts {

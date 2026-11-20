@@ -6,6 +6,8 @@ pub(all) struct JointTorque {
   tau_static_nm : Double
   tau_rated_nm : Double
   safety_factor : Double
+  /// True when the joint has no actuator effort limit (a passive linkage).
+  passive : Bool
   ok : Bool
 }
 
@@ -334,13 +336,25 @@ fn analyze_pose(
       Some(limit) => limit.effort
       None => 0.0
     }
-    let safety = rated / (if tau > 1.0e-6 { tau } else { 1.0e-6 })
+    // A joint with no actuator effort is a passive linkage (4-bar knee, guide,
+    // ...). It still carries gravity, but there is no motor to size.
+    let passive = rated <= 0.0
+    let safety = if passive {
+      0.0
+    } else {
+      rated / (if tau > 1.0e-6 { tau } else { 1.0e-6 })
+    }
     joints.push({
       joint: joint.name,
       tau_static_nm: tau,
       tau_rated_nm: rated,
       safety_factor: safety,
-      ok: safety >= 1.5,
+      passive,
+      ok: if passive {
+        true
+      } else {
+        safety >= 1.5
+      },
     })
   }
 
@@ -348,7 +362,13 @@ fn analyze_pose(
   let group_min : Map[String, Double] = Map([])
   for link in links {
     let lower = link.name.to_lower()
-    if lower.contains("wheel") || lower.contains("foot") {
+    // Cosmetic motor bells ride on the wheel axle but are not ground contact.
+    if lower.contains("_rotor") {
+      continue
+    }
+    if lower.contains("wheel") ||
+      lower.contains("foot") ||
+      lower.contains("tire") {
       match contact_link_min_z(links, fk, link.name) {
         Some(min_z) => {
           contacts.push({ name: link.name, min_z_m: min_z, })

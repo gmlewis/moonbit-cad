@@ -53,7 +53,7 @@ write("moon.pkg", f'''import {{
 }}
 ''')
 
-write(f"{name}.mbt", f'''///|
+write(f"{slug}.mbt", f'''///|
 /// {name} — scaffolded example. Replace the box with real geometry.
 
 ///|
@@ -92,7 +92,7 @@ pub async fn run_cli() -> Unit {{
 }}
 ''')
 
-write(f"{name}_wbtest.mbt", f'''///|
+write(f"{slug}_wbtest.mbt", f'''///|
 test "{name} scaffold builds a valid robot" {{
   let robot = build_example().to_robot()
   assert_true(!robot.has_errors())
@@ -117,7 +117,7 @@ async fn main {{
 write("README.md", f'''# {nn} — {slug.replace("-", " ").title()}
 
 Scaffolded with `scripts/new-example.sh`. Replace the placeholder box in
-`{name}.mbt` with real geometry, then keep the whitebox test in sync.
+`{slug}.mbt` with real geometry, then keep the whitebox test in sync.
 
 ```bash
 ./run-example.sh {name} --headless --out /tmp/{slug}.step

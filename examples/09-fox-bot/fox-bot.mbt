@@ -614,7 +614,10 @@ fn build_fox_head(params : FoxBotParams) -> @cad.Component {
   )
   let ear_part = fox_printed(
     "FOX-EAR", "Printed pointed upright FOX_BOT ear shell", "PETG / PLA (Red)", 2.5,
-  )
+  ).with_single_body_print(true)
+  let ear_inner_part = fox_printed(
+    "FOX-EAR-INNER", "Printed inner ear accent insert", "PLA (Charcoal)", 0.4,
+  ).with_single_body_print(true)
   let d455_part = fox_purchased(
     "REALSENSE-D455", "Intel RealSense D455 stereo depth camera (95 x 26 x 29 mm)",
     "aluminum / optics", 289.0,
@@ -720,7 +723,7 @@ fn build_fox_head(params : FoxBotParams) -> @cad.Component {
           rz_deg=90.0,
           density=@urdf.Density::pla(),
           color=fox_ear_inner(),
-        ).with_part(ear_part),
+        ).with_part(ear_inner_part),
       )
   }
   head.with_print_bed_orient(@cad.PrintBedOrient::AutoFlatLargestFace)
@@ -1734,7 +1737,7 @@ pub fn fox_bot(
       robot, params, prefix, is_front, is_left, hip_id, wheel_id, moteus_step, tire_mount_step,
     )
   }
-  robot
+  robot.with_robot_name("fox_bot")
 }
 
 ///|

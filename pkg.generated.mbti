@@ -347,9 +347,11 @@ pub(all) struct ControlJointConstants {
 #derive(Eq, @debug.Debug)
 pub(all) enum ExplodeSpec {
   AlongMate(Double, Int32)
+  AlongMateLocal(Double, Int32)
   OffsetMm(Double, Double, Double, Int32)
 }
 pub fn ExplodeSpec::along_mate(distance_mm~ : Double, order? : Int32) -> Self
+pub fn ExplodeSpec::along_mate_local(distance_mm~ : Double, order? : Int32) -> Self
 pub fn ExplodeSpec::offset_mm(dx~ : Double, dy~ : Double, dz~ : Double, order? : Int32) -> Self
 
 pub(all) struct Fastener {
@@ -413,6 +415,7 @@ pub(all) struct JointTorque {
   tau_static_nm : Double
   tau_rated_nm : Double
   safety_factor : Double
+  passive : Bool
   ok : Bool
 }
 
@@ -427,10 +430,12 @@ pub(all) struct PartMeta {
   unit_cost_usd : Double
   notes : String
   print_bed_orient : PrintBedOrient
+  single_body_print : Bool
 }
-pub fn PartMeta::new(String, description? : String, supplier? : String, supplier_url? : String, material? : String, process? : String, finish? : String, unit_cost_usd? : Double, notes? : String, print_bed_orient? : PrintBedOrient) -> Self
+pub fn PartMeta::new(String, description? : String, supplier? : String, supplier_url? : String, material? : String, process? : String, finish? : String, unit_cost_usd? : Double, notes? : String, print_bed_orient? : PrintBedOrient, single_body_print? : Bool) -> Self
 pub fn PartMeta::with_notes(Self, String) -> Self
 pub fn PartMeta::with_print_bed_orient(Self, PrintBedOrient) -> Self
+pub fn PartMeta::with_single_body_print(Self, Bool) -> Self
 pub fn PartMeta::with_supplier_url(Self, String) -> Self
 
 pub(all) struct PcbPlacement {

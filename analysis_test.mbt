@@ -171,3 +171,46 @@ test "wheel contact links report ground misalignment" {
   let constants = comp.control_constants()
   assert_true((constants.ground_z_m - -0.005).abs() < 1.0e-6)
 }
+
+///|
+test "passive joints carry gravity without motor sizing warnings" {
+  let analysis = @cad.analyze_robot(analysis_arm(0.0), [("horizontal", Map([]))])
+  let joint = analysis.poses[0].joints[0]
+  assert_true(joint.passive)
+  assert_true(joint.ok)
+  assert_true(joint.tau_static_nm > 1.0)
+  assert_eq(analysis.warnings.length(), 0)
+}
+
+///|
+test "analyze ignores rotor links and uses tires for ground contact" {
+  let base = @cad.Component::new("base")
+    .add_mate_mm_deg("rotor_mount", z=0.0)
+    .add_mate_mm_deg("tire_mount", z=-50.0)
+  let rotor = @cad.Component::new("lf_wheel_act_a12_rotor").add_body(
+    @cad.BodyPart::box_mm("rotor_body", 10.0, 10.0, 10.0),
+  )
+  let tire = @cad.Component::new("lf_tire").add_body(
+    @cad.BodyPart::box_mm("tire_body", 20.0, 20.0, 20.0),
+  )
+  let comp = base
+    .attach(
+      "rotor_fixed",
+      parent_mate="rotor_mount",
+      rotor,
+      spec=@cad.JointSpec::fixed(),
+    )
+    .attach(
+      "tire_fixed",
+      parent_mate="tire_mount",
+      tire,
+      spec=@cad.JointSpec::fixed(),
+    )
+  let analysis = @cad.analyze_robot(comp, [("default", Map([]))])
+  let pose = analysis.poses[0]
+  assert_eq(pose.contacts.length(), 1)
+  assert_eq(pose.contacts[0].name, "lf_tire")
+  assert_true((pose.contacts[0].min_z_m - -0.060).abs() < 1.0e-6)
+  let constants = comp.control_constants()
+  assert_true((constants.ground_z_m - -0.060).abs() < 1.0e-6)
+}

@@ -440,3 +440,51 @@ test "supplier links override BOM metadata through the tree" {
   assert_true(saw_screw)
   assert_true(saw_motor)
 }
+
+///|
+test "single_body_print exports one copy and keeps the BOM quantity" {
+  let meta = @cad.PartMeta::new(
+    "EAR-1",
+    description="printed ear",
+    process="print",
+    material="PLA",
+    single_body_print=true,
+  )
+  let head = @cad.Component::new("head")
+    .add_body(
+      @cad.BodyPart::box_mm("ear_left", 10.0, 10.0, 10.0, x_mm=-20.0).with_part(
+        meta,
+      ),
+    )
+    .add_body(
+      @cad.BodyPart::box_mm("ear_right", 10.0, 10.0, 10.0, x_mm=20.0).with_part(
+        meta,
+      ),
+    )
+  let parts = head.printable_parts()
+  assert_eq(parts.length(), 1)
+  assert_eq(parts[0].design.nodes.length(), 1)
+  let (w, d, h) = parts[0].bbox_mm().unwrap()
+  assert_true(w < 12.0 && d < 12.0 && h < 12.0)
+  let bom = head.bom()
+  let mut quantity = 0
+  for line in bom.lines {
+    if line.part_number == "EAR-1" {
+      quantity = line.quantity
+    }
+  }
+  assert_eq(quantity, 2)
+
+  let fused = @cad.Component::new("head")
+    .add_body(
+      @cad.BodyPart::box_mm("ear_left", 10.0, 10.0, 10.0, x_mm=-20.0).with_part(
+        @cad.PartMeta::new("EAR-1", process="print"),
+      ),
+    )
+    .add_body(
+      @cad.BodyPart::box_mm("ear_right", 10.0, 10.0, 10.0, x_mm=20.0).with_part(
+        @cad.PartMeta::new("EAR-1", process="print"),
+      ),
+    )
+  assert_eq(fused.printable_parts()[0].design.nodes.length(), 2)
+}

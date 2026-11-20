@@ -246,6 +246,20 @@ fn explode_displacement(
       let d = distance_mm * order.to_double() * scale
       (world_axis.0 * d, world_axis.1 * d, world_axis.2 * d)
     }
+    AlongMateLocal(distance_mm, order) => {
+      // axis is authored in the mate's own rotated frame for this variant.
+      let mate_frame : @step_cad.Transform = {
+        rot: parent_mate.placement.rot,
+        trans: (0.0, 0.0, 0.0),
+      }
+      let mut axis = explode_unit(mate_frame.apply_dir(parent_mate.axis))
+      if flip_axis {
+        axis = (-axis.0, -axis.1, -axis.2)
+      }
+      let world_axis = parent_world.apply_dir(axis)
+      let d = distance_mm * order.to_double() * scale
+      (world_axis.0 * d, world_axis.1 * d, world_axis.2 * d)
+    }
     OffsetMm(dx, dy, dz, order) => {
       let world = parent_world.apply_dir((dx, dy, dz))
       let d = order.to_double() * scale

@@ -13,19 +13,36 @@
 /// the opposite direction of the parent mate's declared axis.
 #derive(Debug, Eq)
 pub(all) enum ExplodeSpec {
-  /// Move the child `distance_mm` along the parent mate's outward axis.
+  /// Move the child `distance_mm` along the parent mate's declared `axis`.
+  /// `MateConnector::axis` is a direction in the **parent link frame**, independent
+  /// of the mate's `placement` rotation (the canonical MateConnector convention).
   AlongMate(Double, Int32)
+  /// Move the child along the parent mate's `axis` interpreted in the mate's
+  /// own rotated frame: the placement rotation is applied to the axis.
+  AlongMateLocal(Double, Int32)
   /// Move the child by `(dx, dy, dz)` in the parent's frame.
   OffsetMm(Double, Double, Double, Int32)
 }
 
 ///|
-/// Explodes a child along the parent mate's outward axis.
+/// Explodes a child along the parent mate's outward axis, which is expressed
+/// in the parent link frame. Use `along_mate_local` when the axis should follow
+/// the mate's `placement` rotation.
 pub fn ExplodeSpec::along_mate(
   distance_mm~ : Double,
   order~ : Int32 = 1,
 ) -> ExplodeSpec {
   AlongMate(distance_mm, order)
+}
+
+///|
+/// Explodes a child along the parent mate's `axis` rotated into the mate's own
+/// frame by its `placement` rotation.
+pub fn ExplodeSpec::along_mate_local(
+  distance_mm~ : Double,
+  order~ : Int32 = 1,
+) -> ExplodeSpec {
+  AlongMateLocal(distance_mm, order)
 }
 
 ///|
@@ -170,6 +187,10 @@ pub(all) struct PartMeta {
   notes : String
   /// How this part is oriented when exported for printing.
   print_bed_orient : PrintBedOrient
+  /// Export only the first matching body for this part and rely on the BOM
+  /// quantity for the rest. Use for parts repeated around a link (for example
+  /// twin ears) so the print bed holds one copy, not a fused pair.
+  single_body_print : Bool
 }
 
 ///|
@@ -184,6 +205,7 @@ pub fn PartMeta::new(
   unit_cost_usd~ : Double = 0.0,
   notes~ : String = "",
   print_bed_orient~ : PrintBedOrient = AutoFlatLargestFace,
+  single_body_print~ : Bool = false,
 ) -> PartMeta {
   {
     part_number,
@@ -196,6 +218,7 @@ pub fn PartMeta::new(
     unit_cost_usd,
     notes,
     print_bed_orient,
+    single_body_print,
   }
 }
 
@@ -205,6 +228,15 @@ pub fn PartMeta::with_print_bed_orient(
   orient : PrintBedOrient,
 ) -> PartMeta {
   { ..self, print_bed_orient: orient, }
+}
+
+///|
+/// Export only one body for this part; the BOM quantity records the copies.
+pub fn PartMeta::with_single_body_print(
+  self : PartMeta,
+  single_body_print : Bool,
+) -> PartMeta {
+  { ..self, single_body_print, }
 }
 
 ///|

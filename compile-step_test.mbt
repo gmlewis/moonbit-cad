@@ -147,6 +147,49 @@ fn explodable_assembly(wheel_spec : @cad.ExplodeSpec) -> @cad.Component {
 }
 
 ///|
+fn rotated_explode_assembly(spec : @cad.ExplodeSpec) -> @cad.Component {
+  let base = @cad.Component::new("base")
+    .add_body(@cad.BodyPart::box_mm("base_body", 10.0, 10.0, 10.0))
+    .add_mate_mm_deg("pivot", x=50.0, rz_deg=-90.0, axis=(1.0, 0.0, 0.0))
+  let child = @cad.Component::new("child").add_body(
+    @cad.BodyPart::box_mm("child_body", 10.0, 10.0, 10.0),
+  )
+  base.attach(
+    "child_joint",
+    parent_mate="pivot",
+    child,
+    child_mate="origin",
+    spec=@cad.JointSpec::fixed(),
+    explode=Some(spec),
+  )
+}
+
+///|
+test "along_mate uses the parent-frame axis on a rotated mate" {
+  let comp = rotated_explode_assembly(
+    @cad.ExplodeSpec::along_mate(distance_mm=10.0),
+  )
+  let a0 = find_node_box(comp.to_design(), "child_child_body").unwrap()
+  let a1 = find_node_box(comp.to_exploded_design(), "child_child_body").unwrap()
+  assert_true(explode_near(a1.0 - a0.0, 10.0))
+  assert_true(explode_near(a1.2 - a0.2, 0.0))
+  assert_true(explode_near(a1.4 - a0.4, 0.0))
+}
+
+///|
+test "along_mate_local rotates the axis by the mate placement" {
+  let comp = rotated_explode_assembly(
+    @cad.ExplodeSpec::along_mate_local(distance_mm=10.0),
+  )
+  let a0 = find_node_box(comp.to_design(), "child_child_body").unwrap()
+  let a1 = find_node_box(comp.to_exploded_design(), "child_child_body").unwrap()
+  // rz = -90 maps the mate-local +X axis to world -Y.
+  assert_true(explode_near(a1.2 - a0.2, -10.0))
+  assert_true(explode_near(a1.0 - a0.0, 0.0))
+  assert_true(explode_near(a1.4 - a0.4, 0.0))
+}
+
+///|
 test "exploded design at scale zero matches assembled bounding boxes" {
   let comp = explodable_assembly(@cad.ExplodeSpec::along_mate(distance_mm=20.0))
   let assembled = comp.to_design()

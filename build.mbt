@@ -291,9 +291,16 @@ fn make_printable_part(
   bodies : Array[BodyPart],
   meta : PartMeta,
 ) -> PrintablePart {
-  let selected = bodies.filter(fn(body) {
+  let matching = bodies.filter(fn(body) {
     body_matches_part(body, meta.part_number)
   })
+  // Repeated copies of one part (twin ears, mirrored brackets) print once;
+  // the BOM line's quantity says how many to print.
+  let selected = if meta.single_body_print && matching.length() > 1 {
+    [matching[0]]
+  } else {
+    matching
+  }
   let design = design_from_bodies(
     meta.part_number,
     meta.description,

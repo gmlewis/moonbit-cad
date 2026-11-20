@@ -134,3 +134,14 @@ test "link design returns bodies in local frame" {
   assert_true(comp.link_design("base") is Some(_))
   assert_true(comp.link_design("missing") is None)
 }
+
+///|
+test "robot_name names the exported robot and bundle, not the root link" {
+  let comp = two_link_arm().with_robot_name("arm_robot")
+  let robot = comp.to_robot()
+  assert_eq(robot.name, "arm_robot")
+  assert_eq(robot.links[0].name, "base")
+  let bundle = comp.to_urdf_bundle()
+  assert_eq(bundle.package_name, "arm_robot")
+  assert_eq(bundle.robot.name, "arm_robot")
+}

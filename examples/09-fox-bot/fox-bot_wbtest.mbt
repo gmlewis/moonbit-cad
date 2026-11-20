@@ -119,40 +119,6 @@ test "FOX_BOT wheels sit cleanly outboard of calves and symmetric in Y and Z" {
 }
 
 ///|
-fn design_bbox(
-  d : @step_cad.Design,
-) -> (Double, Double, Double, Double, Double, Double) {
-  let mut x0 = 1.0e18
-  let mut x1 = -1.0e18
-  let mut y0 = 1.0e18
-  let mut y1 = -1.0e18
-  let mut z0 = 1.0e18
-  let mut z1 = -1.0e18
-  for node in d.nodes {
-    let (nx0, nx1, ny0, ny1, nz0, nz1) = node.bounding_box()
-    if nx0 < x0 {
-      x0 = nx0
-    }
-    if nx1 > x1 {
-      x1 = nx1
-    }
-    if ny0 < y0 {
-      y0 = ny0
-    }
-    if ny1 > y1 {
-      y1 = ny1
-    }
-    if nz0 < z0 {
-      z0 = nz0
-    }
-    if nz1 > z1 {
-      z1 = nz1
-    }
-  }
-  (x0, x1, y0, y1, z0, z1)
-}
-
-///|
 test "FOX_BOT scales cleanly and keeps A12 gear tolerance outer-envelope invariant" {
   let petg = {
     ..FoxBotParams::scaled(0.9),
@@ -164,8 +130,8 @@ test "FOX_BOT scales cleanly and keeps A12 gear tolerance outer-envelope invaria
   let c2 = fox_bot(params=pla)
   let d1 = c1.to_design(joint_positions=petg.pose_positions())
   let d2 = c2.to_design(joint_positions=pla.pose_positions())
-  let (x0a, x1a, y0a, y1a, z0a, z1a) = design_bbox(d1)
-  let (x0b, x1b, y0b, y1b, z0b, z1b) = design_bbox(d2)
+  let (x0a, x1a, y0a, y1a, z0a, z1a) = d1.bounding_box()
+  let (x0b, x1b, y0b, y1b, z0b, z1b) = d2.bounding_box()
   assert_true((x0a - x0b).abs() < 1.0e-6)
   assert_true((x1a - x1b).abs() < 1.0e-6)
   assert_true((y0a - y0b).abs() < 1.0e-6)
