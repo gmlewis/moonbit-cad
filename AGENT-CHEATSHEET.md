@@ -121,6 +121,26 @@ scripts/render_views.py build/08
 `solidcraft-cli snapshot`/`eval` and `mcp__solidcraft__*` run headless. Never
 open or activate the SolidCraft GUI from an agent.
 
+## RL / MuJoCo
+
+Examples with an `RlTaskSpec` write `rl_task.json` and a sim-clean
+`bundle/mjcf/<robot>.xml` (`mujoco 4.0.1` + `numpy` only):
+
+```bash
+python3 scripts/verify_mjcf_test.py
+python3 scripts/rl_env_test.py
+python3 scripts/train_rl_test.py
+./train-rl.sh 09 --iterations 15 --directions 8 --top-k 4 --episode-steps 150
+python3 scripts/train_rl.py --example 09 --eval-only
+```
+
+- `scripts/rl_env.py` → `CadRlEnv(build_dir)`: Gym-style `reset()`/`step()`,
+  normalized observations, domain randomization, task-driven rewards.
+- `scripts/train_rl.py` → ARS (`--policy linear|mlp`); optional PPO needs
+  `pip install gymnasium stable-baselines3`.
+- Outputs: `build/<n>/rl/policy.json`, `policy_weights.h` (C99
+  `rl_policy_step(const float *obs, float *act)`), `training_log.csv`.
+
 ## Safety and hygiene
 
 - Never run `./update.sh` (maintainer-only) or `find` on home/toolchain roots.

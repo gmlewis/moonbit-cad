@@ -1,0 +1,86 @@
+#!/usr/bin/env python3
+"""Tests for scripts/rl_env.py.
+
+Loads the generated build/08 and build/09 packages and checks the Gym-style
+reset/step contract, finite observations, and domain randomization.
+
+Usage:
+    python3 scripts/rl_env_test.py
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import sys
+import unittest
+from pathlib import Path
+
+import numpy as np
+
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parent
+sys.path.insert(0, str(HERE))
+
+
+def load_env_module():
+    spec = importlib.util.spec_from_file_location("rl_env", HERE / "rl_env.py")
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+class RlEnvTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.rl_env = load_env_module()
+
+    def test_reset_and_rollout_are_finite(self):
+        for name in ("09", "08"):
+            env = self.rl_env.CadRlEnv(ROOT / "build" / name, randomize=False)
+            obs, info = env.reset(seed=0)
+            self.assertEqual(obs.shape, (env.obs_dim,))
+            self.assertEqual(obs.dtype, np.float32)
+            self.assertTrue(np.isfinite(obs).all())
+            self.assertIn("base_z", info)
+            self.assertEqual(env.action_low.shape, (env.act_dim,))
+            self.assertEqual(env.action_high.shape, (env.act_dim,))
+            rng = np.random.default_rng(0)
+            for _ in range(100):
+                obs, reward, terminated, truncated, info = env.step(
+                    rng.uniform(-1.0, 1.0, env.act_dim)
+                )
+                self.assertTrue(np.isfinite(obs).all())
+                self.assertTrue(np.isfinite(reward))
+                self.assertIsInstance(terminated, bool)
+                self.assertIsInstance(truncated, bool)
+                if terminated or truncated:
+                    break
+
+    def test_domain_randomization_changes_mass_and_friction(self):
+        env = self.rl_env.CadRlEnv(ROOT / "build" / "09", randomize=True)
+        env.reset(seed=1)
+        mass_a = env.model.body_mass.copy()
+        friction_a = env.model.geom_friction.copy()
+        env.reset(seed=2)
+        mass_b = env.model.body_mass.copy()
+        friction_b = env.model.geom_friction.copy()
+        self.assertFalse(np.allclose(mass_a, mass_b))
+        self.assertFalse(np.allclose(friction_a, friction_b))
+        for _ in range(20):
+            obs, reward, terminated, truncated, _info = env.step(
+                np.zeros(env.act_dim)
+            )
+            self.assertTrue(np.isfinite(obs).all())
+            self.assertTrue(np.isfinite(reward))
+            if terminated or truncated:
+                break
+
+    def test_deterministic_mode_keeps_the_model_defaults(self):
+        env = self.rl_env.CadRlEnv(ROOT / "build" / "08", randomize=False)
+        env.reset(seed=3)
+        self.assertTrue(np.allclose(env.model.body_mass, env._base_mass))
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

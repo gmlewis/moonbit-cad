@@ -387,6 +387,24 @@ Scaffold a new example with `scripts/new-example.sh 09-demo-arm`; the generated
 package passes `./test-all.sh` immediately. See `AGENT-CHEATSHEET.md` for the
 builder/CLI quick reference.
 
+### Train an RL policy
+
+Examples that declare an `RlTaskSpec` export `rl_task.json` alongside a
+simulation-clean `bundle/mjcf/<robot>.xml`. The zero-install environment and
+ARS trainer need only `mujoco` and `numpy`:
+
+```bash
+./train-rl.sh 09 --iterations 15 --directions 8 --top-k 4 --episode-steps 150
+python3 scripts/train_rl.py --example 09 --eval-only
+python3 scripts/verify_mjcf_test.py
+```
+
+The trainer writes `build/<n>/rl/policy.json` (weights plus observation
+normalization), `policy_weights.h` (drop-in C99 `rl_policy_step()`), and
+`training_log.csv`. `scripts/rl_env.py` exposes the same task as a Gym-style
+environment (`CadRlEnv`) with domain randomization; `--algo ppo` uses
+Gymnasium and Stable-Baselines3 when those optional packages are installed.
+
 ### Drawings
 
 `scripts/make_drawings.py` turns a package into formal A3 drawing sheets. For
