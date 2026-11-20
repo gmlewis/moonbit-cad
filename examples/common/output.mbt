@@ -729,7 +729,14 @@ pub async fn write_output(
           write_print_part(part.design, dir + "/" + rel)
         }
       }
-      design.write_step_file(Some(dir + "/assembly.step"))
+      if design.nodes.length() > 1 && !design_has_boolean(design) {
+        @step_cad.write_text_file(
+          design.to_instanced_step_string(assembly_name=comp.display_name()),
+          Some(dir + "/assembly.step"),
+        )
+      } else {
+        design.write_step_file(Some(dir + "/assembly.step"))
+      }
       @cad.gltf_safe_design(design).to_gltf_file(Some(dir + "/assembly.gltf"))
       // The interactive preview: START-HERE.html loads viewer.js, which fetches
       // assembly.gltf. The static views/iso.png remains the offline fallback.
@@ -750,9 +757,20 @@ pub async fn write_output(
       // First-class exploded view: whenever the tree declares any
       // `ExplodeSpec`, write the exploded, role-colored STEP automatically.
       if comp.has_explode_spec() {
-        comp
-        .to_exploded_design(joint_positions~, trace_lines=true)
-        .write_step_file(Some(dir + "/exploded.step"))
+        let exp_design = comp.to_exploded_design(
+          joint_positions~,
+          trace_lines=true,
+        )
+        if exp_design.nodes.length() > 1 && !design_has_boolean(exp_design) {
+          @step_cad.write_text_file(
+            exp_design.to_instanced_step_string(
+              assembly_name=comp.display_name() + " (Exploded)",
+            ),
+            Some(dir + "/exploded.step"),
+          )
+        } else {
+          exp_design.write_step_file(Some(dir + "/exploded.step"))
+        }
       }
       comp.to_urdf_bundle().write_to_dir(dir + "/bundle", checked=true)
     }

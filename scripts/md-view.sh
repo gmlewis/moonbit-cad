@@ -50,10 +50,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUT_DIR="$(dirname "$OUT")"
 mkdir -p "$OUT_DIR"
 
+IN_DIR="$(dirname "$IN")"
 pandoc "$IN" \
   -o "$OUT" \
   --standalone \
   --embed-resources \
+  --resource-path "$IN_DIR" \
   --css "$SCRIPT_DIR/md-view.css" \
   --metadata title="$(basename "$IN" .md)" \
   --metadata lang=en

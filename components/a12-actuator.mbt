@@ -18,6 +18,12 @@ pub(all) struct A12ActuatorParams {
   planet_teeth : Int32
   planet_count : Int32
   name : String
+  /// Optional three-hole tire-mount interface on the output hub face.
+  /// Set to `55.85` to match `TIRE-MOUNT-86.3`; `0.0` disables it.
+  tire_mount_bcd_mm : Double
+  tire_mount_bolt_count : Int32
+  tire_mount_phase_deg : Double
+  tire_mount_hole_diam_mm : Double
 }
 
 ///|
@@ -33,6 +39,10 @@ pub fn A12ActuatorParams::new(
   planet_teeth~ : Int32 = 20,
   planet_count~ : Int32 = 4,
   name~ : String = "a12_actuator",
+  tire_mount_bcd_mm~ : Double = 0.0,
+  tire_mount_bolt_count~ : Int32 = 3,
+  tire_mount_phase_deg~ : Double = 30.0,
+  tire_mount_hole_diam_mm~ : Double = 6.0,
 ) -> A12ActuatorParams {
   {
     gear_module_mm,
@@ -46,6 +56,10 @@ pub fn A12ActuatorParams::new(
     planet_teeth,
     planet_count,
     name,
+    tire_mount_bcd_mm,
+    tire_mount_bolt_count,
+    tire_mount_phase_deg,
+    tire_mount_hole_diam_mm,
   }
 }
 
@@ -248,10 +262,20 @@ pub fn a12_planetary_actuator(params : A12ActuatorParams) -> @cad.Component {
   let cap_part = a12_printed(
     "A12-OUTPUT-CAP", "Printed output bearing cap", "CF nylon / PETG", 6.5,
   )
-  let hub_part = a12_printed(
-    "A12-OUTPUT-HUB", "Printed 60 mm output hub (4x M4 on 40 mm BCD)", "CF nylon / PETG",
-    4.0,
-  )
+  let has_tire_mount = params.tire_mount_bcd_mm > 0.0 &&
+    params.tire_mount_bolt_count > 0
+  let hub_r = if has_tire_mount { 40.0 } else { 30.0 }
+  let hub_part = if has_tire_mount {
+    a12_printed(
+      "A12-OUTPUT-HUB-80", "Printed 80 mm wheel output hub (4x M4 on 40 mm BCD + 3x M4 heat-set inserts on 55.85 mm BCD for TIRE-MOUNT-86.3)",
+      "CF nylon / PETG", 4.5,
+    )
+  } else {
+    a12_printed(
+      "A12-OUTPUT-HUB", "Printed 60 mm output hub (4x M4 on 40 mm BCD)", "CF nylon / PETG",
+      4.0,
+    )
+  }
   let bearing_part = a12_purchased(
     "BEARING-FR8-2RS", "FR8-2RS flanged sealed bearing", "steel", 1.55,
   )
@@ -303,6 +327,21 @@ pub fn a12_planetary_actuator(params : A12ActuatorParams) -> @cad.Component {
     hub_holes.push(
       a12_circle(20.0 * @math.cos(a), 20.0 * @math.sin(a), 2.2, 10),
     )
+  }
+  if has_tire_mount {
+    let tm_r = params.tire_mount_bcd_mm / 2.0
+    let tm_hole_r = params.tire_mount_hole_diam_mm / 2.0
+    for i in 0..<params.tire_mount_bolt_count {
+      let a = (
+          params.tire_mount_phase_deg +
+          360.0 * i.to_double() / params.tire_mount_bolt_count.to_double()
+        ) *
+        @math.PI /
+        180.0
+      hub_holes.push(
+        a12_circle(tm_r * @math.cos(a), tm_r * @math.sin(a), tm_hole_r, 12),
+      )
+    }
   }
 
   let step_gb = match
@@ -420,7 +459,7 @@ pub fn a12_planetary_actuator(params : A12ActuatorParams) -> @cad.Component {
     .add_body(
       @cad.BodyPart::extruded_profile_mm(
         params.name + "_output_hub",
-        a12_circle(0.0, 0.0, 30.0, 28),
+        a12_circle(0.0, 0.0, hub_r, 32),
         8.0,
         holes=hub_holes,
         z_mm=hub_z + 4.0,
@@ -500,46 +539,68 @@ pub fn a12_planetary_actuator(params : A12ActuatorParams) -> @cad.Component {
     hole_diam_mm=4.4,
     start_deg=params.flange_start_deg,
   )
-  act
-  .add_mate(
-    @step_common.MateConnector::from_mm_deg(
-      "housing_flange",
-      z=0.0,
-      axis=(0.0, 0.0, -1.0),
-      kind=@step_common.MateKind::PlaneFace,
-      hole_pattern=stator_holes,
-      description="A12 stator mounting face",
-    ),
-  )
-  .add_mate(
-    @step_common.MateConnector::from_mm_deg(
-      "motor_rear",
-      z=0.0,
-      axis=(0.0, 0.0, -1.0),
-      kind=@step_common.MateKind::PlaneFace,
-      hole_pattern=stator_holes,
-      description="Rear motor/controller mounting face",
-    ),
-  )
-  .add_mate(
-    @step_common.MateConnector::from_mm_deg(
-      "output_hub",
-      z=hub_z + 8.0,
-      axis=(0.0, 0.0, 1.0),
-      kind=@step_common.MateKind::CylindricalShaft,
-      diameter_mm=12.7,
-      hole_pattern=output_holes,
-      description="Outboard 4x M4 output flange",
-    ),
-  )
-  .add_mate(
-    @step_common.MateConnector::from_mm_deg(
-      "mount_flange",
-      z=total_len,
-      axis=(0.0, 0.0, 1.0),
-      kind=@step_common.MateKind::PlaneFace,
-      hole_pattern=flange_holes,
-      description="Output cap flange face",
-    ),
-  )
+  let mut result = act
+    .add_mate(
+      @step_common.MateConnector::from_mm_deg(
+        "housing_flange",
+        z=0.0,
+        axis=(0.0, 0.0, -1.0),
+        kind=@step_common.MateKind::PlaneFace,
+        hole_pattern=stator_holes,
+        description="A12 stator mounting face",
+      ),
+    )
+    .add_mate(
+      @step_common.MateConnector::from_mm_deg(
+        "motor_rear",
+        z=0.0,
+        axis=(0.0, 0.0, -1.0),
+        kind=@step_common.MateKind::PlaneFace,
+        hole_pattern=stator_holes,
+        description="Rear motor/controller mounting face",
+      ),
+    )
+    .add_mate(
+      @step_common.MateConnector::from_mm_deg(
+        "output_hub",
+        z=hub_z + 8.0,
+        axis=(0.0, 0.0, 1.0),
+        kind=@step_common.MateKind::CylindricalShaft,
+        diameter_mm=12.7,
+        hole_pattern=output_holes,
+        description="Outboard 4x M4 output flange",
+      ),
+    )
+    .add_mate(
+      @step_common.MateConnector::from_mm_deg(
+        "mount_flange",
+        z=total_len,
+        axis=(0.0, 0.0, 1.0),
+        kind=@step_common.MateKind::PlaneFace,
+        hole_pattern=flange_holes,
+        description="Output cap flange face",
+      ),
+    )
+  if has_tire_mount {
+    let tm_holes = @step_cad.HolePattern::bolt_circle(
+      count=params.tire_mount_bolt_count,
+      bcd_mm=params.tire_mount_bcd_mm,
+      hole_diam_mm=params.tire_mount_hole_diam_mm,
+      pilot_diam_mm=12.7,
+      start_deg=params.tire_mount_phase_deg,
+    )
+    result = result.add_mate(
+      @step_common.MateConnector::from_mm_deg(
+        "tire_mount",
+        z=hub_z + 8.0,
+        ry_deg=90.0,
+        axis=(1.0, 0.0, 0.0),
+        kind=@step_common.MateKind::PlaneFace,
+        diameter_mm=2.0 * hub_r,
+        hole_pattern=tm_holes,
+        description="Flush tire-mount face matching TIRE-MOUNT-86.3 front-face",
+      ),
+    )
+  }
+  result
 }

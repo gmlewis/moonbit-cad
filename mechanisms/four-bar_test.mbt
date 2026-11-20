@@ -111,3 +111,31 @@ test "transmission angle diagnostics flag a poor linkage" {
   })
   assert_true(has_transmission_warning)
 }
+
+///|
+test "upper_branch selects upper-Z pivot D and closes cleanly" {
+  let params = @mechanisms.FourBarParams::new(
+    ax=255.0,
+    az=0.0,
+    cx=195.0,
+    cz=26.0,
+    crank_len_mm=178.0,
+    coupler_len_mm=48.0,
+    guide_len_mm=175.0,
+    output_len_mm=215.0,
+    output_beta_deg=152.0,
+    upper_branch=true,
+  )
+  let sweep = @mechanisms.sweep_four_bar(
+    params,
+    start_deg=22.9,
+    end_deg=57.9,
+    steps=35,
+  )
+  assert_eq(sweep.errors.length(), 0)
+  for sol in sweep.solutions {
+    assert_true(@mechanisms.loop_closure_residual(params, sol) < 1.0e-9)
+    assert_true(sol.dz > sol.bz)
+    assert_true(sol.transmission_deg > 35.0 && sol.transmission_deg < 100.0)
+  }
+}

@@ -33,3 +33,32 @@ test "a12 actuator interface is tolerance invariant" {
     _ => fail("expected a 4 x M4 output bolt circle with a pilot bore")
   }
 }
+
+///|
+test "a12 actuator supports flush tire-mount hub interface" {
+  let params = @components.A12ActuatorParams::new(
+    tire_mount_bcd_mm=55.85,
+    tire_mount_bolt_count=3,
+    tire_mount_phase_deg=30.0,
+    tire_mount_hole_diam_mm=6.0,
+  )
+  let act = @components.a12_planetary_actuator(params)
+  let tm = act.mates.get("tire_mount").unwrap()
+  match tm.hole_pattern {
+    Some(@step_cad.HolePattern::BoltCircle(count, bcd, hole, pilot, start)) => {
+      assert_eq(count, 3)
+      assert_true((bcd - 55.85).abs() < 1.0e-9)
+      assert_true((hole - 6.0).abs() < 1.0e-9)
+      assert_true((pilot - 12.7).abs() < 1.0e-9)
+      assert_true((start - 30.0).abs() < 1.0e-9)
+    }
+    _ => fail("expected a 3 x M4 tire_mount bolt circle")
+  }
+  let has_hub_80 = act.bodies.fold(init=false, fn(acc, b) {
+    match b.part {
+      Some(p) => acc || p.part_number == "A12-OUTPUT-HUB-80"
+      None => acc
+    }
+  })
+  assert_true(has_hub_80)
+}

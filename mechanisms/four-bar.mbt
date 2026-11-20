@@ -14,6 +14,10 @@ pub(all) struct FourBarParams {
   guide_len_mm : Double
   output_len_mm : Double
   output_beta_deg : Double
+  /// Select the upper-Z circle-circle intersection for Pivot `D` when `true`
+  /// (e.g. a curved guide link arching above the hip crank), or the lower-Z
+  /// branch when `false` (default).
+  upper_branch : Bool
 }
 
 ///|
@@ -27,6 +31,7 @@ pub fn FourBarParams::new(
   guide_len_mm~ : Double,
   output_len_mm~ : Double,
   output_beta_deg~ : Double = 0.0,
+  upper_branch~ : Bool = false,
 ) -> FourBarParams {
   {
     ax,
@@ -38,6 +43,7 @@ pub fn FourBarParams::new(
     guide_len_mm,
     output_len_mm,
     output_beta_deg,
+    upper_branch,
   }
 }
 
@@ -125,7 +131,17 @@ pub fn solve_four_bar(
   let c1z = mz + h * (dx_bc / dist)
   let c2x = mx - h * (-dz_bc / dist)
   let c2z = mz - h * (dx_bc / dist)
-  let (dx, dz) = if c1z < c2z { (c1x, c1z) } else { (c2x, c2z) }
+  let (dx, dz) = if params.upper_branch {
+    if c1z > c2z {
+      (c1x, c1z)
+    } else {
+      (c2x, c2z)
+    }
+  } else if c1z < c2z {
+    (c1x, c1z)
+  } else {
+    (c2x, c2z)
+  }
   let phi = @math.atan2(dz - bz, dx - bx)
   let psi = @math.atan2(dz - params.cz, dx - params.cx)
   let w_ang = phi + params.output_beta_deg * @math.PI / 180.0

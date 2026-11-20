@@ -1,0 +1,59 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "gmlewis/cad/examples/09-fox-bot"
+
+import {
+  "gmlewis/cad/mechanisms",
+  "gmlewis/step/components/common",
+}
+
+// Values
+pub fn fox_bot(params? : FoxBotParams, moteus_step? : String?, tire_mount_step? : String?) -> @gmlewis/cad.Component
+
+pub fn fox_calf_strut_sketch(FoxBotParams) -> @gmlewis/step/cad.Sketch2D
+
+pub fn fox_guide_link_sketch(FoxBotParams) -> @gmlewis/step/cad.Sketch2D
+
+pub fn fox_hip_bracket_sketch(FoxBotParams) -> @gmlewis/step/cad.Sketch2D
+
+pub fn fox_hip_crank_sketch(FoxBotParams) -> @gmlewis/step/cad.Sketch2D
+
+pub async fn run_cli() -> Unit
+
+pub fn solve_fox_leg(FoxBotParams, Double) -> @mechanisms.FourBarSolution
+
+// Errors
+
+// Types and methods
+pub(all) struct FoxBotParams {
+  scale : Double
+  chassis_len_mm : Double
+  inner_width_mm : Double
+  rail_z_mm : Double
+  hip_x_mm : Double
+  crank_len_mm : Double
+  coupler_len_mm : Double
+  guide_len_mm : Double
+  calf_len_mm : Double
+  calf_beta_deg : Double
+  gear_module_mm : Double
+  gear_length_mm : Double
+  num_elbows : Int32
+  tolerance_mm : Double
+  pose : String
+  roll_deg : Double
+  pitch_deg : Double
+  heave : Double
+  wheel_spin_deg : Double
+  detail : @common.DetailLevel
+}
+pub fn FoxBotParams::default() -> Self
+pub fn FoxBotParams::effective_inner_width_mm(Self) -> Double
+pub fn FoxBotParams::effective_rail_z_mm(Self) -> Double
+pub fn FoxBotParams::four_bar_params(Self) -> @mechanisms.FourBarParams
+pub fn FoxBotParams::leg_angles_deg(Self) -> (Double, Double, Double, Double)
+pub fn FoxBotParams::pose_positions(Self) -> Map[String, Double]
+pub fn FoxBotParams::scaled(Double) -> Self
+
+// Type aliases
+
+// Traits

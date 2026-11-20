@@ -27,9 +27,10 @@ pub(all) struct FourBarParams {
   guide_len_mm : Double
   output_len_mm : Double
   output_beta_deg : Double
+  upper_branch : Bool
 }
 pub fn FourBarParams::grashof(Self) -> Bool
-pub fn FourBarParams::new(ax~ : Double, az~ : Double, cx~ : Double, cz~ : Double, crank_len_mm~ : Double, coupler_len_mm~ : Double, guide_len_mm~ : Double, output_len_mm~ : Double, output_beta_deg? : Double) -> Self
+pub fn FourBarParams::new(ax~ : Double, az~ : Double, cx~ : Double, cz~ : Double, crank_len_mm~ : Double, coupler_len_mm~ : Double, guide_len_mm~ : Double, output_len_mm~ : Double, output_beta_deg? : Double, upper_branch? : Bool) -> Self
 
 pub(all) struct FourBarSolution {
   ax : Double

@@ -1,0 +1,6 @@
+import {
+  "gmlewis/cad/examples/09-fox-bot" @fox,
+  "moonbitlang/async",
+}
+
+pkgtype(kind: "executable")

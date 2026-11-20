@@ -200,10 +200,14 @@ pub(all) struct A12ActuatorParams {
   planet_teeth : Int32
   planet_count : Int32
   name : String
+  tire_mount_bcd_mm : Double
+  tire_mount_bolt_count : Int32
+  tire_mount_phase_deg : Double
+  tire_mount_hole_diam_mm : Double
 }
 pub fn A12ActuatorParams::center_distance_mm(Self) -> Double
 pub fn A12ActuatorParams::layout(Self) -> @planetary.HerringbonePlanetaryLayout
-pub fn A12ActuatorParams::new(gear_module_mm? : Double, gear_length_mm? : Double, num_elbows? : Int32, tolerance_mm? : Double, hub_offset_mm? : Double, flange_start_deg? : Double, detail? : @common.DetailLevel, sun_teeth? : Int32, planet_teeth? : Int32, planet_count? : Int32, name? : String) -> Self
+pub fn A12ActuatorParams::new(gear_module_mm? : Double, gear_length_mm? : Double, num_elbows? : Int32, tolerance_mm? : Double, hub_offset_mm? : Double, flange_start_deg? : Double, detail? : @common.DetailLevel, sun_teeth? : Int32, planet_teeth? : Int32, planet_count? : Int32, name? : String, tire_mount_bcd_mm? : Double, tire_mount_bolt_count? : Int32, tire_mount_phase_deg? : Double, tire_mount_hole_diam_mm? : Double) -> Self
 pub fn A12ActuatorParams::outer_radius_mm(Self) -> Double
 pub fn A12ActuatorParams::total_len_mm(Self) -> Double
 
