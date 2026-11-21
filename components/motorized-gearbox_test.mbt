@@ -215,3 +215,130 @@ test "wheel-mode A12 gearbox supports dual bearings, flush tire mount, moteus sh
   // Power budget must count the combined geared A12 once, not twice.
   assert_eq(comp.power_budget().actuators.length(), 1)
 }
+
+///|
+test "single-stage cycloidal motorized gearbox builds valid URDF and STEP" {
+  let stage = @components.MotorizedStageSpec::cycloidal(
+    num_lobes=11,
+    num_disks=2,
+  )
+  let comp = @components.motorized_gearbox(stages=[stage], motor_source="a12")
+  let robot = check_motorized_gearbox(comp)
+  assert_eq(comp.parameters.get("stage_types").unwrap(), "cycloidal")
+  assert_eq(comp.parameters.get("signed_reduction").unwrap(), "-11")
+  assert_eq(comp.parameters.get("reduction").unwrap(), "11")
+  match robot.get_joint("motorized_gearbox_stage1_carrier_joint") {
+    Some(j) =>
+      match j.mimic {
+        Some(m) => assert_true((m.multiplier + 1.0 / 11.0).abs() < 1.0e-9)
+        None => fail("expected mimic on cycloidal carrier joint")
+      }
+    None => fail("missing cycloidal stage1 carrier joint")
+  }
+}
+
+///|
+test "single-stage harmonic motorized gearbox builds valid URDF and STEP" {
+  let stage = @components.MotorizedStageSpec::harmonic(
+    module_mm=1.0,
+    flexspline_teeth=60,
+    tooth_diff=2,
+  )
+  let comp = @components.motorized_gearbox(stages=[stage], motor_source="a12")
+  let robot = check_motorized_gearbox(comp)
+  assert_eq(comp.parameters.get("stage_types").unwrap(), "harmonic")
+  assert_eq(comp.parameters.get("signed_reduction").unwrap(), "-30")
+  assert_eq(comp.parameters.get("reduction").unwrap(), "30")
+  match robot.get_joint("motorized_gearbox_stage1_carrier_joint") {
+    Some(j) =>
+      match j.mimic {
+        Some(m) => assert_true((m.multiplier + 1.0 / 30.0).abs() < 1.0e-9)
+        None => fail("expected mimic on harmonic carrier joint")
+      }
+    None => fail("missing harmonic stage1 carrier joint")
+  }
+}
+
+///|
+test "heterogeneous 3-stage gearbox stacks planetary, cycloidal, and harmonic stages" {
+  let s1 = @components.MotorizedStageSpec::default()
+  let s2 = @components.MotorizedStageSpec::cycloidal(num_lobes=11, num_disks=2)
+  let s3 = @components.MotorizedStageSpec::harmonic(
+    module_mm=1.0,
+    flexspline_teeth=60,
+    tooth_diff=2,
+  )
+  let comp = @components.motorized_gearbox(
+    stages=[s1, s2, s3],
+    motor_source="a12",
+  )
+  let robot = check_motorized_gearbox(comp)
+  assert_eq(
+    comp.parameters.get("stage_types").unwrap(),
+    "planetary,cycloidal,harmonic",
+  )
+  // Net signed reduction: (1 + 52/12) * (-11) * (-30) = (16/3) * 330 = +1760.0.
+  let signed = @string.parse_double(
+    comp.parameters.get("signed_reduction").unwrap(),
+  ) catch {
+    _ => abort("invalid signed_reduction")
+  }
+  assert_true((signed - 1760.0).abs() < 1.0e-6)
+  // Verify mimic chain from stage 1 -> stage 2 -> stage 3.
+  match robot.get_joint("motorized_gearbox_stage2_sun_joint") {
+    Some(j) =>
+      match j.mimic {
+        Some(m) => {
+          assert_eq(m.joint, "motorized_gearbox_stage1_carrier_joint")
+          assert_true((m.multiplier - 1.0).abs() < 1.0e-9)
+        }
+        None => fail("missing stage2 input mimic")
+      }
+    None => fail("missing stage2 input joint")
+  }
+  match robot.get_joint("motorized_gearbox_stage3_sun_joint") {
+    Some(j) =>
+      match j.mimic {
+        Some(m) => {
+          assert_eq(m.joint, "motorized_gearbox_stage2_carrier_joint")
+          assert_true((m.multiplier - 1.0).abs() < 1.0e-9)
+        }
+        None => fail("missing stage3 input mimic")
+      }
+    None => fail("missing stage3 input joint")
+  }
+  match robot.get_joint("motorized_gearbox_stage3_carrier_joint") {
+    Some(j) =>
+      match j.mimic {
+        Some(m) => {
+          assert_eq(m.joint, "motorized_gearbox_stage3_sun_joint")
+          assert_true((m.multiplier + 1.0 / 30.0).abs() < 1.0e-9)
+        }
+        None => fail("missing stage3 output mimic")
+      }
+    None => fail("missing stage3 output joint")
+  }
+}
+
+///|
+test "stepped-planetary, wolfrom 3K, and flat-harmonic stages stack cleanly in motorized_gearbox" {
+  let s1 = @components.MotorizedStageSpec::stepped_planetary()
+  let s2 = @components.MotorizedStageSpec::wolfrom()
+  let s3 = @components.MotorizedStageSpec::flat_harmonic()
+  let comp = @components.motorized_gearbox(
+    stages=[s1, s2, s3],
+    motor_source="a12",
+  )
+  let _ = check_motorized_gearbox(comp)
+  assert_eq(
+    comp.parameters.get("stage_types").unwrap(),
+    "stepped-planetary,wolfrom,flat-harmonic",
+  )
+  // Net signed reduction: 10.2 * 85.0 * (-30.0) = -26010.0.
+  let signed = @string.parse_double(
+    comp.parameters.get("signed_reduction").unwrap(),
+  ) catch {
+    _ => abort("invalid signed_reduction")
+  }
+  assert_true((signed + 26010.0).abs() < 1.0e-4)
+}

@@ -19,7 +19,11 @@ pub fn angle_bar_part(name? : String, leg_a_mm? : Double, leg_b_mm? : Double, th
 
 pub fn ball_bearing(name? : String, designation? : String, outer_diam_mm? : Double, inner_diam_mm? : Double, width_mm? : Double, detail? : @common.DetailLevel, density? : @urdf.Density) -> @gmlewis/cad.Component
 
+pub fn ball_screw_actuator_component(name? : String, screw_diameter_mm? : Double, screw_length_mm? : Double, lead_mm? : Double, stroke_mm? : Double) -> @gmlewis/cad.Component
+
 pub fn bearing_plate_part(name? : String, bearing_outer_mm? : Double, bore_fit_mm? : Double, width_mm? : Double, height_mm? : Double, thickness_mm? : Double, bolt_hole_mm? : Double, bolt_spacing_mm? : Double) -> @gmlewis/cad.Component
+
+pub fn bevel_differential_component(name? : String, module_mm? : Double, input_teeth? : Int32, output_teeth? : Int32, face_width_mm? : Double, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
 
 pub fn bldc_actuator_pod(name? : String, preset? : String, stages? : Int32, module_mm? : Double, sun_teeth? : Int32, planet_teeth? : Int32, planet_count? : Int32, gear_length_mm? : Double, gear_type? : String, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
 
@@ -38,6 +42,8 @@ pub fn box_tube_strut(String, width_mm~ : Double, height_mm~ : Double, length_mm
 pub fn cable_route(name? : String, points? : Array[(Double, Double, Double)], jacket_diameter_mm? : Double, wire_names? : Array[String], material? : String, from_component? : String, from_port? : String, to_component? : String, to_port? : String, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/cad.Component
 
 pub fn camera_module(name? : String, body_mm? : Double, body_h_mm? : Double, lens_diam_mm? : Double, voltage_v? : Double, current_ma? : Double) -> @gmlewis/cad.Component
+
+pub fn capstan_drive_component(name? : String, capstan_radius_mm? : Double, driven_radius_mm? : Double, cable_diameter_mm? : Double, drum_width_mm? : Double, travel_deg? : Double, clearance_mm? : Double, crossed? : Bool) -> @gmlewis/cad.Component
 
 pub fn caster_fork_assembly(name? : String, wheel_diam_mm? : Double, wheel_width_mm? : Double, fork_span_mm? : Double, fork_length_mm? : Double, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
 
@@ -171,6 +177,8 @@ pub fn sun_clamp_hub(String, Double, Double, Double, @common.DetailLevel) -> @gm
 
 pub fn suspension_fork_module(name? : String, fork_span_mm? : Double, fork_length_mm? : Double, wheel_diam_mm? : Double, detail? : @common.DetailLevel, density? : @urdf.Density) -> @gmlewis/cad.Component
 
+pub fn timing_belt_drive_component(name? : String, driver_pitch_diam_mm? : Double, driven_pitch_diam_mm? : Double, center_distance_mm? : Double, belt_width_mm? : Double) -> @gmlewis/cad.Component
+
 pub fn treaded_wheel(String, radius_mm? : Double, width_mm? : Double, hub_radius_mm? : Double, hub_bore_mm? : Double, hub_bolt_circle_mm? : Double, detail? : @common.DetailLevel, density? : @urdf.Density) -> @gmlewis/cad.Component
 
 pub fn tslot_extrusion_strut(name~ : String, profile? : @profiles.TSlotProfile, length_mm? : Double, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
@@ -184,6 +192,8 @@ pub fn vslot_corner_bracket_part(name? : String, leg_mm? : Double, width_mm? : D
 pub fn vslot_extrusion_strut(name~ : String, profile? : @profiles.VSlotProfile, length_mm? : Double, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
 
 pub fn vslot_joining_plate_part(name? : String, length_mm? : Double, width_mm? : Double, thickness_mm? : Double, slot_pitch_mm? : Double, slot_length_mm? : Double, slot_width_mm? : Double) -> @gmlewis/cad.Component
+
+pub fn worm_drive_component(name? : String, module_mm? : Double, worm_starts? : Int32, wheel_teeth? : Int32, worm_pitch_radius_mm? : Double, friction_coeff? : Double) -> @gmlewis/cad.Component
 
 // Errors
 
@@ -229,6 +239,20 @@ pub(all) struct BldcPreset {
   bearing_designation : String
 }
 
+pub(all) struct CycloidalStageSpec {
+  num_lobes : Int32
+  pin_circle_radius_mm : Double
+  ring_pin_radius_mm : Double
+  eccentricity_mm : Double
+  num_disks : Int32
+  disk_thickness_mm : Double
+  disk_gap_mm : Double
+  output_pin_count : Int32
+  output_pin_circle_radius_mm : Double
+  output_pin_radius_mm : Double
+  eccentric_bearing_outer_radius_mm : Double
+}
+
 pub(all) struct FlangedBearingSpec {
   designation : String
   bore_mm : Double
@@ -236,6 +260,36 @@ pub(all) struct FlangedBearingSpec {
   width_mm : Double
   flange_outer_mm : Double
   flange_thickness_mm : Double
+}
+
+pub(all) struct FlatHarmonicStageSpec {
+  module_mm : Double
+  flexspline_teeth : Int32
+  tooth_diff : Int32
+  ring_length_mm : Double
+  ring_gap_mm : Double
+  flex_wall_mm : Double
+  deformed : Bool
+}
+
+#derive(Eq)
+pub(all) enum GearboxStageKind {
+  Planetary
+  Cycloidal
+  Harmonic
+  SteppedPlanetary
+  Wolfrom
+  FlatHarmonic
+}
+
+pub(all) struct HarmonicStageSpec {
+  module_mm : Double
+  flexspline_teeth : Int32
+  tooth_diff : Int32
+  gear_length_mm : Double
+  cup_length_mm : Double
+  flex_wall_mm : Double
+  deformed : Bool
 }
 
 pub(all) struct KiCadFootprint {
@@ -250,6 +304,7 @@ pub(all) struct KiCadFootprint {
 pub fn KiCadFootprint::new(reference? : String, value? : String, footprint? : String, x_mm? : Double, y_mm? : Double, rotation_deg? : Double, side? : String) -> Self
 
 pub(all) struct MotorizedStageSpec {
+  kind : GearboxStageKind
   module_mm : Double
   sun_teeth : Int32
   planet_teeth : Int32
@@ -257,9 +312,23 @@ pub(all) struct MotorizedStageSpec {
   gear_length_mm : Double
   num_elbows : Int32
   planet_bearing : String
+  cycloidal : CycloidalStageSpec?
+  harmonic : HarmonicStageSpec?
+  stepped : SteppedStageSpec?
+  wolfrom : WolfromStageSpec?
+  flat_harmonic : FlatHarmonicStageSpec?
 }
+pub fn MotorizedStageSpec::cycloidal(num_lobes? : Int32, pin_circle_radius_mm? : Double, ring_pin_radius_mm? : Double, eccentricity_mm? : Double, num_disks? : Int32, disk_thickness_mm? : Double, disk_gap_mm? : Double, output_pin_count? : Int32, output_pin_circle_radius_mm? : Double, output_pin_radius_mm? : Double, eccentric_bearing_outer_radius_mm? : Double) -> Self
 pub fn MotorizedStageSpec::default() -> Self
+pub fn MotorizedStageSpec::efficiency(Self) -> Double
+pub fn MotorizedStageSpec::flat_harmonic(module_mm? : Double, flexspline_teeth? : Int32, tooth_diff? : Int32, ring_length_mm? : Double, ring_gap_mm? : Double, flex_wall_mm? : Double, deformed? : Bool) -> Self
+pub fn MotorizedStageSpec::harmonic(module_mm? : Double, flexspline_teeth? : Int32, tooth_diff? : Int32, gear_length_mm? : Double, cup_length_mm? : Double, flex_wall_mm? : Double, deformed? : Bool) -> Self
+pub fn MotorizedStageSpec::is_print_in_place_cartridge(Self) -> Bool
 pub fn MotorizedStageSpec::new(module_mm~ : Double, sun_teeth~ : Int32, planet_teeth~ : Int32, planet_count~ : Int32, gear_length_mm~ : Double, num_elbows? : Int32, planet_bearing? : String) -> Self
+pub fn MotorizedStageSpec::signed_reduction(Self) -> Double
+pub fn MotorizedStageSpec::stage_kind(Self) -> GearboxStageKind
+pub fn MotorizedStageSpec::stepped_planetary(module_mm? : Double, sun_teeth? : Int32, planet_sun_teeth? : Int32, planet_ring_teeth? : Int32, planet_count? : Int32, tier1_length_mm? : Double, tier2_length_mm? : Double, tier_gap_mm? : Double) -> Self
+pub fn MotorizedStageSpec::wolfrom(module_mm? : Double, sun_teeth? : Int32, planet_teeth? : Int32, ring_tooth_diff? : Int32, planet_count? : Int32, fixed_ring_length_mm? : Double, output_ring_length_mm? : Double, ring_gap_mm? : Double) -> Self
 
 pub(all) struct PlanetaryGearboxParams {
   gear_module : Double
@@ -283,6 +352,28 @@ pub(all) struct PlanetaryGearboxParams {
   include_carrier : Bool
 }
 pub fn PlanetaryGearboxParams::default() -> Self
+
+pub(all) struct SteppedStageSpec {
+  module_mm : Double
+  sun_teeth : Int32
+  planet_sun_teeth : Int32
+  planet_ring_teeth : Int32
+  planet_count : Int32
+  tier1_length_mm : Double
+  tier2_length_mm : Double
+  tier_gap_mm : Double
+}
+
+pub(all) struct WolfromStageSpec {
+  module_mm : Double
+  sun_teeth : Int32
+  planet_teeth : Int32
+  ring_tooth_diff : Int32
+  planet_count : Int32
+  fixed_ring_length_mm : Double
+  output_ring_length_mm : Double
+  ring_gap_mm : Double
+}
 
 // Type aliases
 

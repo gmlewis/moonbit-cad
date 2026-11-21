@@ -11,6 +11,14 @@ pub(all) struct GearboxConfig {
   gearbox_name : String
   links_path : String
   num_stages : Int32
+  stage_types : String
+  cycloid_lobes : String
+  cycloid_disks : String
+  cycloid_radius : String
+  cycloid_eccentricity : String
+  harmonic_teeth : String
+  harmonic_module : String
+  harmonic_cup_length : String
   preset : String
   motor_source : String
   modules : String
@@ -46,6 +54,14 @@ pub fn GearboxConfig::new(
   gearbox_name~ : String = "motorized_gearbox",
   links_path~ : String = "examples/01-motorized-wheel/supplier-links.txt",
   num_stages~ : Int32 = 1,
+  stage_types~ : String = "planetary",
+  cycloid_lobes~ : String = "11",
+  cycloid_disks~ : String = "2",
+  cycloid_radius~ : String = "42.0",
+  cycloid_eccentricity~ : String = "1.5",
+  harmonic_teeth~ : String = "60",
+  harmonic_module~ : String = "1.0",
+  harmonic_cup_length~ : String = "24.0",
   preset~ : String = "",
   motor_source~ : String = "a12",
   modules~ : String = "2.0",
@@ -78,6 +94,14 @@ pub fn GearboxConfig::new(
     gearbox_name,
     links_path,
     num_stages,
+    stage_types,
+    cycloid_lobes,
+    cycloid_disks,
+    cycloid_radius,
+    cycloid_eccentricity,
+    harmonic_teeth,
+    harmonic_module,
+    harmonic_cup_length,
     preset,
     motor_source,
     modules,
@@ -158,19 +182,108 @@ async fn build_gearbox_component_with_cache(
   let bearings = cli_or_abort(
     @cad.parse_string_list(config.planet_bearings, stage_count, "planetBearing"),
   )
+  let stage_types = cli_or_abort(
+    @cad.parse_string_list(config.stage_types, stage_count, "stageTypes"),
+  )
+  let cyc_lobes = cli_or_abort(
+    @cad.parse_int_list(config.cycloid_lobes, stage_count, "cycloidLobes"),
+  )
+  let cyc_disks = cli_or_abort(
+    @cad.parse_int_list(config.cycloid_disks, stage_count, "cycloidDisks"),
+  )
+  let cyc_radii = cli_or_abort(
+    @cad.parse_double_list(config.cycloid_radius, stage_count, "cycloidRadius"),
+  )
+  let cyc_eccs = cli_or_abort(
+    @cad.parse_double_list(
+      config.cycloid_eccentricity,
+      stage_count,
+      "cycloidEccentricity",
+    ),
+  )
+  let harm_teeth = cli_or_abort(
+    @cad.parse_int_list(config.harmonic_teeth, stage_count, "harmonicTeeth"),
+  )
+  let harm_mods = cli_or_abort(
+    @cad.parse_double_list(
+      config.harmonic_module,
+      stage_count,
+      "harmonicModule",
+    ),
+  )
+  let harm_cups = cli_or_abort(
+    @cad.parse_double_list(
+      config.harmonic_cup_length,
+      stage_count,
+      "harmonicCupLength",
+    ),
+  )
   let stage_specs : Array[@components.MotorizedStageSpec] = []
   for i in 0..<stage_count {
-    stage_specs.push(
-      @components.MotorizedStageSpec::new(
-        module_mm=modules[i],
-        sun_teeth=sun_teeth[i],
-        planet_teeth=planet_teeth[i],
-        planet_count=planet_counts[i],
-        gear_length_mm=gear_lengths[i],
-        num_elbows=elbows[i],
-        planet_bearing=bearings[i],
-      ),
-    )
+    let kind_str = stage_types[i].to_lower()
+    if kind_str == "planetary" {
+      stage_specs.push(
+        @components.MotorizedStageSpec::new(
+          module_mm=modules[i],
+          sun_teeth=sun_teeth[i],
+          planet_teeth=planet_teeth[i],
+          planet_count=planet_counts[i],
+          gear_length_mm=gear_lengths[i],
+          num_elbows=elbows[i],
+          planet_bearing=bearings[i],
+        ),
+      )
+    } else if kind_str == "cycloidal" || kind_str == "cycloid" {
+      stage_specs.push(
+        @components.MotorizedStageSpec::cycloidal(
+          num_lobes=cyc_lobes[i],
+          pin_circle_radius_mm=cyc_radii[i],
+          eccentricity_mm=cyc_eccs[i],
+          num_disks=cyc_disks[i],
+          disk_thickness_mm=gear_lengths[i] * 0.8,
+        ),
+      )
+    } else if kind_str == "harmonic" || kind_str == "strain-wave" {
+      stage_specs.push(
+        @components.MotorizedStageSpec::harmonic(
+          module_mm=harm_mods[i],
+          flexspline_teeth=harm_teeth[i],
+          gear_length_mm=gear_lengths[i],
+          cup_length_mm=harm_cups[i],
+        ),
+      )
+    } else if kind_str == "stepped" ||
+      kind_str == "stepped-planetary" ||
+      kind_str == "compound-planetary" {
+      stage_specs.push(
+        @components.MotorizedStageSpec::stepped_planetary(
+          tier1_length_mm=gear_lengths[i] * 0.8,
+          tier2_length_mm=gear_lengths[i] * 0.8,
+        ),
+      )
+    } else if kind_str == "wolfrom" || kind_str == "3k" {
+      stage_specs.push(
+        @components.MotorizedStageSpec::wolfrom(
+          fixed_ring_length_mm=gear_lengths[i] * 0.8,
+          output_ring_length_mm=gear_lengths[i] * 0.8,
+        ),
+      )
+    } else if kind_str == "flat-harmonic" ||
+      kind_str == "pancake-harmonic" ||
+      kind_str == "split-ring-harmonic" {
+      stage_specs.push(
+        @components.MotorizedStageSpec::flat_harmonic(
+          module_mm=harm_mods[i],
+          flexspline_teeth=harm_teeth[i],
+          ring_length_mm=gear_lengths[i] * 0.7,
+        ),
+      )
+    } else {
+      @cli.eprintln(
+        "error: unknown --stageTypes value '\{stage_types[i]}' for stage \{i + 1}; expected planetary, cycloidal, harmonic, stepped, wolfrom, or flat-harmonic",
+      )
+      abort("")
+    }
   }
   let include_tire = !config.no_tire
   if include_tire && config.no_output_hub {
@@ -233,7 +346,7 @@ async fn build_gearbox_component_with_cache(
   )
   let pip_cartridges : Array[String] = []
   for i in 0..<stage_count {
-    if stage_specs[i].num_elbows >= 4 {
+    if stage_specs[i].is_print_in_place_cartridge() {
       pip_cartridges.push("MG-STAGE\{i + 1}-CARTRIDGE")
     }
   }
@@ -401,7 +514,31 @@ pub async fn run_gearbox_cli(defaults : GearboxConfig) -> Unit {
   let base_spec = {
     "numStages": @cli.opt_int(
       defaults.num_stages,
-      help="Number of planetary stages",
+      help="Number of gearbox stages",
+    ),
+    "stageTypes": @cli.opt_string(
+      help="Comma-separated stage types per stage: planetary, cycloidal, harmonic, stepped, wolfrom, flat-harmonic (default \{defaults.stage_types})",
+    ),
+    "cycloidLobes": @cli.opt_string(
+      help="Comma-separated cycloidal lobe counts per stage (default \{defaults.cycloid_lobes})",
+    ),
+    "cycloidDisks": @cli.opt_string(
+      help="Comma-separated phased cycloidal disk counts per stage (1, 2 at 180 deg, or 3 at 120 deg; default \{defaults.cycloid_disks})",
+    ),
+    "cycloidRadius": @cli.opt_string(
+      help="Comma-separated cycloidal ring pin-circle radii in mm per stage (default \{defaults.cycloid_radius})",
+    ),
+    "cycloidEccentricity": @cli.opt_string(
+      help="Comma-separated cycloidal eccentricities in mm per stage (default \{defaults.cycloid_eccentricity})",
+    ),
+    "harmonicTeeth": @cli.opt_string(
+      help="Comma-separated harmonic flexspline tooth counts per stage (even, >= 30; default \{defaults.harmonic_teeth})",
+    ),
+    "harmonicModule": @cli.opt_string(
+      help="Comma-separated harmonic gear modules in mm per stage (default \{defaults.harmonic_module})",
+    ),
+    "harmonicCupLength": @cli.opt_string(
+      help="Comma-separated harmonic flexspline cup lengths in mm per stage (default \{defaults.harmonic_cup_length})",
     ),
     "preset": @cli.opt_string(
       help="BLDC preset: 5010_360kv, 5008_335kv, 5208_180kv, 5065_270kv, 6354_190kv",
@@ -495,6 +632,28 @@ pub async fn run_gearbox_cli(defaults : GearboxConfig) -> Unit {
   let cfg : GearboxConfig = {
     ..defaults,
     num_stages: args.int("numStages"),
+    stage_types: args.string_opt("stageTypes").unwrap_or(defaults.stage_types),
+    cycloid_lobes: args
+    .string_opt("cycloidLobes")
+    .unwrap_or(defaults.cycloid_lobes),
+    cycloid_disks: args
+    .string_opt("cycloidDisks")
+    .unwrap_or(defaults.cycloid_disks),
+    cycloid_radius: args
+    .string_opt("cycloidRadius")
+    .unwrap_or(defaults.cycloid_radius),
+    cycloid_eccentricity: args
+    .string_opt("cycloidEccentricity")
+    .unwrap_or(defaults.cycloid_eccentricity),
+    harmonic_teeth: args
+    .string_opt("harmonicTeeth")
+    .unwrap_or(defaults.harmonic_teeth),
+    harmonic_module: args
+    .string_opt("harmonicModule")
+    .unwrap_or(defaults.harmonic_module),
+    harmonic_cup_length: args
+    .string_opt("harmonicCupLength")
+    .unwrap_or(defaults.harmonic_cup_length),
     preset: args.string_opt("preset").unwrap_or(defaults.preset),
     motor_source: args
     .string_opt("motorSource")
@@ -549,7 +708,7 @@ pub async fn run_gearbox_cli(defaults : GearboxConfig) -> Unit {
   match output.build_package {
     Some(dir) =>
       for k in 0..<cfg.num_stages {
-        if stage_specs[k].num_elbows >= 4 {
+        if stage_specs[k].is_print_in_place_cartridge() {
           let raw_cart = @components.motorized_stage_cartridge(
             name=cfg.gearbox_name,
             preset~,

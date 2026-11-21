@@ -36,15 +36,17 @@
 const PLANET_POCKET_CLEARANCE_MM : Double = 0.1
 
 ///|
-/// One planetary stage of a `motorized_gearbox`.
+/// One stage of a `motorized_gearbox` (planetary, cycloidal, or harmonic).
 pub(all) struct MotorizedStageSpec {
+  /// Stage mechanical topology (`Planetary`, `Cycloidal`, or `Harmonic`).
+  kind : GearboxStageKind
   /// Gear module in millimeters.
   module_mm : Double
-  /// Sun tooth count.
+  /// Sun tooth count (planetary stages).
   sun_teeth : Int32
-  /// Planet tooth count.
+  /// Planet tooth count (planetary stages).
   planet_teeth : Int32
-  /// Number of orbiting planets.
+  /// Number of orbiting planets (planetary stages).
   planet_count : Int32
   /// Gear face width in millimeters.
   gear_length_mm : Double
@@ -52,10 +54,20 @@ pub(all) struct MotorizedStageSpec {
   num_elbows : Int32
   /// Planet bearing: `"FR8-2RS"` or an ISO bearing designation.
   planet_bearing : String
+  /// Cycloidal stage parameters when `kind == Cycloidal`.
+  cycloidal : CycloidalStageSpec?
+  /// Harmonic stage parameters when `kind == Harmonic`.
+  harmonic : HarmonicStageSpec?
+  /// Stepped planetary stage parameters when `kind == SteppedPlanetary`.
+  stepped : SteppedStageSpec?
+  /// Wolfrom (3K) stage parameters when `kind == Wolfrom`.
+  wolfrom : WolfromStageSpec?
+  /// Flat / pancake harmonic stage parameters when `kind == FlatHarmonic`.
+  flat_harmonic : FlatHarmonicStageSpec?
 }
 
 ///|
-/// Builds a stage specification.
+/// Builds a planetary stage specification.
 pub fn MotorizedStageSpec::new(
   module_mm~ : Double,
   sun_teeth~ : Int32,
@@ -66,6 +78,7 @@ pub fn MotorizedStageSpec::new(
   planet_bearing~ : String = "FR8-2RS",
 ) -> MotorizedStageSpec {
   {
+    kind: GearboxStageKind::Planetary,
     module_mm,
     sun_teeth,
     planet_teeth,
@@ -73,6 +86,11 @@ pub fn MotorizedStageSpec::new(
     gear_length_mm,
     num_elbows,
     planet_bearing,
+    cycloidal: None,
+    harmonic: None,
+    stepped: None,
+    wolfrom: None,
+    flat_harmonic: None,
   }
 }
 
@@ -82,6 +100,7 @@ pub fn MotorizedStageSpec::new(
 /// barrel fits inside a 7-inch wheel envelope.
 pub fn MotorizedStageSpec::default() -> MotorizedStageSpec {
   {
+    kind: GearboxStageKind::Planetary,
     module_mm: 2.0,
     sun_teeth: 12,
     planet_teeth: 20,
@@ -89,6 +108,11 @@ pub fn MotorizedStageSpec::default() -> MotorizedStageSpec {
     gear_length_mm: 10.0,
     num_elbows: 0,
     planet_bearing: "FR8-2RS",
+    cycloidal: None,
+    harmonic: None,
+    stepped: None,
+    wolfrom: None,
+    flat_harmonic: None,
   }
 }
 
@@ -270,9 +294,20 @@ priv struct MotorizedStage {
   bearing : FlangedBearingSpec
   params : PlanetaryGearboxParams
   layout : @step_planetary.HerringbonePlanetaryLayout
+  cycloidal_params : @step_cycloidal.CycloidalParams?
+  cycloidal_layout : @step_cycloidal.CycloidalLayout?
+  harmonic_params : @step_harmonic.HarmonicParams?
+  harmonic_layout : @step_harmonic.HarmonicLayout?
+  stepped_params : @step_stepped.SteppedPlanetaryParams?
+  stepped_layout : @step_stepped.SteppedPlanetaryLayout?
+  wolfrom_params : @step_wolfrom.WolfromParams?
+  wolfrom_layout : @step_wolfrom.WolfromLayout?
+  flat_harmonic_params : @step_harmonic.FlatHarmonicParams?
+  flat_harmonic_layout : @step_harmonic.FlatHarmonicLayout?
   smooth : Bool
   z0 : Double
   gear_length : Double
+  ring_axial_length : Double
   height : Double
   base_outer : Double
   ring_free_bore : Double
@@ -657,20 +692,23 @@ fn build_stage_casing_comp(
     )
     return module_comp
   }
-  // Flush print-in-place housing shell: bottom flange ring sits on z = [0, ft],
-  // carrier sleeve covers z = [gear_length, stage_height + ft], and 6 top bolt
-  // lugs at `top_phase_deg` flare at 45 deg for support-free printing.
+  // Flush print-in-place housing shell: a single connected analytical barrel
+  // wrapping `ring_body` (whose outer radius is inset by 1.5 mm to
+  // `casing_outer - 1.5`), so the entire exterior barrel from z = 0 to top_z
+  // is one smooth analytical cylinder with zero Z-fighting and zero facet
+  // artifacts (even around herringbone swept rings).
   let top_z = stage_height + flange_thickness_mm
+  let sleeve_inner = casing_outer - 1.5
   let profile = @step_cad.RevolvedProfile::polyline(
       [
-        (casing_outer - 0.1, 0.0),
+        (sleeve_inner, 0.0),
         (flange_outer_radius, 0.0),
         (flange_outer_radius, flange_thickness_mm),
         (casing_outer, flange_thickness_mm),
         (casing_outer, top_z),
         (smooth_inner, top_z),
         (smooth_inner, gear_length),
-        (casing_outer - 0.1, gear_length),
+        (sleeve_inner, gear_length),
       ],
       closed=true,
     )
@@ -1558,10 +1596,58 @@ pub fn motorized_stage_cartridge(
     }
     let step_params = pgb_step_params(params, spec.num_elbows == 0, detail)
     let layout = @step_planetary.herringbone_planetary_layout(step_params)
-    let base_outer = layout.ring_outer_radius_mm - trial_outer
-    let carrier_plate_radius = layout.center_distance_mm +
-      layout.planet.outer_radius_mm +
-      carrier_margin_mm
+    let (base_outer, carrier_plate_radius) = match spec.kind {
+      Planetary =>
+        (
+          layout.ring_outer_radius_mm - trial_outer,
+          layout.center_distance_mm +
+          layout.planet.outer_radius_mm +
+          carrier_margin_mm,
+        )
+      Cycloidal => {
+        let cs = spec.cycloidal.unwrap()
+        (
+          cs.pin_circle_radius_mm + cs.ring_pin_radius_mm,
+          cs.output_pin_circle_radius_mm +
+          cs.output_pin_radius_mm +
+          carrier_margin_mm,
+        )
+      }
+      Harmonic => {
+        let hs = spec.harmonic.unwrap()
+        let circ_pitch = hs.module_mm *
+          (hs.flexspline_teeth + hs.tooth_diff).to_double() /
+          2.0
+        let flex_root = hs.module_mm *
+          (hs.flexspline_teeth.to_double() / 2.0 - 1.0)
+        (circ_pitch + hs.module_mm, flex_root + carrier_margin_mm)
+      }
+      SteppedPlanetary => {
+        let ss = spec.stepped.unwrap()
+        let a = ss.module_mm *
+          (ss.sun_teeth + ss.planet_sun_teeth).to_double() /
+          2.0
+        let p1_out = ss.module_mm *
+          (ss.planet_sun_teeth.to_double() / 2.0 + 1.0)
+        (a + p1_out + 1.0, a + p1_out + carrier_margin_mm)
+      }
+      Wolfrom => {
+        let ws = spec.wolfrom.unwrap()
+        let zr1 = (ws.sun_teeth + 2 * ws.planet_teeth).to_double()
+        let r_root = ws.module_mm * (zr1 / 2.0 + 1.25)
+        (r_root + 5.0, r_root + 4.0 + carrier_margin_mm)
+      }
+      FlatHarmonic => {
+        let fs = spec.flat_harmonic.unwrap()
+        let circ_pitch = fs.module_mm *
+          (fs.flexspline_teeth + fs.tooth_diff).to_double() /
+          2.0
+        (
+          circ_pitch + fs.module_mm + 4.0,
+          circ_pitch + fs.module_mm + 3.5 + carrier_margin_mm,
+        )
+      }
+    }
     let smooth_inner = carrier_plate_radius + casing_radial_clearance_mm
     let height = spec.gear_length_mm +
       clearance +
@@ -1585,7 +1671,12 @@ pub fn motorized_stage_cartridge(
   }
   let k = stage_index - 1
   let (spec, bearing, base_params, _, base_outer, _, smooth_inner, stage_height) = stage_entries[k]
-  let outer_thickness = casing_outer - base_outer
+  if spec.kind != GearboxStageKind::Planetary {
+    abort(
+      "motorized_stage_cartridge only applies to print-in-place planetary stages (stage \{stage_index} is not planetary)",
+    )
+  }
+  let outer_thickness = casing_outer - 1.5 - base_outer
   let params = { ..base_params, outer_thickness_mm: outer_thickness, }
   let smooth = spec.num_elbows == 0
   let step_params = pgb_step_params(params, smooth, detail)
@@ -1835,15 +1926,8 @@ pub fn motorized_gearbox(
     let sun_bore_radius = input_shaft_diam / 2.0 + 0.1
     let planet_bore_radius = bearing.outer_mm / 2.0 - 0.03
     let pin_diam = bearing.bore_mm
-    let planet_root = spec.module_mm *
-      (spec.planet_teeth.to_double() / 2.0 - 1.25)
-    if planet_bore_radius > planet_root - 1.5 {
-      abort(
-        "stage \{k + 1}: bearing \{spec.planet_bearing} (outer \{bearing.outer_mm} mm) does not fit planet \{spec.planet_teeth} at module \{spec.module_mm}; increase the module, increase the planet tooth count, or use a smaller bearing",
-      )
-    }
     let trial_outer = 1.0
-    let params : PlanetaryGearboxParams = {
+    let default_params : PlanetaryGearboxParams = {
       gear_module: spec.module_mm,
       gear_length_mm: spec.gear_length_mm,
       helix_angle_deg: 30.0,
@@ -1864,14 +1948,315 @@ pub fn motorized_gearbox(
       outer_thickness_mm: trial_outer,
       include_carrier: true,
     }
-    let step_params = pgb_step_params(params, smooth, detail)
-    let layout = @step_planetary.herringbone_planetary_layout(step_params)
-    let base_outer = layout.ring_outer_radius_mm - trial_outer
-    let carrier_plate_radius = layout.center_distance_mm +
-      layout.planet.outer_radius_mm +
-      carrier_margin_mm
+    let (
+      params,
+      layout,
+      cycloidal_params,
+      cycloidal_layout,
+      harmonic_params,
+      harmonic_layout,
+      stepped_params,
+      stepped_layout,
+      wolfrom_params,
+      wolfrom_layout,
+      flat_harmonic_params,
+      flat_harmonic_layout,
+      stage_gear_length,
+      ring_axial_length,
+      base_outer,
+      ring_free_bore,
+      carrier_plate_radius,
+      casing_desc,
+    ) = match spec.kind {
+      Planetary => {
+        let planet_root = spec.module_mm *
+          (spec.planet_teeth.to_double() / 2.0 - 1.25)
+        if planet_bore_radius > planet_root - 1.5 {
+          abort(
+            "stage \{k + 1}: bearing \{spec.planet_bearing} (outer \{bearing.outer_mm} mm) does not fit planet \{spec.planet_teeth} at module \{spec.module_mm}; increase the module, increase the planet tooth count, or use a smaller bearing",
+          )
+        }
+        let step_params = pgb_step_params(default_params, smooth, detail)
+        let pl = @step_planetary.herringbone_planetary_layout(step_params)
+        let bo = pl.ring_outer_radius_mm - trial_outer
+        let cpr = pl.center_distance_mm +
+          pl.planet.outer_radius_mm +
+          carrier_margin_mm
+        (
+          default_params,
+          pl,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          spec.gear_length_mm,
+          spec.gear_length_mm,
+          bo,
+          pl.ring.outer_radius_mm,
+          cpr,
+          "Printed stage \{k + 1} casing module with integrated internal ring gear, carrier bore, and joint flanges",
+        )
+      }
+      Cycloidal => {
+        let cs = match spec.cycloidal {
+          Some(c) => c
+          None => abort("stage \{k + 1}: missing cycloidal stage spec")
+        }
+        let cp = match
+          @step_cycloidal.CycloidalParams::new(
+            num_lobes=cs.num_lobes,
+            pin_circle_radius_mm=cs.pin_circle_radius_mm,
+            ring_pin_radius_mm=cs.ring_pin_radius_mm,
+            eccentricity_mm=cs.eccentricity_mm,
+            num_disks=cs.num_disks,
+            disk_thickness_mm=cs.disk_thickness_mm,
+            disk_gap_mm=cs.disk_gap_mm,
+            output_pin_count=cs.output_pin_count,
+            output_pin_circle_radius_mm=cs.output_pin_circle_radius_mm,
+            output_pin_radius_mm=cs.output_pin_radius_mm,
+            input_bore_radius_mm=sun_bore_radius,
+            eccentric_bearing_outer_radius_mm=cs.eccentric_bearing_outer_radius_mm,
+            outer_wall_mm=trial_outer,
+            tolerance_mm~,
+          ) {
+          Ok(v) => v
+          Err(e) => abort("stage \{k + 1} cycloidal params: \{e.message()}")
+        }
+        let cl = @step_cycloidal.cycloidal_layout(cp)
+        let bo = cl.ring_outer_radius_mm - trial_outer
+        let cpr = cs.output_pin_circle_radius_mm +
+          cs.output_pin_radius_mm +
+          carrier_margin_mm
+        let dummy_layout = @step_planetary.herringbone_planetary_layout(
+          pgb_step_params(default_params, true, detail),
+        )
+        (
+          default_params,
+          dummy_layout,
+          Some(cp),
+          Some(cl),
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          cl.stack_length_mm,
+          cl.stack_length_mm,
+          bo,
+          cl.ring_inner_radius_mm,
+          cpr,
+          "Printed stage \{k + 1} cycloidal casing module with integrated outer pin ring (\{cl.ring_pin_count} pins) and joint flanges",
+        )
+      }
+      Harmonic => {
+        let hs = match spec.harmonic {
+          Some(h) => h
+          None => abort("stage \{k + 1}: missing harmonic stage spec")
+        }
+        let hp = match
+          @step_harmonic.HarmonicParams::new(
+            module_mm=hs.module_mm,
+            flexspline_teeth=hs.flexspline_teeth,
+            tooth_diff=hs.tooth_diff,
+            gear_length_mm=hs.gear_length_mm,
+            cup_length_mm=hs.cup_length_mm,
+            flex_wall_mm=hs.flex_wall_mm,
+            outer_wall_mm=trial_outer,
+            input_bore_radius_mm=sun_bore_radius,
+            tolerance_mm~,
+            deformed=hs.deformed,
+          ) {
+          Ok(v) => v
+          Err(e) => abort("stage \{k + 1} harmonic params: \{e.message()}")
+        }
+        let hl = @step_harmonic.harmonic_layout(hp)
+        let bo = hl.circ_outer_radius_mm - trial_outer
+        let cpr = hl.flex_root_radius_mm + carrier_margin_mm
+        let dummy_layout = @step_planetary.herringbone_planetary_layout(
+          pgb_step_params(default_params, true, detail),
+        )
+        (
+          default_params,
+          dummy_layout,
+          None,
+          None,
+          Some(hp),
+          Some(hl),
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          hl.total_length_mm,
+          hs.gear_length_mm,
+          bo,
+          hl.circ_root_radius_mm,
+          cpr,
+          "Printed stage \{k + 1} harmonic casing module with integrated circular spline (\{hl.circular_spline_teeth} teeth) and joint flanges",
+        )
+      }
+      SteppedPlanetary => {
+        let ss = match spec.stepped {
+          Some(s) => s
+          None => abort("stage \{k + 1}: missing stepped planetary stage spec")
+        }
+        let sp = match
+          @step_stepped.SteppedPlanetaryParams::new(
+            module_mm=ss.module_mm,
+            sun_teeth=ss.sun_teeth,
+            planet_sun_teeth=ss.planet_sun_teeth,
+            planet_ring_teeth=ss.planet_ring_teeth,
+            planet_count=ss.planet_count,
+            tier1_length_mm=ss.tier1_length_mm,
+            tier2_length_mm=ss.tier2_length_mm,
+            tier_gap_mm=ss.tier_gap_mm,
+            sun_bore_radius_mm=sun_bore_radius,
+            outer_wall_mm=trial_outer,
+            tolerance_mm~,
+          ) {
+          Ok(v) => v
+          Err(e) =>
+            abort("stage \{k + 1} stepped planetary params: \{e.message()}")
+        }
+        let sl = @step_stepped.stepped_planetary_layout(sp)
+        let bo = sl.ring_outer_radius_mm - trial_outer
+        let cpr = sl.center_distance_mm +
+          sl.planet_sun_outer_radius_mm +
+          carrier_margin_mm
+        let dummy_layout = @step_planetary.herringbone_planetary_layout(
+          pgb_step_params(default_params, true, detail),
+        )
+        (
+          default_params,
+          dummy_layout,
+          None,
+          None,
+          None,
+          None,
+          Some(sp),
+          Some(sl),
+          None,
+          None,
+          None,
+          None,
+          sl.total_length_mm,
+          sl.total_length_mm,
+          bo,
+          sl.casing_inner_envelope_mm,
+          cpr,
+          "Printed stage \{k + 1} stepped planetary casing module with integrated tier-2 ring (\{sl.ring_teeth} teeth) and joint flanges",
+        )
+      }
+      Wolfrom => {
+        let ws = match spec.wolfrom {
+          Some(w) => w
+          None => abort("stage \{k + 1}: missing wolfrom stage spec")
+        }
+        let wp = match
+          @step_wolfrom.WolfromParams::new(
+            module_mm=ws.module_mm,
+            sun_teeth=ws.sun_teeth,
+            planet_teeth=ws.planet_teeth,
+            ring_tooth_diff=ws.ring_tooth_diff,
+            planet_count=ws.planet_count,
+            fixed_ring_length_mm=ws.fixed_ring_length_mm,
+            output_ring_length_mm=ws.output_ring_length_mm,
+            ring_gap_mm=ws.ring_gap_mm,
+            sun_bore_radius_mm=sun_bore_radius,
+            outer_wall_mm=trial_outer,
+            tolerance_mm~,
+          ) {
+          Ok(v) => v
+          Err(e) => abort("stage \{k + 1} wolfrom params: \{e.message()}")
+        }
+        let wl = @step_wolfrom.wolfrom_layout(wp)
+        let bo = wl.ring_outer_radius_mm - trial_outer
+        let cpr = wl.output_ring_outer_radius_mm + carrier_margin_mm
+        let dummy_layout = @step_planetary.herringbone_planetary_layout(
+          pgb_step_params(default_params, true, detail),
+        )
+        (
+          default_params,
+          dummy_layout,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          Some(wp),
+          Some(wl),
+          None,
+          None,
+          wl.total_length_mm,
+          ws.fixed_ring_length_mm,
+          bo,
+          wl.fixed_ring_root_radius_mm,
+          cpr,
+          "Printed stage \{k + 1} Wolfrom 3K casing module with integrated fixed ring (\{wl.fixed_ring_teeth} teeth) and joint flanges",
+        )
+      }
+      FlatHarmonic => {
+        let fs = match spec.flat_harmonic {
+          Some(f) => f
+          None => abort("stage \{k + 1}: missing flat harmonic stage spec")
+        }
+        let fp = match
+          @step_harmonic.FlatHarmonicParams::new(
+            module_mm=fs.module_mm,
+            flexspline_teeth=fs.flexspline_teeth,
+            tooth_diff=fs.tooth_diff,
+            ring_length_mm=fs.ring_length_mm,
+            ring_gap_mm=fs.ring_gap_mm,
+            flex_wall_mm=fs.flex_wall_mm,
+            outer_wall_mm=trial_outer,
+            input_bore_radius_mm=sun_bore_radius,
+            tolerance_mm~,
+            deformed=fs.deformed,
+          ) {
+          Ok(v) => v
+          Err(e) => abort("stage \{k + 1} flat harmonic params: \{e.message()}")
+        }
+        let fl = @step_harmonic.flat_harmonic_layout(fp)
+        let bo = fl.base.circ_outer_radius_mm - trial_outer
+        let cpr = fl.output_ring_outer_radius_mm + carrier_margin_mm
+        let dummy_layout = @step_planetary.herringbone_planetary_layout(
+          pgb_step_params(default_params, true, detail),
+        )
+        (
+          default_params,
+          dummy_layout,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          Some(fp),
+          Some(fl),
+          fl.total_length_mm,
+          fs.ring_length_mm,
+          bo,
+          fl.base.circ_root_radius_mm,
+          cpr,
+          "Printed stage \{k + 1} pancake harmonic casing module with integrated fixed circular spline (\{fl.base.circular_spline_teeth} teeth) and joint flanges",
+        )
+      }
+    }
     let smooth_inner = carrier_plate_radius + casing_radial_clearance_mm
-    let height = spec.gear_length_mm +
+    let height = stage_gear_length +
       clearance +
       carrier_thickness_mm +
       top_gap_mm
@@ -1880,12 +2265,23 @@ pub fn motorized_gearbox(
       bearing,
       params,
       layout,
+      cycloidal_params,
+      cycloidal_layout,
+      harmonic_params,
+      harmonic_layout,
+      stepped_params,
+      stepped_layout,
+      wolfrom_params,
+      wolfrom_layout,
+      flat_harmonic_params,
+      flat_harmonic_layout,
       smooth,
       z0: z,
-      gear_length: spec.gear_length_mm,
+      gear_length: stage_gear_length,
+      ring_axial_length,
       height,
       base_outer,
-      ring_free_bore: layout.ring.outer_radius_mm,
+      ring_free_bore,
       carrier_plate_radius,
       smooth_inner,
       carrier_shaft_diam: if k + 1 == stage_count {
@@ -1901,7 +2297,7 @@ pub fn motorized_gearbox(
       carrier_mount: "\{name}_stage\{k + 1}_carrier_mount",
       casing_part: fabricated_part(
         "MG-CASING-\{k + 1}",
-        "Printed stage \{k + 1} casing module with integrated internal ring gear, carrier bore, and joint flanges",
+        casing_desc,
         "carbon fiber nylon",
         "3D print",
         16.0,
@@ -1933,13 +2329,68 @@ pub fn motorized_gearbox(
   }
   let flange_outer_radius = casing_outer + flange_extra_mm
   let casing_bolt_radius = casing_outer + flange_extra_mm / 2.0
+  let ring_inset = if stage_flush { 1.5 } else { 0.0 }
   let finalized : Array[MotorizedStage] = []
   for info in infos {
-    let outer_thickness = casing_outer - info.base_outer
-    let params = { ..info.params, outer_thickness_mm: outer_thickness, }
-    let step_params = pgb_step_params(params, info.smooth, detail)
-    let layout = @step_planetary.herringbone_planetary_layout(step_params)
-    finalized.push({ ..info, params, layout, })
+    let outer_thickness = casing_outer - ring_inset - info.base_outer
+    match info.spec.kind {
+      Planetary => {
+        let params = { ..info.params, outer_thickness_mm: outer_thickness, }
+        let step_params = pgb_step_params(params, info.smooth, detail)
+        let layout = @step_planetary.herringbone_planetary_layout(step_params)
+        finalized.push({ ..info, params, layout, })
+      }
+      Cycloidal => {
+        let cp0 = info.cycloidal_params.unwrap()
+        let cp = { ..cp0, outer_wall_mm: outer_thickness, }
+        let cl = @step_cycloidal.cycloidal_layout(cp)
+        finalized.push({
+          ..info,
+          cycloidal_params: Some(cp),
+          cycloidal_layout: Some(cl),
+        })
+      }
+      Harmonic => {
+        let hp0 = info.harmonic_params.unwrap()
+        let hp = { ..hp0, outer_wall_mm: outer_thickness, }
+        let hl = @step_harmonic.harmonic_layout(hp)
+        finalized.push({
+          ..info,
+          harmonic_params: Some(hp),
+          harmonic_layout: Some(hl),
+        })
+      }
+      SteppedPlanetary => {
+        let sp0 = info.stepped_params.unwrap()
+        let sp = { ..sp0, outer_wall_mm: outer_thickness, }
+        let sl = @step_stepped.stepped_planetary_layout(sp)
+        finalized.push({
+          ..info,
+          stepped_params: Some(sp),
+          stepped_layout: Some(sl),
+        })
+      }
+      Wolfrom => {
+        let wp0 = info.wolfrom_params.unwrap()
+        let wp = { ..wp0, outer_wall_mm: outer_thickness, }
+        let wl = @step_wolfrom.wolfrom_layout(wp)
+        finalized.push({
+          ..info,
+          wolfrom_params: Some(wp),
+          wolfrom_layout: Some(wl),
+        })
+      }
+      FlatHarmonic => {
+        let fp0 = info.flat_harmonic_params.unwrap()
+        let fp = { ..fp0, outer_wall_mm: outer_thickness, }
+        let fl = @step_harmonic.flat_harmonic_layout(fp)
+        finalized.push({
+          ..info,
+          flat_harmonic_params: Some(fp),
+          flat_harmonic_layout: Some(fl),
+        })
+      }
+    }
   }
   // ---------------------------------------------------------------------
   // Pass 3: output stack and carrier shaft lengths.
@@ -2009,14 +2460,15 @@ pub fn motorized_gearbox(
     0.0
   } else {
     let cap_offset = if stage_flush { 0.0 } else { flange_thickness_mm }
-    let ideal_cap = p.shaft_length_mm - stage1.gear_length - cap_offset
+    let ideal_cap = p.shaft_length_mm - stage1.ring_axial_length - cap_offset
     let thickness = if ideal_cap > cap_min_thickness {
       ideal_cap
     } else {
       cap_min_thickness
     }
     let shaft_end_z = -cap_offset - thickness + p.shaft_length_mm
-    if shaft_end_z < 0.6 * stage1.gear_length {
+    if stage1.spec.kind == GearboxStageKind::Planetary &&
+      shaft_end_z < 0.6 * stage1.gear_length {
       abort(
         "motor shaft is too short for stage 1 at gear length \{stage1.gear_length} mm; reduce the stage-1 gear length or choose a longer-shaft preset",
       )
@@ -2048,39 +2500,120 @@ pub fn motorized_gearbox(
     .with_param("output_joint", last.carrier_joint)
     .with_param("command_joint", rotor_joint)
   // ---------------------------------------------------------------------
-  // Per-stage casing modules, gears, carriers, and planet bearings.
+  // Per-stage casing modules, gears/disks/flexsplines, carriers, and bearings.
   // ---------------------------------------------------------------------
   for k in 0..<stage_count {
     let info = finalized[k]
     let idx = k + 1
     let part = info.casing_part
     let color = @step_cad.Rgb::black()
-    let stage_step = expect_step(
-      "planetary gearbox stage \{idx}",
-      @step_planetary.herringbone_planetary_gearbox(
-        pgb_step_params(info.params, info.smooth, detail),
-      ),
-    )
     let ring_name = "\{name}_stage\{idx}_ring"
-    let ring_comp = pgb_gear_part(
-      ring_name,
-      stage_step,
-      "ring",
-      "Integrated planetary ring gear",
-      "MG-CASING-\{idx}",
-      0.0,
-      info.gear_length,
-      info.smooth,
-    )
-    if ring_comp.bodies.length() != 1 {
-      abort("stage \{idx}: expected one integrated ring body")
-    }
-    let raw_ring = ring_comp.bodies[0]
-    let ring_body = {
-      ..raw_ring,
-      name: ring_name,
-      node: raw_ring.node.with_name(ring_name).with_color(color),
-      part: Some(part),
+    let (stage_step, ring_body, extra_ring_bodies) : (
+      @step_common.Component,
+      @cad.BodyPart,
+      Array[@cad.BodyPart],
+    ) = match info.spec.kind {
+      Planetary => {
+        let ss = expect_step(
+          "planetary gearbox stage \{idx}",
+          @step_planetary.herringbone_planetary_gearbox(
+            pgb_step_params(info.params, info.smooth, detail),
+          ),
+        )
+        let ring_comp = pgb_gear_part(
+          ring_name,
+          ss,
+          "ring",
+          "Integrated planetary ring gear",
+          "MG-CASING-\{idx}",
+          0.0,
+          info.gear_length,
+          info.smooth,
+        )
+        if ring_comp.bodies.length() != 1 {
+          abort("stage \{idx}: expected one integrated ring body")
+        }
+        let raw_ring = ring_comp.bodies[0]
+        let rb = {
+          ..raw_ring,
+          name: ring_name,
+          node: raw_ring.node.with_name(ring_name).with_color(color),
+          part: Some(part),
+        }
+        (ss, rb, [])
+      }
+      Cycloidal => {
+        let cp = info.cycloidal_params.unwrap()
+        let cl = info.cycloidal_layout.unwrap()
+        let ss = expect_step(
+          "cycloidal gearbox stage \{idx}",
+          @step_cycloidal.cycloidal_gearbox(cp),
+        )
+        let rb = stage_step_layer_body(ring_name, ss, "ring", part, color)
+        let pin_part = fabricated_part(
+          "MG-CYC-PIN-\{idx}",
+          "Steel cycloidal outer ring pin",
+          "steel",
+          "purchased",
+          0.5,
+        )
+        let pins : Array[@cad.BodyPart] = []
+        for i in 0..<cl.ring_pin_count {
+          pins.push(
+            stage_step_layer_body(
+              "\{name}_stage\{idx}_ring_pin_\{i + 1}",
+              ss,
+              "ring-pin-\{i + 1}",
+              pin_part,
+              @step_cad.Rgb::new(0.75, 0.78, 0.82),
+            ),
+          )
+        }
+        (ss, rb, pins)
+      }
+      Harmonic => {
+        let hp = info.harmonic_params.unwrap()
+        let ss = expect_step(
+          "harmonic gearbox stage \{idx}",
+          @step_harmonic.harmonic_gearbox(hp),
+        )
+        let rb = stage_step_layer_body(ring_name, ss, "ring", part, color)
+        (ss, rb, [])
+      }
+      SteppedPlanetary => {
+        let sp = info.stepped_params.unwrap()
+        let ss = expect_step(
+          "stepped planetary stage \{idx}",
+          @step_stepped.stepped_planetary_gearbox(sp),
+        )
+        let rb = stage_step_layer_body(ring_name, ss, "ring", part, color)
+        let sleeve = stage_step_layer_body(
+          ring_name + "_sleeve",
+          ss,
+          "ring-sleeve",
+          part,
+          color,
+        )
+        (ss, rb, [sleeve])
+      }
+      Wolfrom => {
+        let wp = info.wolfrom_params.unwrap()
+        let ss = expect_step(
+          "wolfrom 3K stage \{idx}",
+          @step_wolfrom.wolfrom_gearbox(wp),
+        )
+        let rb = stage_step_layer_body(ring_name, ss, "ring-fixed", part, color)
+        (ss, rb, [])
+      }
+      FlatHarmonic => {
+        let fp = info.flat_harmonic_params.unwrap()
+        let ss = expect_step(
+          "flat harmonic stage \{idx}",
+          @step_harmonic.flat_harmonic_gearbox(fp),
+        )
+        let rb = stage_step_layer_body(ring_name, ss, "ring-fixed", part, color)
+        (ss, rb, [])
+      }
     }
     let bottom_phase_deg = if stage_flush {
       if k % 2 == 0 {
@@ -2100,12 +2633,12 @@ pub fn motorized_gearbox(
     } else {
       0.0
     }
-    let module_comp = build_stage_casing_comp(
+    let mut module_comp = build_stage_casing_comp(
       name,
       idx,
       part,
       ring_body,
-      info.gear_length,
+      info.ring_axial_length,
       info.height,
       info.ring_free_bore,
       info.smooth_inner,
@@ -2119,6 +2652,9 @@ pub fn motorized_gearbox(
       detail,
       color,
     )
+    for pin_body in extra_ring_bodies {
+      module_comp = module_comp.add_body(pin_body)
+    }
     let top_z = info.z0 + info.height + flange_thickness_mm
     casing = casing.attach(
       "\{name}_stage\{idx}_casing_module_merge",
@@ -2155,89 +2691,127 @@ pub fn motorized_gearbox(
           },
         )
     }
-    // Sun gear and its input coupling.
-    let sun_bore = info.input_shaft_diam + 0.2
-    let sun_root = info.spec.module_mm *
-      (info.spec.sun_teeth.to_double() / 2.0 - 1.25)
-    let hub_diam = if sun_root * 2.0 - 2.0 > 24.0 {
-      24.0
-    } else {
-      sun_root * 2.0 - 2.0
-    }
-    let hub_diam = if hub_diam < sun_bore + 6.0 {
-      sun_bore + 6.0
-    } else {
-      hub_diam
-    }
-    let hub_length = if stage_flush {
-      0.0
-    } else if k == 0 {
-      sun_hub_1
-    } else {
-      // Keep the hub above the previous carrier's output hub.
-      let available = 2.0 * flange_thickness_mm + top_gap_mm - 1.0
-      let desired = 8.0
-      if available < desired {
-        if available > 0.0 {
-          available
+    // Rotating input member (planetary sun / cycloidal eccentric hub / harmonic wave generator).
+    let mut sun = match info.spec.kind {
+      Planetary => {
+        let sun_bore = info.input_shaft_diam + 0.2
+        let sun_root = info.spec.module_mm *
+          (info.spec.sun_teeth.to_double() / 2.0 - 1.25)
+        let hub_diam = if sun_root * 2.0 - 2.0 > 24.0 {
+          24.0
         } else {
-          0.0
+          sun_root * 2.0 - 2.0
         }
-      } else {
-        desired
-      }
-    }
-    let sun_comp = pgb_gear_part(
-      "\{name}_stage\{idx}_sun",
-      stage_step,
-      "sun",
-      "Planetary sun gear",
-      "MG-SUN-\{idx}",
-      0.0,
-      info.gear_length,
-      info.smooth,
-    )
-    let sun_raw_body = if stage_flush {
-      cut_sun_drive_features(
-        sun_comp.bodies[0],
-        "\{name}_stage\{idx}_sun",
-        if k == 0 {
-          5.0
+        let hub_diam = if hub_diam < sun_bore + 6.0 {
+          sun_bore + 6.0
         } else {
-          6.2
-        },
-        3.2,
-        if k == 0 {
-          5.4
-        } else {
-          info.gear_length + 1.0
-        },
-        if k == 0 && is_a12 {
-          8.4
-        } else {
+          hub_diam
+        }
+        let hub_length = if stage_flush {
           0.0
-        },
-        5.5,
-        info.gear_length,
-        @step_cad.Rgb::orange(),
-      )
-    } else {
-      sun_comp.bodies[0]
+        } else if k == 0 {
+          sun_hub_1
+        } else {
+          let available = 2.0 * flange_thickness_mm + top_gap_mm - 1.0
+          let desired = 8.0
+          if available < desired {
+            if available > 0.0 {
+              available
+            } else {
+              0.0
+            }
+          } else {
+            desired
+          }
+        }
+        let sun_comp = pgb_gear_part(
+          "\{name}_stage\{idx}_sun",
+          stage_step,
+          "sun",
+          "Planetary sun gear",
+          "MG-SUN-\{idx}",
+          0.0,
+          info.gear_length,
+          info.smooth,
+        )
+        let sun_raw_body = if stage_flush {
+          cut_sun_drive_features(
+            sun_comp.bodies[0],
+            "\{name}_stage\{idx}_sun",
+            if k == 0 {
+              5.0
+            } else {
+              6.2
+            },
+            3.2,
+            if k == 0 {
+              5.4
+            } else {
+              info.gear_length + 1.0
+            },
+            if k == 0 && is_a12 {
+              8.4
+            } else {
+              0.0
+            },
+            5.5,
+            info.gear_length,
+            @step_cad.Rgb::orange(),
+          )
+        } else {
+          sun_comp.bodies[0]
+        }
+        motorized_sun(
+          "\{name}_stage\{idx}_sun",
+          "MG-SUN-\{idx}",
+          sun_raw_body,
+          sun_bore,
+          hub_diam,
+          hub_length,
+          info.gear_length,
+          "M3",
+        )
+      }
+      Cycloidal =>
+        build_cycloidal_input_hub(
+          "\{name}_stage\{idx}_eccentric",
+          "MG-ECCENTRIC-\{idx}",
+          stage_step,
+          info.cycloidal_layout.unwrap(),
+        )
+      Harmonic =>
+        build_harmonic_wave_generator(
+          "\{name}_stage\{idx}_wave_gen",
+          "MG-WAVEGEN-\{idx}",
+          stage_step,
+          info.harmonic_layout.unwrap(),
+        )
+      SteppedPlanetary =>
+        build_stepped_input_sun(
+          "\{name}_stage\{idx}_stepped_sun",
+          "MG-STEPPED-SUN-\{idx}",
+          stage_step,
+          info.stepped_layout.unwrap(),
+        )
+      Wolfrom =>
+        build_wolfrom_input_sun(
+          "\{name}_stage\{idx}_wolfrom_sun",
+          "MG-WOLFROM-SUN-\{idx}",
+          stage_step,
+          info.wolfrom_layout.unwrap(),
+        )
+      FlatHarmonic =>
+        build_flat_harmonic_wave_generator(
+          "\{name}_stage\{idx}_wave_gen",
+          "MG-FLAT-WAVEGEN-\{idx}",
+          stage_step,
+          info.flat_harmonic_layout.unwrap(),
+        )
     }
-    let mut sun = motorized_sun(
-      "\{name}_stage\{idx}_sun",
-      "MG-SUN-\{idx}",
-      sun_raw_body,
-      sun_bore,
-      hub_diam,
-      hub_length,
-      info.gear_length,
-      "M3",
-    )
     let driver_joint = if k == 0 && is_a12 {
-      // Physically attach Stage 1 sun to A12's bolted rotor adapter and clamp
+      // Physically attach Stage 1 input to A12's bolted rotor adapter and clamp
       // it with an axial M4 SHCS from the open top face before installing
-      // Stage 1 carrier.
+      // Stage 1 output carrier.
       sun = sun
         .add_mate_mm_deg("clamp_seat", z=5.5)
         .attach(
@@ -2315,121 +2889,196 @@ pub fn motorized_gearbox(
         spec=@cad.JointSpec::merge_rigid(offset_mm=top_gap_mm),
       )
     }
-    // Carrier.
+    // Output carrier & stage-specific moving elements.
     let carrier_z = info.z0 + info.gear_length + clearance
     let hub_seat = if k + 1 == stage_count && output_hub {
       Some(output_hub_seat_global - carrier_z)
     } else {
       None
     }
-    let mut carrier = motorized_carrier(
-      "\{name}_stage\{idx}_carrier",
-      "MG-CARRIER-\{idx}",
-      info.layout,
-      info.params,
-      info.carrier_plate_radius,
-      clearance,
-      carrier_thickness_mm,
-      info.carrier_shaft_diam,
-      info.carrier_shaft_length,
-      hub_seat,
-      detail,
-    )
-    // Planet gears with flanged bearings.
-    let z_sun = info.spec.sun_teeth.to_double()
-    let z_planet = info.spec.planet_teeth.to_double()
-    let z_ring = info.layout.ring_teeth.to_double()
-    let carrier_multiplier = z_sun / (z_sun + z_ring)
-    let planet_multiplier = -(z_sun * z_ring) / (z_planet * (z_sun + z_ring))
-    for i in 0..<info.layout.planets.length() {
-      let planet_layer = "planet-\{i + 1}"
-      let planet_comp = pgb_gear_part(
-        "\{name}_stage\{idx}_planet_\{i}",
-        stage_step,
-        planet_layer,
-        "Planetary planet gear",
-        "MG-PLANET-\{idx}",
-        0.0,
-        info.gear_length,
-        info.smooth,
-      )
-      if planet_comp.bodies.length() != 1 {
-        abort("stage \{idx}: expected one body for \{planet_layer}")
-      }
-      let raw_planet = planet_comp.bodies[0]
-      let planet_part = fabricated_part(
-        "MG-PLANET-\{idx}",
-        "Printed planetary planet gear; press the flanged bearing into the counterbore from the top face until it seats flush",
-        "carbon fiber nylon",
-        "3D print",
-        3.0,
-      )
-      let planet_body0 = {
-        ..raw_planet,
-        name: "\{name}_stage\{idx}_planet_\{i}",
-        node: raw_planet.node
-        .with_name("\{name}_stage\{idx}_planet_\{i}")
-        .with_color(@step_cad.Rgb::blue()),
-        part: Some(planet_part),
-      }
-      let planet_body = if info.bearing.flange_thickness_mm > 0.0 {
-        let pocket_radius = info.bearing.flange_outer_mm / 2.0 +
-          PLANET_POCKET_CLEARANCE_MM
-        let pocket_cutter = @step_cad.Cylinder::new(
-            pocket_radius * 2.0,
-            info.bearing.flange_thickness_mm + 0.5,
-          )
-          .with_name("\{name}_stage\{idx}_planet_\{i}_pocket_cutter")
-          .translate(z=info.gear_length - info.bearing.flange_thickness_mm)
-        {
-          ..planet_body0,
-          node: @step_cad.difference(
-            planet_body0.node,
-            [pocket_cutter],
-            name="\{name}_stage\{idx}_planet_\{i}",
-          ).with_color(@step_cad.Rgb::blue()),
-        }
-      } else {
-        planet_body0
-      }
-      let mut planet = @cad.Component::new(
-          "\{name}_stage\{idx}_planet_\{i}",
-          description="Printed planetary planet gear with flanged bearing",
+    let carrier_multiplier = 1.0 / info.spec.signed_reduction()
+    let carrier = match info.spec.kind {
+      Planetary => {
+        let mut c = motorized_carrier(
+          "\{name}_stage\{idx}_carrier",
+          "MG-CARRIER-\{idx}",
+          info.layout,
+          info.params,
+          info.carrier_plate_radius,
+          clearance,
+          carrier_thickness_mm,
+          info.carrier_shaft_diam,
+          info.carrier_shaft_length,
+          hub_seat,
+          detail,
         )
-        .with_param("bearing", info.bearing.designation)
-        .with_param("bearing_press_mm", "0.06")
-        .add_body(planet_body)
-        .add_mate_mm_deg("bottom")
-        .add_mate_mm_deg("top", z=info.gear_length)
-        .add_mate_mm_deg("origin")
-        .with_part(planet_part)
-      let bearing = flanged_bearing_component(
-        "\{name}_stage\{idx}_planet_\{i}_bearing",
-        info.bearing,
-        detail,
-      )
-      planet = planet.attach(
-        "\{name}_stage\{idx}_planet_\{i}_bearing_merge",
-        parent_mate="top",
-        bearing,
-        child_mate="flange_top_reversed",
-        spec=@cad.JointSpec::merge_rigid(
-          offset_mm=-info.bearing.flange_thickness_mm,
-        ),
-      )
-      carrier = carrier.attach(
-        "\{name}_stage\{idx}_planet_\{i}_joint",
-        parent_mate="pin_\{i}",
-        planet,
-        child_mate="origin",
-        spec=@cad.JointSpec::continuous(
-          limit=Some(@urdf.JointLimit::new(effort=10.0, velocity=30.0)),
-          dynamics=Some(@urdf.JointDynamics::new(damping=0.02, friction=0.01)),
-          mimic=Some(
-            @urdf.JointMimic::new(driver_joint, multiplier=planet_multiplier),
-          ),
-        ),
-      )
+        let z_sun = info.spec.sun_teeth.to_double()
+        let z_planet = info.spec.planet_teeth.to_double()
+        let z_ring = info.layout.ring_teeth.to_double()
+        let planet_multiplier = -(z_sun * z_ring) /
+          (z_planet * (z_sun + z_ring))
+        for i in 0..<info.layout.planets.length() {
+          let planet_layer = "planet-\{i + 1}"
+          let planet_comp = pgb_gear_part(
+            "\{name}_stage\{idx}_planet_\{i}",
+            stage_step,
+            planet_layer,
+            "Planetary planet gear",
+            "MG-PLANET-\{idx}",
+            0.0,
+            info.gear_length,
+            info.smooth,
+          )
+          if planet_comp.bodies.length() != 1 {
+            abort("stage \{idx}: expected one body for \{planet_layer}")
+          }
+          let raw_planet = planet_comp.bodies[0]
+          let planet_part = fabricated_part(
+            "MG-PLANET-\{idx}",
+            "Printed planetary planet gear; press the flanged bearing into the counterbore from the top face until it seats flush",
+            "carbon fiber nylon",
+            "3D print",
+            3.0,
+          )
+          let planet_body0 = {
+            ..raw_planet,
+            name: "\{name}_stage\{idx}_planet_\{i}",
+            node: raw_planet.node
+            .with_name("\{name}_stage\{idx}_planet_\{i}")
+            .with_color(@step_cad.Rgb::blue()),
+            part: Some(planet_part),
+          }
+          let planet_body = if info.bearing.flange_thickness_mm > 0.0 {
+            let pocket_radius = info.bearing.flange_outer_mm / 2.0 +
+              PLANET_POCKET_CLEARANCE_MM
+            let pocket_cutter = @step_cad.Cylinder::new(
+                pocket_radius * 2.0,
+                info.bearing.flange_thickness_mm + 0.5,
+              )
+              .with_name("\{name}_stage\{idx}_planet_\{i}_pocket_cutter")
+              .translate(z=info.gear_length - info.bearing.flange_thickness_mm)
+            {
+              ..planet_body0,
+              node: @step_cad.difference(
+                planet_body0.node,
+                [pocket_cutter],
+                name="\{name}_stage\{idx}_planet_\{i}",
+              ).with_color(@step_cad.Rgb::blue()),
+            }
+          } else {
+            planet_body0
+          }
+          let mut planet = @cad.Component::new(
+              "\{name}_stage\{idx}_planet_\{i}",
+              description="Printed planetary planet gear with flanged bearing",
+            )
+            .with_param("bearing", info.bearing.designation)
+            .with_param("bearing_press_mm", "0.06")
+            .add_body(planet_body)
+            .add_mate_mm_deg("bottom")
+            .add_mate_mm_deg("top", z=info.gear_length)
+            .add_mate_mm_deg("origin")
+            .with_part(planet_part)
+          let bearing = flanged_bearing_component(
+            "\{name}_stage\{idx}_planet_\{i}_bearing",
+            info.bearing,
+            detail,
+          )
+          planet = planet.attach(
+            "\{name}_stage\{idx}_planet_\{i}_bearing_merge",
+            parent_mate="top",
+            bearing,
+            child_mate="flange_top_reversed",
+            spec=@cad.JointSpec::merge_rigid(
+              offset_mm=-info.bearing.flange_thickness_mm,
+            ),
+          )
+          c = c.attach(
+            "\{name}_stage\{idx}_planet_\{i}_joint",
+            parent_mate="pin_\{i}",
+            planet,
+            child_mate="origin",
+            spec=@cad.JointSpec::continuous(
+              limit=Some(@urdf.JointLimit::new(effort=10.0, velocity=30.0)),
+              dynamics=Some(
+                @urdf.JointDynamics::new(damping=0.02, friction=0.01),
+              ),
+              mimic=Some(
+                @urdf.JointMimic::new(
+                  driver_joint,
+                  multiplier=planet_multiplier,
+                ),
+              ),
+            ),
+          )
+        }
+        c
+      }
+      Cycloidal =>
+        build_cycloidal_output_carrier(
+          "\{name}_stage\{idx}_carrier",
+          "MG-CYC-CARRIER-\{idx}",
+          stage_step,
+          info.cycloidal_layout.unwrap(),
+          info.carrier_plate_radius,
+          clearance,
+          carrier_thickness_mm,
+          info.carrier_shaft_diam,
+          info.carrier_shaft_length,
+          hub_seat,
+        )
+      Harmonic =>
+        build_harmonic_output_carrier(
+          "\{name}_stage\{idx}_carrier",
+          "MG-HARM-CARRIER-\{idx}",
+          stage_step,
+          info.harmonic_layout.unwrap(),
+          info.carrier_plate_radius,
+          clearance,
+          carrier_thickness_mm,
+          info.carrier_shaft_diam,
+          info.carrier_shaft_length,
+          hub_seat,
+        )
+      SteppedPlanetary =>
+        build_stepped_output_carrier(
+          "\{name}_stage\{idx}_carrier",
+          "MG-STEPPED-CARRIER-\{idx}",
+          stage_step,
+          info.stepped_layout.unwrap(),
+          info.carrier_plate_radius,
+          clearance,
+          carrier_thickness_mm,
+          info.carrier_shaft_diam,
+          info.carrier_shaft_length,
+          hub_seat,
+        )
+      Wolfrom =>
+        build_wolfrom_output_carrier(
+          "\{name}_stage\{idx}_carrier",
+          "MG-WOLFROM-CARRIER-\{idx}",
+          stage_step,
+          info.wolfrom_layout.unwrap(),
+          info.carrier_plate_radius,
+          clearance,
+          carrier_thickness_mm,
+          info.carrier_shaft_diam,
+          info.carrier_shaft_length,
+          hub_seat,
+        )
+      FlatHarmonic =>
+        build_flat_harmonic_output_carrier(
+          "\{name}_stage\{idx}_carrier",
+          "MG-FLAT-HARM-CARRIER-\{idx}",
+          stage_step,
+          info.flat_harmonic_layout.unwrap(),
+          info.carrier_plate_radius,
+          clearance,
+          carrier_thickness_mm,
+          info.carrier_shaft_diam,
+          info.carrier_shaft_length,
+          hub_seat,
+        )
     }
     casing = casing.attach(
       info.carrier_joint,
@@ -2444,7 +3093,7 @@ pub fn motorized_gearbox(
         ),
       ),
     )
-    // Sun coupling for non-A12 Stage 1 or subsequent continuous sun stages.
+    // Input coupling for non-A12 Stage 1 or subsequent continuous stages.
     if !(k == 0 && is_a12) {
       let sun_source = if k == 0 {
         rotor_joint
@@ -2651,15 +3300,17 @@ pub fn motorized_gearbox(
   } else {
     eff_frame_bolt_circle
   }
-  for i in 0..<4 {
-    let theta = 2.0 * @math.PI * (i.to_double() + 0.5) / 4.0
-    output_cap_holes.push(
-      (
-        out_frame_bolt_circle / 2.0 * @math.cos(theta),
-        out_frame_bolt_circle / 2.0 * @math.sin(theta),
-        5.5,
-      ),
-    )
+  if frame_bolt_circle_mm > 0.0 {
+    for i in 0..<4 {
+      let theta = 2.0 * @math.PI * (i.to_double() + 0.5) / 4.0
+      output_cap_holes.push(
+        (
+          out_frame_bolt_circle / 2.0 * @math.cos(theta),
+          out_frame_bolt_circle / 2.0 * @math.sin(theta),
+          5.5,
+        ),
+      )
+    }
   }
   let output_cap_bottom = output_cap_top - output_cap_thickness
   let output_cap_body = if dual_output_bearing {
@@ -3211,31 +3862,41 @@ pub fn motorized_gearbox(
   // ---------------------------------------------------------------------
   // Stage reduction records, actuator specification, and control binding.
   // ---------------------------------------------------------------------
-  let mut total_reduction = 1.0
-  for info in finalized {
-    let z_sun = info.spec.sun_teeth.to_double()
-    let z_ring = info.layout.ring_teeth.to_double()
-    total_reduction = total_reduction * (1.0 + z_ring / z_sun)
-  }
+  let mut signed_reduction = 1.0
   let mut efficiency = 1.0
-  for _ in 0..<stage_count {
-    efficiency = efficiency * 0.9
+  let stage_type_names : Array[String] = []
+  for info in finalized {
+    signed_reduction = signed_reduction * info.spec.signed_reduction()
+    efficiency = efficiency * info.spec.efficiency()
+    stage_type_names.push(
+      match info.spec.kind {
+        Planetary => "planetary"
+        Cycloidal => "cycloidal"
+        Harmonic => "harmonic"
+        SteppedPlanetary => "stepped-planetary"
+        Wolfrom => "wolfrom"
+        FlatHarmonic => "flat-harmonic"
+      },
+    )
   }
+  let total_reduction = signed_reduction.abs()
   let output_torque = bldc_rated_torque(p) * total_reduction * efficiency
   let geared_spec = @cad.ActuatorSpec::new(
     @cad.ActuatorKind::Bldc,
-    model="Motorized planetary gearbox " + p.name,
+    model="Motorized gearbox (" + stage_type_names.join("+") + ") " + p.name,
     voltage_v=p.voltage_v,
     current_rated_a=p.current_rated_a,
     current_stall_a=p.current_peak_a,
     torque_rated_nm=output_torque,
     driver=if is_a12 { "moteus C1 / FOC" } else { "VESC / SimpleFOC" },
     interface="CAN",
-    encoder="rotor magnet read by a rear-mounted moteus C1 (AS5047P); 1:1 with the input sun gear",
+    encoder="rotor magnet read by a rear-mounted moteus C1 (AS5047P); 1:1 with stage-1 input",
   )
   let mut out = casing
     .with_actuator(geared_spec)
+    .with_param("stage_types", stage_type_names.join(","))
     .with_param("reduction", total_reduction.to_string())
+    .with_param("signed_reduction", signed_reduction.to_string())
     .with_param("output_torque_nm", output_torque.to_string())
     .with_param("output_shaft_protrusion_mm", output_protrusion.to_string())
     .with_param("motor_cap_thickness_mm", motor_cap_thickness.to_string())
