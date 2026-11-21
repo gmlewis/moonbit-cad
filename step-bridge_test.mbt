@@ -225,3 +225,59 @@ test "from_scene_node uses true shape volume for hollow tubes and curved arcs" {
     mag_body.inertial.mass > 0.0020 && mag_body.inertial.mass < 0.0032,
   )
 }
+
+///|
+test "gltf_safe_node keeps centered bounding boxes and uses coaxial proxies for round solids" {
+  // 1. Hollow revolved tube becomes a hollow tube (ExtrudedProfile with a hole)
+  // centered on [-50..50, -50..50, 0..20].
+  let tube = @step_cad.RevolvedProfile::tube(100.0, 90.0, 20.0)
+    .as_shape()
+    .with_name("hollow-ring")
+  let safe_tube = @cad.gltf_safe_node(tube)
+  let (tx0, tx1, ty0, ty1, tz0, tz1) = safe_tube.bounding_box()
+  assert_true((tx0 + 50.0).abs() < 0.5 && (tx1 - 50.0).abs() < 0.5)
+  assert_true((ty0 + 50.0).abs() < 0.5 && (ty1 - 50.0).abs() < 0.5)
+  assert_true(tz0.abs() < 1.0e-6 && (tz1 - 20.0).abs() < 1.0e-6)
+  match safe_tube.shape {
+    @step_cad.Shape::ExtrudedProfile(ext) =>
+      assert_eq(ext.profile.holes.length(), 1)
+    _ => fail("expected hollow tube ExtrudedProfile for RevolvedProfile::tube")
+  }
+
+  // 2. Centered imported STEP disk along Y (38 x 9.5 x 38, like moteus-c1)
+  // stays centered on [-19..19, -4.75..4.75, -19..19] instead of shifting to [0..38].
+  let disk_step = @step_cad.Design::new(name="disk")
+    .add(
+      @step_cad.ExtrudedProfile::new(
+        @step_cad.Profile2D::circle(38.0, segments=32),
+        9.5,
+      )
+      .with_name("pcb-disk")
+      .rotate_x(-90.0)
+      .translate(y=-4.75),
+    )
+    .to_step_file()
+  let disk_body = @cad.BodyPart::imported_step("pcb-disk", disk_step)
+  let safe_disk = @cad.gltf_safe_node(disk_body.node)
+  let (dx0, dx1, dy0, dy1, dz0, dz1) = safe_disk.bounding_box()
+  assert_true((dx0 + 19.0).abs() < 0.5 && (dx1 - 19.0).abs() < 0.5)
+  assert_true((dy0 + 4.75).abs() < 0.5 && (dy1 - 4.75).abs() < 0.5)
+  assert_true((dz0 + 19.0).abs() < 0.5 && (dz1 - 19.0).abs() < 0.5)
+  assert_true(safe_disk.shape is @step_cad.Shape::Cylinder(_))
+
+  // 3. Non-circular imported STEP box centered at origin keeps its exact
+  // [-5..5, -10..10, -15..15] bounds without shifting by half-extents.
+  let box_step = @step_cad.Design::new(name="centered-box")
+    .add(
+      @step_cad.Cuboid::new(10.0, 20.0, 30.0)
+      .with_name("box")
+      .translate(x=-5.0, y=-10.0, z=-15.0),
+    )
+    .to_step_file()
+  let box_body = @cad.BodyPart::imported_step("box", box_step)
+  let safe_box = @cad.gltf_safe_node(box_body.node)
+  let (bx0, bx1, by0, by1, bz0, bz1) = safe_box.bounding_box()
+  assert_true((bx0 + 5.0).abs() < 1.0e-6 && (bx1 - 5.0).abs() < 1.0e-6)
+  assert_true((by0 + 10.0).abs() < 1.0e-6 && (by1 - 10.0).abs() < 1.0e-6)
+  assert_true((bz0 + 15.0).abs() < 1.0e-6 && (bz1 - 15.0).abs() < 1.0e-6)
+}

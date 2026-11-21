@@ -47,7 +47,11 @@ async function init() {
 
   let model;
   try {
-    const gltf = await new GLTFLoader().loadAsync("assembly.gltf");
+    const embedded = document.getElementById("embedded-assembly-gltf");
+    const loader = new GLTFLoader();
+    const gltf = embedded && embedded.textContent.trim()
+      ? await loader.parseAsync(embedded.textContent, "")
+      : await loader.loadAsync("assembly.gltf");
     model = gltf.scene;
   } catch (error) {
     showHint("3D model unavailable (serve this folder over http); showing the isometric render.");

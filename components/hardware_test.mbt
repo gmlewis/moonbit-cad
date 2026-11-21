@@ -302,7 +302,11 @@ test "swept gear STEP keeps B-spline surfaces while glTF proxies them" {
   for node in sun.to_design().nodes {
     if node.shape is @step_cad.Shape::SweptProfile(_) {
       saw_swept = true
-      assert_true(@cad.gltf_safe_node(node).shape is @step_cad.Shape::Cuboid(_))
+      let safe_shape = @cad.gltf_safe_node(node).shape
+      assert_true(
+        safe_shape
+        is (@step_cad.Shape::Cylinder(_) | @step_cad.Shape::ExtrudedProfile(_)),
+      )
     }
   }
   assert_true(saw_swept)

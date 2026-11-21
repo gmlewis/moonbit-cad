@@ -816,6 +816,7 @@ fn build_roadrunner_leg(
       wheel_drive,
       child_mate="motor_mount",
       spec=@cad.JointSpec::fixed(),
+      explode=Some(@cad.ExplodeSpec::along_mate(distance_mm=60.0)),
     )
     .attach_to(
       prefix + "_wheel_drive_rotor",
@@ -824,6 +825,7 @@ fn build_roadrunner_leg(
       wheel,
       child_mate="hub_mount",
       spec=@cad.JointSpec::fixed(offset_mm=24.0),
+      explode=Some(@cad.ExplodeSpec::along_mate(distance_mm=70.0)),
     )
   thigh_x = thigh_x
     .attach(
@@ -923,6 +925,7 @@ pub fn build_roadrunner(
       leg,
       child_mate="motor_mount",
       spec=@cad.JointSpec::fixed(),
+      explode=Some(@cad.ExplodeSpec::offset_mm(dx=0.0, dy=sign * 140.0, dz=0.0)),
     )
   }
   base = base.add_cable_route(

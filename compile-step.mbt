@@ -3,35 +3,295 @@
 /// coordinates, using the URDF forward kinematics result for every link.
 
 ///|
-/// Replaces a revolved solid with a coaxial bounding cylinder for glTF
-/// visualization.
+/// Replaces a revolved solid with a coaxial bounding cylinder (or hollow tube
+/// when the revolved profile has a through-bore) for glTF visualization.
 ///
 /// The STEP exporter keeps the exact spherical, conical, and toroidal
 /// surfaces. The glTF tessellator only handles planes, cylinders, and linear
-/// extrusions, so revolved profiles become a cylinder that covers the same
-/// axial span and maximum radius.
+/// extrusions, so revolved profiles become a cylinder or tube that covers the
+/// same axial span and radial extent.
 fn gltf_safe_revolved(node : @step_cad.SceneNode) -> @step_cad.SceneNode {
   let (x0, x1, y0, y1, z0, z1) = node.shape.bounding_box()
-  let max_x = if x1.abs() > x0.abs() { x1.abs() } else { x0.abs() }
-  let max_y = if y1.abs() > y0.abs() { y1.abs() } else { y0.abs() }
-  let max_r = if max_x > max_y { max_x } else { max_y }
+  let sx = if x1 - x0 > 1.0e-6 { x1 - x0 } else { 1.0 }
+  let sy = if y1 - y0 > 1.0e-6 { y1 - y0 } else { 1.0 }
+  let outer_d = if sx > sy { sx } else { sy }
   let height = if z1 - z0 > 1.0e-6 { z1 - z0 } else { 1.0 }
-  let cylinder = @step_cad.Cylinder::new(2.0 * max_r, height)
+  let inner_d = match node.shape {
+    @step_cad.Shape::RevolvedProfile(rev) => {
+      let mut r_min = 1.0e30
+      for seg in rev.segments {
+        let (a, b) = match seg {
+          @step_cad.RevLine(a, b) => (a, b)
+          @step_cad.RevArc(a, b, _) => (a, b)
+        }
+        if a.0.abs() < r_min {
+          r_min = a.0.abs()
+        }
+        if b.0.abs() < r_min {
+          r_min = b.0.abs()
+        }
+      }
+      if r_min < 1.0e29 {
+        2.0 * r_min
+      } else {
+        0.0
+      }
+    }
+    _ => 0.0
+  }
+  let shape = if inner_d > 1.0 && inner_d < outer_d - 1.0 {
+    @step_cad.tube(outer_d, inner_d, height, segments=36)
+  } else {
+    @step_cad.Cylinder::new(outer_d, height)
+  }
+  let proxy = shape
     .with_name(node.name)
     .with_color(node.color)
-    .translate(z=z0)
-  transform_scene_node(cylinder, @step_cad.Transform::from_node(node))
+    .translate(x=(x0 + x1) / 2.0, y=(y0 + y1) / 2.0, z=z0)
+  transform_scene_node(proxy, @step_cad.Transform::from_node(node))
 }
 
 ///|
-/// Replaces a swept solid with an axis-aligned bounding box for glTF
-/// visualization.
+/// Normalizes an angular difference into `(-pi, pi]`.
+fn gltf_arc_signed_sweep(a : Double) -> Double {
+  let two_pi = 2.0 * @math.PI
+  let mut x = a
+  while x > @math.PI {
+    x = x - two_pi
+  }
+  while x <= -@math.PI {
+    x = x + two_pi
+  }
+  x
+}
+
+///|
+/// Samples a closed loop of `ProfileSegment`s into a 2D polygon for glTF
+/// extrusion.
+fn gltf_sample_arc_loop(
+  segs : Array[@step_cad.ProfileSegment],
+  arc_steps~ : Int32 = 4,
+) -> Array[(Double, Double)] {
+  let pts : Array[(Double, Double)] = []
+  let steps = if arc_steps < 2 { 2 } else { arc_steps }
+  for seg in segs {
+    match seg {
+      @step_cad.SegmentLine(a, _) => pts.push(a)
+      @step_cad.SegmentArc(a, b, c) => {
+        let dx = a.0 - c.0
+        let dy = a.1 - c.1
+        let rho = (dx * dx + dy * dy).sqrt()
+        let a0 = @math.atan2(dy, dx)
+        let a1 = @math.atan2(b.1 - c.1, b.0 - c.0)
+        let delta = gltf_arc_signed_sweep(a1 - a0)
+        for k in 0..<steps {
+          let ang = a0 + delta * k.to_double() / steps.to_double()
+          pts.push((c.0 + rho * @math.cos(ang), c.1 + rho * @math.sin(ang)))
+        }
+      }
+    }
+  }
+  pts
+}
+
+///|
+/// Converts an `ExtrudedArcProfile` into a glTF-safe `ExtrudedProfile`, tube,
+/// or cylinder.
+fn gltf_safe_extruded_arc(
+  node : @step_cad.SceneNode,
+  e : @step_cad.ExtrudedArcProfile,
+) -> @step_cad.SceneNode {
+  if e.segments.length() <= 16 && e.holes.length() <= 1 && e.round_bore is None {
+    let outer = gltf_sample_arc_loop(e.segments)
+    let holes = e.holes.map(fn(h) { gltf_sample_arc_loop(h) })
+    if outer.length() >= 3 {
+      let ext = @step_cad.ExtrudedProfile::new(outer, e.height_mm, holes~)
+        .with_name(node.name)
+        .with_color(node.color)
+      return transform_scene_node(ext, @step_cad.Transform::from_node(node))
+    }
+  }
+  let (x0, x1, y0, y1, z0, z1) = node.shape.bounding_box()
+  let sx = if x1 - x0 > 1.0e-6 { x1 - x0 } else { 1.0 }
+  let sy = if y1 - y0 > 1.0e-6 { y1 - y0 } else { 1.0 }
+  let outer_d = if sx > sy { sx } else { sy }
+  let height = if z1 - z0 > 1.0e-6 { z1 - z0 } else { 1.0 }
+  if (sx - sy).abs() <= 0.25 * outer_d {
+    let inner_d = match e.round_bore {
+      Some((_, bore_d)) => bore_d
+      None => 0.0
+    }
+    let shape = if inner_d > 1.0 && inner_d < outer_d - 1.0 {
+      @step_cad.tube(outer_d, inner_d, height, segments=36)
+    } else {
+      @step_cad.Cylinder::new(outer_d, height)
+    }
+    let proxy = shape
+      .with_name(node.name)
+      .with_color(node.color)
+      .translate(x=(x0 + x1) / 2.0, y=(y0 + y1) / 2.0, z=z0)
+    transform_scene_node(proxy, @step_cad.Transform::from_node(node))
+  } else {
+    gltf_safe_bounding_box(node)
+  }
+}
+
+///|
+/// Replaces a swept solid with a coaxial cylinder/tube (for circular gears and
+/// rings) or an accurately positioned bounding box for glTF visualization.
 ///
 /// Herringbone gear flanks are swept B-spline surfaces; the glTF tessellator
 /// only handles planes, cylinders, and linear extrusions. The STEP exporter
-/// keeps the exact swept B-Rep, while the glTF proxy is a box spanning the same
-/// extents.
+/// keeps the exact swept B-Rep, while the glTF proxy uses a coaxial hollow
+/// tube or cylinder matching the gear's true outer and bore diameters.
 fn gltf_safe_swept(node : @step_cad.SceneNode) -> @step_cad.SceneNode {
+  let (x0, x1, y0, y1, z0, z1) = node.shape.bounding_box()
+  let sx = if x1 - x0 > 1.0e-6 { x1 - x0 } else { 1.0 }
+  let sy = if y1 - y0 > 1.0e-6 { y1 - y0 } else { 1.0 }
+  let sz = if z1 - z0 > 1.0e-6 { z1 - z0 } else { 1.0 }
+  let cx = (x0 + x1) / 2.0
+  let cy = (y0 + y1) / 2.0
+  let cz = (z0 + z1) / 2.0
+  match node.shape {
+    @step_cad.Shape::SweptProfile(s) => {
+      let hole_diam_xy = fn() -> Double {
+        if s.profile.holes.length() == 0 {
+          return 0.0
+        }
+        let hole = s.profile.holes[0]
+        if hole.length() < 3 {
+          return 0.0
+        }
+        let mut hx0 = hole[0].0
+        let mut hx1 = hole[0].0
+        let mut hy0 = hole[0].1
+        let mut hy1 = hole[0].1
+        for pt in hole {
+          if pt.0 < hx0 {
+            hx0 = pt.0
+          }
+          if pt.0 > hx1 {
+            hx1 = pt.0
+          }
+          if pt.1 < hy0 {
+            hy0 = pt.1
+          }
+          if pt.1 > hy1 {
+            hy1 = pt.1
+          }
+        }
+        (hx1 - hx0 + (hy1 - hy0)) / 2.0
+      }
+      let hole_diam_xz = fn() -> Double {
+        if s.profile.holes.length() == 0 {
+          return 0.0
+        }
+        let hole = s.profile.holes[0]
+        if hole.length() < 3 {
+          return 0.0
+        }
+        let mut hx0 = hole[0].0
+        let mut hx1 = hole[0].0
+        let mut hz0 = hole[0].2
+        let mut hz1 = hole[0].2
+        for pt in hole {
+          if pt.0 < hx0 {
+            hx0 = pt.0
+          }
+          if pt.0 > hx1 {
+            hx1 = pt.0
+          }
+          if pt.2 < hz0 {
+            hz0 = pt.2
+          }
+          if pt.2 > hz1 {
+            hz1 = pt.2
+          }
+        }
+        (hx1 - hx0 + (hz1 - hz0)) / 2.0
+      }
+      let max_xy = if sx > sy { sx } else { sy }
+      let max_xz = if sx > sz { sx } else { sz }
+      if (sx - sy).abs() <= 0.15 * max_xy {
+        let inner_d = hole_diam_xy()
+        let shape = if inner_d > 1.0 && inner_d < max_xy - 1.0 {
+          @step_cad.tube(max_xy, inner_d, sz, segments=36)
+        } else {
+          @step_cad.Cylinder::new(max_xy, sz)
+        }
+        let proxy = shape
+          .with_name(node.name)
+          .with_color(node.color)
+          .translate(x=cx, y=cy, z=z0)
+        return transform_scene_node(proxy, @step_cad.Transform::from_node(node))
+      } else if (sx - sz).abs() <= 0.15 * max_xz {
+        let inner_d = hole_diam_xz()
+        let shape = if inner_d > 1.0 && inner_d < max_xz - 1.0 {
+          @step_cad.tube(max_xz, inner_d, sy, segments=36)
+        } else {
+          @step_cad.Cylinder::new(max_xz, sy)
+        }
+        let proxy = shape
+          .with_name(node.name)
+          .with_color(node.color)
+          .rotate_x(-90.0)
+          .translate(x=cx, y=y0, z=cz)
+        return transform_scene_node(proxy, @step_cad.Transform::from_node(node))
+      }
+    }
+    _ => ()
+  }
+  gltf_safe_bounding_box(node)
+}
+
+///|
+/// Replaces an imported STEP solid with a coaxial cylinder (when the solid has
+/// a circular cross-section along X, Y, or Z, such as a round motor controller
+/// PCB or wheel hub flange) or an accurately positioned bounding box.
+fn gltf_safe_imported_step(node : @step_cad.SceneNode) -> @step_cad.SceneNode {
+  let (x0, x1, y0, y1, z0, z1) = node.shape.bounding_box()
+  let sx = if x1 - x0 > 1.0e-6 { x1 - x0 } else { 1.0 }
+  let sy = if y1 - y0 > 1.0e-6 { y1 - y0 } else { 1.0 }
+  let sz = if z1 - z0 > 1.0e-6 { z1 - z0 } else { 1.0 }
+  let cx = (x0 + x1) / 2.0
+  let cy = (y0 + y1) / 2.0
+  let cz = (z0 + z1) / 2.0
+  let max_xy = if sx > sy { sx } else { sy }
+  let max_xz = if sx > sz { sx } else { sz }
+  let max_yz = if sy > sz { sy } else { sz }
+  if (sx - sy).abs() <= 0.15 * max_xy && sz < 0.8 * max_xy {
+    let cyl = @step_cad.Cylinder::new(max_xy, sz)
+      .with_name(node.name)
+      .with_color(node.color)
+      .translate(x=cx, y=cy, z=z0)
+    transform_scene_node(cyl, @step_cad.Transform::from_node(node))
+  } else if (sx - sz).abs() <= 0.15 * max_xz && sy < 0.8 * max_xz {
+    let cyl = @step_cad.Cylinder::new(max_xz, sy)
+      .with_name(node.name)
+      .with_color(node.color)
+      .rotate_x(-90.0)
+      .translate(x=cx, y=y0, z=cz)
+    transform_scene_node(cyl, @step_cad.Transform::from_node(node))
+  } else if (sy - sz).abs() <= 0.15 * max_yz && sx < 0.8 * max_yz {
+    let cyl = @step_cad.Cylinder::new(max_yz, sx)
+      .with_name(node.name)
+      .with_color(node.color)
+      .rotate_y(90.0)
+      .translate(x=x0, y=cy, z=cz)
+    transform_scene_node(cyl, @step_cad.Transform::from_node(node))
+  } else {
+    gltf_safe_bounding_box(node)
+  }
+}
+
+///|
+/// Replaces any shape the glTF tessellator cannot handle with an accurately
+/// positioned axis-aligned bounding box.
+///
+/// Note that `@step_cad.Cuboid::new(sx, sy, sz)` has its minimum corner at
+/// `(0, 0, 0)` and spans `[0..sx, 0..sy, 0..sz]`, so it must be translated by
+/// `(x0, y0, z0)` to match `[x0..x1, y0..y1, z0..z1]`.
+fn gltf_safe_bounding_box(node : @step_cad.SceneNode) -> @step_cad.SceneNode {
   let (x0, x1, y0, y1, z0, z1) = node.shape.bounding_box()
   let sx = if x1 - x0 > 1.0e-6 { x1 - x0 } else { 1.0 }
   let sy = if y1 - y0 > 1.0e-6 { y1 - y0 } else { 1.0 }
@@ -39,33 +299,51 @@ fn gltf_safe_swept(node : @step_cad.SceneNode) -> @step_cad.SceneNode {
   let box_node = @step_cad.Cuboid::new(sx, sy, sz)
     .with_name(node.name)
     .with_color(node.color)
-    .translate(x=(x0 + x1) / 2.0, y=(y0 + y1) / 2.0, z=(z0 + z1) / 2.0)
+    .translate(x=x0, y=y0, z=z0)
   transform_scene_node(box_node, @step_cad.Transform::from_node(node))
-}
-
-///|
-/// Replaces any shape the glTF tessellator cannot handle with a bounding box.
-fn gltf_safe_bounding_box(node : @step_cad.SceneNode) -> @step_cad.SceneNode {
-  gltf_safe_swept(node)
 }
 
 ///|
 /// Makes a scene node safe for the glTF tessellator.
 ///
-/// Revolved profiles (bearing balls, button and countersunk heads, chamfered
-/// shafts) become bounding cylinders, swept profiles (herringbone gear flanks)
-/// and any remaining analytic shape the tessellator cannot handle become
-/// bounding boxes, and booleans are rebuilt from their converted children.
-/// Shapes that compile to planes, cylinders, and linear extrusions pass through
-/// unchanged, so the STEP output always keeps its exact analytic B-Rep.
+/// Revolved profiles (bearing rings and balls, button and countersunk heads,
+/// chamfered shafts, socketed screws) become coaxial bounding cylinders or
+/// tubes, swept profiles (herringbone gears) become coaxial tubes or cylinders,
+/// imported STEP solids become coaxial cylinders or centered bounding boxes,
+/// and booleans are rebuilt from their converted children. Shapes that compile
+/// to planes, cylinders, and linear extrusions pass through unchanged, so the
+/// STEP output always keeps its exact analytic B-Rep.
 pub fn gltf_safe_node(node : @step_cad.SceneNode) -> @step_cad.SceneNode {
   match node.shape {
-    @step_cad.Shape::RevolvedProfile(_) => gltf_safe_revolved(node)
-    @step_cad.Shape::SweptProfile(_) => gltf_safe_swept(node)
     @step_cad.Shape::Cuboid(_)
     | @step_cad.Shape::Cylinder(_)
     | @step_cad.Shape::ExtrudedProfile(_) => node
-    @step_cad.Shape::ExtrudedArcProfile(_) => gltf_safe_revolved(node)
+    @step_cad.Shape::ChamferedPrism(_) => flatten_chamfered_prism(node)
+    @step_cad.Shape::RevolvedProfile(_)
+    | @step_cad.Shape::SocketedSolid(_)
+    | @step_cad.Shape::ConicalNut(_)
+    | @step_cad.Shape::SlitTube(_)
+    | @step_cad.Shape::AcornNut(_)
+    | @step_cad.Shape::ConicalExtrusion(_)
+    | @step_cad.Shape::BevelGearBody(_)
+    | @step_cad.Shape::SquareHoleWasher(_)
+    | @step_cad.Shape::TabWasher(_)
+    | @step_cad.Shape::HexHeadWasherFace(_) => gltf_safe_revolved(node)
+    @step_cad.Shape::ExtrudedArcProfile(e) => gltf_safe_extruded_arc(node, e)
+    @step_cad.Shape::SweptProfile(_) => gltf_safe_swept(node)
+    @step_cad.Shape::ImportedStep(_) => gltf_safe_imported_step(node)
+    @step_cad.Shape::Fillet(f) => {
+      let base = gltf_safe_node(f.base)
+        .with_name(node.name)
+        .with_color(node.color)
+      transform_scene_node(base, @step_cad.Transform::from_node(node))
+    }
+    @step_cad.Shape::Chamfer(c) => {
+      let base = gltf_safe_node(c.base)
+        .with_name(node.name)
+        .with_color(node.color)
+      transform_scene_node(base, @step_cad.Transform::from_node(node))
+    }
     @step_cad.Shape::Union(union) => {
       let children = union.nodes.map(gltf_safe_node)
       let rebuilt = @step_cad.union_all(children, name=node.name).with_color(

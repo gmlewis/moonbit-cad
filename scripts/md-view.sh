@@ -60,4 +60,22 @@ pandoc "$IN" \
   --metadata title="$(basename "$IN" .md)" \
   --metadata lang=en
 
+# If rendering START-HERE.md and assembly.gltf exists alongside it, embed the
+# glTF JSON so the interactive Three.js 3D viewer works even over file://.
+if [[ "$(basename "$IN")" == "START-HERE.md" && -f "$IN_DIR/assembly.gltf" ]]; then
+  python3 - "$OUT" "$IN_DIR/assembly.gltf" <<'PY'
+import sys
+html_path, gltf_path = sys.argv[1], sys.argv[2]
+html = open(html_path, "r", encoding="utf-8").read()
+gltf = open(gltf_path, "r", encoding="utf-8").read().replace("</script", "<\\/script")
+tag = f'<script id="embedded-assembly-gltf" type="application/json">{gltf}</script>\n'
+if 'id="embedded-assembly-gltf"' not in html:
+    if "<script type=\"module\">" in html:
+        html = html.replace("<script type=\"module\">", tag + "<script type=\"module\">", 1)
+    elif "</body>" in html:
+        html = html.replace("</body>", tag + "</body>", 1)
+    open(html_path, "w", encoding="utf-8").write(html)
+PY
+fi
+
 printf '%s\n' "$OUT"

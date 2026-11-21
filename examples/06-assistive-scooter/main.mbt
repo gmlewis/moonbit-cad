@@ -249,6 +249,7 @@ async fn main {
       @components.joystick_pod(name="joystick", detail~),
       child_mate="mount",
       spec=@cad.JointSpec::fixed(),
+      explode=Some(@cad.ExplodeSpec::offset_mm(dx=0.0, dy=0.0, dz=110.0)),
     )
   // Differential rear planetary drives.
   for drive in [("left", 1.0), ("right", -1.0)] {
@@ -285,6 +286,9 @@ async fn main {
         ),
         child_mate="motor_mount",
         spec=@cad.JointSpec::fixed(),
+        explode=Some(
+          @cad.ExplodeSpec::offset_mm(dx=0.0, dy=side * 140.0, dz=0.0),
+        ),
       )
   }
   // Front casters (wheelchair) or one steerable suspension fork (scooter).
