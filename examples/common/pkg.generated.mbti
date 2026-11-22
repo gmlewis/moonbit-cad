@@ -7,6 +7,8 @@ import {
 }
 
 // Values
+pub async fn apply_bottom_chamfer(String, chamfer_mm? : Double) -> Unit
+
 pub async fn build_gearbox_component(GearboxConfig, detail? : @gmlewis/step/components/common.DetailLevel) -> (@gmlewis/cad.Component, Array[@components.MotorizedStageSpec], String, String)
 
 pub fn[T] cli_or_abort(Result[T, String]) -> T

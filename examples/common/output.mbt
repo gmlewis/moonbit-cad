@@ -55,15 +55,69 @@ fn design_has_boolean(design : @step_cad.Design) -> Bool {
 }
 
 ///|
+/// Maximum STEP file size (bytes) for OCCT bottom-face chamfering; larger
+/// multi-body B-spline cartridges (such as 30 MB swept herringbone gearsets)
+/// are skipped so builds stay fast.
+const MAX_CHAMFER_STEP_BYTES : Int32 = 10 * 1024 * 1024
+
+///|
+/// Applies a 45-degree bottom-face (`z = 0`) elephant-foot chamfer to a
+/// printable STEP file in place via `scripts/csg_eval.py --chamfer-bottom`.
+/// Fails soft with a warning if OCP is unavailable or the file exceeds
+/// `MAX_CHAMFER_STEP_BYTES`.
+pub async fn apply_bottom_chamfer(
+  path : String,
+  chamfer_mm~ : Double = @cad.DEFAULT_ELEPHANT_FOOT_CHAMFER_MM,
+) -> Unit {
+  if chamfer_mm <= 0.0 {
+    return
+  }
+  let size = @fs.read_file(path).binary().length() catch { _ => 0 }
+  if size <= 0 || size > MAX_CHAMFER_STEP_BYTES {
+    return
+  }
+  let res = Some(
+    @process.collect_output_merged("python3", [
+      "scripts/csg_eval.py",
+      path,
+      "-o",
+      path,
+      "--chamfer-bottom",
+      chamfer_mm.to_string(),
+    ]),
+  ) catch {
+    _ => None
+  }
+  match res {
+    Some((code, out)) =>
+      if code != 0 {
+        let msg = out.text() catch { _ => "" }
+        let trimmed = msg.trim()
+        @cli.eprintln("warning: bottom chamfer skipped for \{path}: \{trimmed}")
+      }
+    None =>
+      @cli.eprintln(
+        "warning: python3/OCP unavailable; skipped bottom chamfer for " + path,
+      )
+  }
+}
+
+///|
 /// Writes one printable part. Parts whose geometry is a boolean or edge
 /// feature are OCCT-evaluated so the printed STEP carries the trimmed solid;
 /// if OCCT is unavailable the nominal export is written with a warning.
-async fn write_print_part(design : @step_cad.Design, path : String) -> Unit {
+/// Applies the default 0.35 mm bottom-face elephant-foot chamfer afterward.
+async fn write_print_part(
+  design : @step_cad.Design,
+  path : String,
+  bottom_chamfer_mm~ : Double = @cad.DEFAULT_ELEPHANT_FOOT_CHAMFER_MM,
+) -> Unit {
   if design_has_boolean(design) {
     let evaluated = Some(design.to_step_evaluated()) catch { _ => None }
     match evaluated {
       Some(text) => {
         @step_cad.write_text_file(text, Some(path))
+        apply_bottom_chamfer(path, chamfer_mm=bottom_chamfer_mm)
         return
       }
       None =>
@@ -75,6 +129,7 @@ async fn write_print_part(design : @step_cad.Design, path : String) -> Unit {
     }
   }
   @step_cad.write_text_file(design.to_step_file(), Some(path))
+  apply_bottom_chamfer(path, chamfer_mm=bottom_chamfer_mm)
 }
 
 ///|
@@ -753,8 +808,12 @@ pub async fn write_output(
         let rel = "printable/" +
           @cad.sanitize_part_number(part.part_number) +
           ".step"
-        if written.contains(rel) && design_has_boolean(part.design) {
-          write_print_part(part.design, dir + "/" + rel)
+        if written.contains(rel) {
+          if design_has_boolean(part.design) {
+            write_print_part(part.design, dir + "/" + rel)
+          } else {
+            apply_bottom_chamfer(dir + "/" + rel)
+          }
         }
       }
       if design.nodes.length() > 1 && !design_has_boolean(design) {

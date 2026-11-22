@@ -206,6 +206,12 @@ fn printable_infill_fraction(line : BomLine) -> Double {
 }
 
 ///|
+/// Default 45-degree bottom-face (`z = 0`) elephant-foot chamfer applied to
+/// printable STEP exports so FDM parts release cleanly without bottom-layer
+/// fusion.
+pub const DEFAULT_ELEPHANT_FOOT_CHAMFER_MM : Double = 0.35
+
+///|
 /// Rough print-time factor: minutes per gram of deposited material.
 const PRINT_MIN_PER_GRAM : Double = 1.2
 

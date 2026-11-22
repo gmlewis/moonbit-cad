@@ -9,6 +9,8 @@ import {
 }
 
 // Values
+pub const DEFAULT_ELEPHANT_FOOT_CHAMFER_MM : Double = 0.35
+
 pub fn analyze_robot(Component, Array[(String, Map[String, Double])]) -> RobotAnalysis
 
 pub fn centered_cuboid_node(Double, Double, Double, name? : String, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/step/cad.SceneNode
