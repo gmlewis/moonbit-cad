@@ -5,7 +5,6 @@ import {
   "gmlewis/step/cad" @step_cad,
   "gmlewis/step/cli",
   "gmlewis/urdf",
-  "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/core/math",
 }

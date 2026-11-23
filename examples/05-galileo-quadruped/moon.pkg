@@ -6,7 +6,6 @@ import {
   "gmlewis/step/cli",
   "gmlewis/step/components/common" @step_common,
   "gmlewis/urdf",
-  "moonbitlang/async",
   "moonbitlang/core/math",
 }
 
