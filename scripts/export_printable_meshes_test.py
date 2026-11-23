@@ -92,11 +92,46 @@ class ExportPrintableMeshesTest(unittest.TestCase):
         with zipfile.ZipFile(three_mf) as archive:
             self.assertIsNone(archive.testzip())
             self.assertIn("3D/3dmodel.model", archive.namelist())
+            self.assertIn("Metadata/provenance.json", archive.namelist())
+            prov = json.loads(archive.read("Metadata/provenance.json").decode("utf-8"))
+            self.assertEqual(prov["source_step"], "CUBE.step")
+            self.assertEqual(prov["mesh_export"]["quality"], "fine")
+            self.assertTrue(prov["source_step_sha256"])
 
         data = stl.read_bytes()
         self.assertGreaterEqual(len(data), 84)
         triangles = struct.unpack("<I", data[80:84])[0]
         self.assertGreater(triangles, 0)
+
+    def test_single_step_and_inspect_command_provenance(self) -> None:
+        cmd = "moon run examples/02-planetary-actuator -- --package build/02 --tolerance 0.15"
+        step = self.printable / "CUBE.step"
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(EXPORTER),
+                str(step),
+                "--formats",
+                "3mf",
+                "--command",
+                cmd,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
+        three_mf = self.printable / "CUBE.3mf"
+        insp = subprocess.run(
+            [sys.executable, str(EXPORTER), "--inspect", str(three_mf)],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        self.assertEqual(insp.returncode, 0, insp.stderr or insp.stdout)
+        prov = json.loads(insp.stdout)
+        self.assertEqual(prov["command"], cmd)
+        self.assertEqual(prov["source_step"], "CUBE.step")
 
     def test_missing_build_directory_is_a_usage_error(self) -> None:
         result = subprocess.run(

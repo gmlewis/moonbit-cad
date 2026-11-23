@@ -55,6 +55,31 @@ fn design_has_boolean(design : @step_cad.Design) -> Bool {
 }
 
 ///|
+/// Writes `provenance.json` next to exported printable STEPs so downstream
+/// `.3mf` mesh exports can embed the exact MoonBit command and parameters used
+/// to generate the parts.
+async fn write_provenance_json(dir : String, comp : @cad.Component) -> Unit {
+  let argv = @env.args()
+  let quoted_args = argv.map(json_quote).join(", ")
+  let shell_cmd = argv.join(" ")
+  let params_entries : Array[String] = []
+  comp.parameters.each(fn(k, v) {
+    params_entries.push(json_quote(k) + ": " + json_quote(v))
+  })
+  let params_json = "{" + params_entries.join(", ") + "}"
+  let doc =
+    $|{
+    $|  "component": \{json_quote(comp.display_name())},
+    $|  "command": \{json_quote(shell_cmd)},
+    $|  "argv": [\{quoted_args}],
+    $|  "elephant_foot_chamfer_mm": \{@cad.DEFAULT_ELEPHANT_FOOT_CHAMFER_MM},
+    $|  "parameters": \{params_json}
+    $|}
+    $|
+  @step_cad.write_text_file(doc, Some(dir + "/provenance.json"))
+}
+
+///|
 /// Maximum STEP file size (bytes) for OCCT bottom-face chamfering; larger
 /// multi-body B-spline cartridges (such as 30 MB swept herringbone gearsets)
 /// are skipped so builds stay fast.
@@ -788,6 +813,7 @@ pub async fn write_output(
         comp.print_list_csv(bed~),
         Some(dir + "/print-list.csv"),
       )
+      write_provenance_json(dir, comp)
     }
     None => ()
   }
@@ -799,6 +825,7 @@ pub async fn write_output(
         _ => ()
       }
       @fs.mkdir(dir + "/printable", recursive=true, allow_exist=true)
+      write_provenance_json(dir, comp)
       let written : Array[String] = []
       for file in comp.build_package_files(bed~, joint_positions~) {
         @step_cad.write_text_file(file.content, Some(dir + "/" + file.path))

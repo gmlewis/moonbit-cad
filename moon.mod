@@ -1,6 +1,6 @@
 name = "gmlewis/cad"
 
-version = "0.2.15"
+version = "0.2.16"
 
 import {
   "gmlewis/step@0.2.13",
