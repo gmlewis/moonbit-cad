@@ -60,21 +60,39 @@ pandoc "$IN" \
   --metadata title="$(basename "$IN" .md)" \
   --metadata lang=en
 
-# If rendering START-HERE.md and assembly.gltf exists alongside it, embed the
-# glTF JSON so the interactive Three.js 3D viewer works even over file://.
-if [[ "$(basename "$IN")" == "START-HERE.md" && -f "$IN_DIR/assembly.gltf" ]]; then
-  python3 - "$OUT" "$IN_DIR/assembly.gltf" <<'PY'
-import sys
-html_path, gltf_path = sys.argv[1], sys.argv[2]
-html = open(html_path, "r", encoding="utf-8").read()
-gltf = open(gltf_path, "r", encoding="utf-8").read().replace("</script", "<\\/script")
-tag = f'<script id="embedded-assembly-gltf" type="application/json">{gltf}</script>\n'
-if 'id="embedded-assembly-gltf"' not in html:
-    if "<script type=\"module\">" in html:
-        html = html.replace("<script type=\"module\">", tag + "<script type=\"module\">", 1)
+# If rendering START-HERE.md, embed the high-quality OCCT assembly.glb (base64)
+# and explode.json when present (falling back to assembly.gltf) so the
+# interactive animated Three.js 3D viewer works even over file://.
+if [[ "$(basename "$IN")" == "START-HERE.md" ]]; then
+  python3 - "$OUT" "$IN_DIR" <<'PY'
+import base64, pathlib, sys
+html_path = pathlib.Path(sys.argv[1])
+in_dir = pathlib.Path(sys.argv[2])
+html = html_path.read_text(encoding="utf-8")
+
+tags = []
+glb_path = in_dir / "assembly.glb"
+gltf_path = in_dir / "assembly.gltf"
+explode_path = in_dir / "explode.json"
+
+if glb_path.exists() and 'id="embedded-assembly-glb"' not in html:
+    b64 = base64.b64encode(glb_path.read_bytes()).decode("ascii")
+    tags.append(f'<script id="embedded-assembly-glb" type="text/plain">{b64}</script>\n')
+elif gltf_path.exists() and 'id="embedded-assembly-gltf"' not in html:
+    gltf = gltf_path.read_text(encoding="utf-8").replace("</script", "<\\/script")
+    tags.append(f'<script id="embedded-assembly-gltf" type="application/json">{gltf}</script>\n')
+
+if explode_path.exists() and 'id="embedded-explode-json"' not in html:
+    exp = explode_path.read_text(encoding="utf-8").replace("</script", "<\\/script")
+    tags.append(f'<script id="embedded-explode-json" type="application/json">{exp}</script>\n')
+
+if tags:
+    blob = "".join(tags)
+    if '<script type="module">' in html:
+        html = html.replace('<script type="module">', blob + '<script type="module">', 1)
     elif "</body>" in html:
-        html = html.replace("</body>", tag + "</body>", 1)
-    open(html_path, "w", encoding="utf-8").write(html)
+        html = html.replace("</body>", blob + "</body>", 1)
+    html_path.write_text(html, encoding="utf-8")
 PY
 fi
 

@@ -159,6 +159,13 @@ if (( CHECK_INTERFERENCES )); then
   fi
 fi
 
+# High-quality OCCT GLB + explode animation metadata for START-HERE.html.
+if [[ -f scripts/step_to_glb.py && -f "${OUT}/assembly.step" ]]; then
+  if ! python3 scripts/step_to_glb.py "${OUT}"; then
+    echo "warning: OCCT GLB export failed; START-HERE.html will fall back to flat glTF." >&2
+  fi
+fi
+
 # Multi-angle contact sheet referenced by START-HERE.html's visual overview.
 # render_views.py warns and succeeds when solidcraft-cli is unavailable.
 if [[ -f scripts/render_views.py ]]; then

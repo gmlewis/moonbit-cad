@@ -211,18 +211,18 @@ img {
   text-align: center;
 }
 
-/* Interactive model panel written by build.mbt (viewer.js + assembly.gltf). */
+/* Interactive model panel written by build.mbt (viewer.js + assembly.glb/gltf). */
 .model-panel {
   position: relative;
   margin: 1.25rem 0 2rem;
-  min-height: 420px;
+  min-height: 520px;
   border: 1px solid var(--border);
   border-radius: 10px;
   overflow: hidden;
   background: radial-gradient(
-    circle at 50% 30%,
-    var(--accent-soft),
-    var(--bg) 70%
+    circle at 50% 35%,
+    rgba(100, 145, 210, 0.22),
+    var(--bg) 72%
   );
 }
 
@@ -233,7 +233,7 @@ img {
 .model-panel canvas {
   display: block;
   width: 100%;
-  height: 420px;
+  height: 520px;
   touch-action: none;
 }
 
@@ -253,6 +253,102 @@ img {
   background: color-mix(in srgb, var(--bg) 82%, transparent);
   color: var(--muted);
   font-size: 0.8rem;
+  pointer-events: none;
+}
+
+.viewer-toolbar {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg) 84%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 5;
+}
+
+.viewer-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.32rem 0.68rem;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--bg) 70%, var(--fg) 6%);
+  color: var(--fg);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 550;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+.viewer-btn:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, var(--bg));
+}
+
+.viewer-btn:active {
+  transform: translateY(1px);
+}
+
+.viewer-btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.viewer-btn-primary:hover {
+  background: color-mix(in srgb, var(--accent) 85%, #fff);
+  border-color: var(--accent);
+}
+
+.viewer-btn.is-active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 24%, var(--bg));
+  color: var(--fg);
+}
+
+.viewer-slider-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 0.25rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.viewer-slider {
+  width: 110px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.viewer-slider-pct {
+  min-width: 2.6em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.viewer-part-tooltip {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.65rem;
+  padding: 0.28rem 0.68rem;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  color: var(--fg);
+  font-size: 0.8rem;
+  font-weight: 550;
+  pointer-events: none;
+  z-index: 5;
 }
 
 @media (max-width: 640px) {
