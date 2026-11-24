@@ -31,7 +31,7 @@ pub fn A12ActuatorParams::new(
   gear_module_mm~ : Double = 2.0,
   gear_length_mm~ : Double = 12.0,
   num_elbows~ : Int32 = 4,
-  tolerance_mm~ : Double = 0.2,
+  tolerance_mm~ : Double = 0.1,
   hub_offset_mm~ : Double = 8.0,
   flange_start_deg~ : Double = 30.0,
   detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Detailed,

@@ -1561,3 +1561,226 @@ pub fn nema_mount_plate_part(
   .add_mate_mm_deg("bottom")
   .add_mate_mm_deg("top", z=thickness_mm)
 }
+
+///|
+/// A purchased Maker Store USA part with its real supplier, SKU, and URL.
+fn makerstore_part(
+  part_number : String,
+  description : String,
+  material : String,
+  finish : String,
+  unit_cost_usd : Double,
+  supplier_url~ : String,
+) -> @cad.PartMeta {
+  @cad.PartMeta::new(
+    part_number,
+    description~,
+    supplier="Maker Store USA",
+    supplier_url~,
+    material~,
+    process="purchased",
+    finish~,
+    unit_cost_usd~,
+  )
+}
+
+///|
+/// A Maker Store 20-series L plate with a centred hole grid (SKU
+/// `PLATE-40X40L` / `PLATE-40X80L`).
+///
+/// Inherits the STEP component's face and per-hole `CylindricalBore` mates. The
+/// default 40 x 40 x 3 mm plate with a 3 x 3 grid of 5 mm holes on 10 mm centres
+/// matches the Maker Store dimensioned drawing.
+pub fn makerstore_l_plate(
+  name~ : String = "l_plate",
+  leg_a_mm~ : Double = 40.0,
+  leg_b_mm~ : Double = 40.0,
+  width_mm~ : Double = 40.0,
+  thickness_mm~ : Double = 3.0,
+  hole_diam_mm~ : Double = 5.0,
+  pitch_mm~ : Double = 10.0,
+  density~ : @urdf.Density = @urdf.Density::aluminum_6061(),
+) -> @cad.Component {
+  let step_comp = expect_step(
+    "Maker Store L plate",
+    @step_mechanisms.makerstore_l_plate(
+      leg_a_mm~,
+      leg_b_mm~,
+      width_mm~,
+      thickness_mm~,
+      hole_diameter_mm=hole_diam_mm,
+      pitch_mm~,
+    ),
+  )
+  let (sku, price) = if leg_a_mm > 60.0 {
+    ("PLATE-40X80L", 6.75)
+  } else {
+    ("PLATE-40X40L", 4.73)
+  }
+  let part = makerstore_part(
+    sku,
+    "Maker Store L plate \{leg_a_mm} x \{leg_b_mm} x \{width_mm} mm",
+    "aluminium",
+    "black anodized",
+    price,
+    supplier_url="https://makerstore.cc/product/joining-plates/",
+  )
+  @cad.Component::from_step_component(
+    name,
+    step_comp,
+    density~,
+    part=Some(part),
+  )
+}
+
+///|
+/// A Maker Store metric aluminum spacer (SKU `SHIM-SPAC`), OD 10 / ID 5 by
+/// default. Inherits the STEP component's bore, outer-seat, and face mates.
+pub fn makerstore_aluminum_spacer(
+  name~ : String = "spacer",
+  length_mm~ : Double = 10.0,
+  outer_diam_mm~ : Double = 10.0,
+  bore_diam_mm~ : Double = 5.0,
+  density~ : @urdf.Density = @urdf.Density::aluminum_6061(),
+) -> @cad.Component {
+  let step_comp = expect_step(
+    "Maker Store aluminum spacer",
+    @step_motion.makerstore_aluminum_spacer(
+      length_mm~,
+      outer_diameter_mm=outer_diam_mm,
+      inner_diameter_mm=bore_diam_mm,
+    ),
+  )
+  let part = makerstore_part(
+    "SHIM-SPAC",
+    "Maker Store aluminum spacer OD \{outer_diam_mm} / ID \{bore_diam_mm} x \{length_mm} mm",
+    "aluminium",
+    "plain",
+    0.25,
+    supplier_url="https://makerstore.cc/product/metric-aluminum-spacers/",
+  )
+  @cad.Component::from_step_component(
+    name,
+    step_comp,
+    density~,
+    part=Some(part),
+  )
+}
+
+///|
+/// A Maker Store 20-series hex sliding T-nut (SKU `HARD-TNUT-SLIDING`).
+pub fn makerstore_hex_tnut(
+  name~ : String = "tnut",
+  thread~ : String = "M5",
+  slot_width_mm~ : Double = 5.0,
+) -> @cad.Component {
+  let step_comp = expect_step(
+    "Maker Store sliding T-nut",
+    @step_fasteners.makerstore_hex_tnut(thread, slot_width_mm~),
+  )
+  let part = makerstore_part(
+    "HARD-TNUT-SLIDING-\{thread}",
+    "Maker Store sliding T-nut \{thread}",
+    "steel",
+    "plain",
+    0.65,
+    supplier_url="https://makerstore.cc/product/sliding-t-nut/",
+  )
+  @cad.Component::from_step_component(
+    name,
+    step_comp,
+    density=@urdf.Density::steel_mild(),
+    part=Some(part),
+  )
+}
+
+///|
+/// A Maker Store 40-series sliding block T-nut (SKU
+/// `HARD-40S-TNUT-STEEL-SLID-18`).
+pub fn makerstore_sliding_tnut(
+  name~ : String = "tnut40",
+  thread~ : String = "M6",
+  slot_width_mm~ : Double = 7.7,
+) -> @cad.Component {
+  let step_comp = expect_step(
+    "Maker Store 40-series sliding T-nut",
+    @step_fasteners.makerstore_sliding_tnut(thread, slot_width_mm~),
+  )
+  let part = makerstore_part(
+    "HARD-40S-TNUT-STEEL-SLID-18-\{thread}",
+    "Maker Store 40-series sliding T-nut \{thread}",
+    "steel",
+    "plain",
+    0.65,
+    supplier_url="https://makerstore.cc/product/hard-40s-tnut-steel-slid-18-1pc/",
+  )
+  @cad.Component::from_step_component(
+    name,
+    step_comp,
+    density=@urdf.Density::steel_mild(),
+    part=Some(part),
+  )
+}
+
+///|
+/// A Maker Store gusseted V-Slot corner bracket (SKU `BRAC-90CAST` at 20 mm,
+/// `BRAC-40S-90CAST-B` at 40 mm).
+pub fn makerstore_corner_bracket(
+  name~ : String = "corner_bracket",
+  leg_mm~ : Double = 20.0,
+  density~ : @urdf.Density = @urdf.Density::aluminum_6061(),
+) -> @cad.Component {
+  let step_comp = expect_step(
+    "Maker Store corner bracket",
+    @step_profiles.makerstore_corner_bracket(leg_mm~),
+  )
+  let (sku, price) = if leg_mm < 30.0 {
+    ("BRAC-90CAST", 1.80)
+  } else {
+    ("BRAC-40S-90CAST-B", 3.40)
+  }
+  let part = makerstore_part(
+    sku,
+    "Maker Store V-Slot corner bracket \{leg_mm} mm",
+    "aluminium",
+    "cast",
+    price,
+    supplier_url="https://makerstore.cc/product/cast-90-degree-corner-bracket/",
+  )
+  @cad.Component::from_step_component(
+    name,
+    step_comp,
+    density~,
+    part=Some(part),
+  )
+}
+
+///|
+/// A Maker Store thrust bearing envelope (SKU `BEAR-F`).
+pub fn makerstore_thrust_bearing(
+  name~ : String = "thrust_bearing",
+  designation~ : String = "F5-10M",
+) -> @cad.Component {
+  let size = expect_step(
+    "Maker Store thrust bearing size",
+    @step_motion.thrust_bearing_size(designation),
+  )
+  let step_comp = expect_step(
+    "Maker Store thrust bearing",
+    @step_motion.thrust_bearing(size),
+  )
+  let part = makerstore_part(
+    "BEAR-\{designation}",
+    "Maker Store thrust bearing \{designation}",
+    "bearing steel",
+    "ground",
+    3.45,
+    supplier_url="https://makerstore.cc/product/thrust-bearings/",
+  )
+  @cad.Component::from_step_component(
+    name,
+    step_comp,
+    density=@urdf.Density::steel_mild(),
+    part=Some(part),
+  )
+}

@@ -1,0 +1,5 @@
+import {
+  "gmlewis/cad/examples/10-makerstore-joint" @makerstore_joint,
+}
+
+pkgtype(kind: "executable")

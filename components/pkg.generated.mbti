@@ -107,6 +107,18 @@ pub fn low_kv_bldc_motor(name? : String, preset? : String, detail? : @common.Det
 
 pub fn magnetic_encoder(name? : String, disc_diam_mm? : Double, board_len_mm? : Double, voltage_v? : Double, current_ma? : Double) -> @gmlewis/cad.Component
 
+pub fn makerstore_aluminum_spacer(name? : String, length_mm? : Double, outer_diam_mm? : Double, bore_diam_mm? : Double, density? : @urdf.Density) -> @gmlewis/cad.Component
+
+pub fn makerstore_corner_bracket(name? : String, leg_mm? : Double, density? : @urdf.Density) -> @gmlewis/cad.Component
+
+pub fn makerstore_hex_tnut(name? : String, thread? : String, slot_width_mm? : Double) -> @gmlewis/cad.Component
+
+pub fn makerstore_l_plate(name? : String, leg_a_mm? : Double, leg_b_mm? : Double, width_mm? : Double, thickness_mm? : Double, hole_diam_mm? : Double, pitch_mm? : Double, density? : @urdf.Density) -> @gmlewis/cad.Component
+
+pub fn makerstore_sliding_tnut(name? : String, thread? : String, slot_width_mm? : Double) -> @gmlewis/cad.Component
+
+pub fn makerstore_thrust_bearing(name? : String, designation? : String) -> @gmlewis/cad.Component
+
 pub fn moteus_c1_board(String, name? : String, source? : String) -> @gmlewis/cad.Component
 
 pub fn moteus_position_sensor(name? : String, board_len_mm? : Double, board_w_mm? : Double, thickness_mm? : Double, mounting_hole_diam_mm? : Double, hole_inset_mm? : Double, chip_size_mm? : Double, chip_height_mm? : Double, voltage_v? : Double, current_ma? : Double, detail? : @common.DetailLevel) -> @gmlewis/cad.Component

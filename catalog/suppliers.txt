@@ -98,3 +98,14 @@ RR-IMU-6DOF | Amazon | https://www.amazon.com/s?k=BMI088+6-DOF+IMU+module | 6-DO
 WBR-IMU-6DOF | Amazon | https://www.amazon.com/s?k=BMI088+6-DOF+IMU+module | 6-DOF MEMS IMU sensor board (EKF pitch/rate estimation) | 18.00
 WBR-MCU-BOARD | Amazon | https://www.amazon.com/s?k=ESP32+S3+CAN+bus+controller+board | ESP32-S3 + CAN transceiver main control board | 22.00
 WBR-TOF-SENSOR | Amazon | https://www.amazon.com/s?k=VL53L1X+ToF+range+sensor+module | Front ToF / ultrasonic obstacle sensor module | 9.50
+
+# --- Maker Store USA (makerstore.cc) 20/40-series hardware ------------------
+
+PLATE-40X40L | Maker Store USA | https://makerstore.cc/product/joining-plates/ | 40 x 40 x 3 mm L plate / bracket, 3 x 3 5 mm holes on 10 mm centres, black anodized | 4.73
+PLATE-40X80L | Maker Store USA | https://makerstore.cc/product/joining-plates/ | 40 x 80 x 3 mm L plate / bracket, 10 mm hole grid | 6.75
+SHIM-SPAC | Maker Store USA | https://makerstore.cc/product/metric-aluminum-spacers/ | Metric aluminum spacer OD 10 mm / ID 5 mm; price varies by length (3-40 mm) | 0.25
+HARD-TNUT-SLIDING-M5 | Maker Store USA | https://makerstore.cc/product/sliding-t-nut/ | 20-series sliding T-nut M5 for 5 mm V-slot (M3/M4/M5 variants) | 0.65
+HARD-40S-TNUT-STEEL-SLID-18-M6 | Maker Store USA | https://makerstore.cc/product/hard-40s-tnut-steel-slid-18-1pc/ | 40-series sliding T-nut M6, 20 x 19.1 x 9.1 mm, 7.7 mm slot | 0.65
+BRAC-90CAST | Maker Store USA | https://makerstore.cc/product/cast-90-degree-corner-bracket/ | Cast 20 x 20 x 17 mm 90-degree corner bracket | 1.80
+BRAC-40S-90CAST-B | Maker Store USA | https://makerstore.cc/product/brac-40s-90cast-b/ | 40-series cast 90-degree corner bracket | 3.40
+BEAR-F5-10M | Maker Store USA | https://makerstore.cc/product/thrust-bearings/ | F5-10M thrust bearing, 5 x 10 x 4 mm (F5-12M/F6-12M/F8-16M also listed) | 3.45

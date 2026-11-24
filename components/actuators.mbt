@@ -1663,9 +1663,8 @@ pub fn planetary_bldc_actuator(
   let carrier_thickness = 8.0
   let gear_outer_thickness = 6.0
   let center_delta = 0.2
-  // Printed gears need a little more backlash than machined ones. The Tier-1
-  // generator applies twice this value as a centre-distance allowance.
-  let tolerance = 0.2
+  // Printed gears use our calibrated 0.10 mm flank clearance.
+  let tolerance = 0.1
   let pa_deg = 20.0
   let deg = @math.PI / 180.0
   let ring_outer = module_mm *
@@ -1681,7 +1680,9 @@ pub fn planetary_bldc_actuator(
   } else {
     housing_outer
   }
-  let housing_inner = ring_outer - 0.05
+  // 0.10 mm radial slip fit for the 4-keyed ring cartridge (torque is reacted
+  // positively by the four 45-deg axial keyways, not by a plastic press fit).
+  let housing_inner = ring_outer + 0.10
   let bolt_circle = (ring_outer + housing_wall / 2.0) * 2.0
   let rear_bolt_circle = (barrel_outer - housing_wall / 2.0) * 2.0
   let stage_pitch = gear_length_mm + carrier_thickness + 8.0
@@ -1759,7 +1760,7 @@ pub fn planetary_bldc_actuator(
     false,
   )
   let housing_part = fabricated_part(
-    "ACT-HOUSING", "Printed planetary actuator housing; press the ring gear into the interference seat and tap the M3 cover screws into the 6 mm wall",
+    "ACT-HOUSING", "Printed planetary actuator housing with four 45-deg anti-rotation keyways; slide the keyed ring cartridge in and bolt the cover with M3 screws",
     "carbon fiber nylon", "3D print", 18.0,
   )
   let plate_part = fabricated_part(
@@ -1833,6 +1834,72 @@ pub fn planetary_bldc_actuator(
       ),
     )
   }
+  // Build the outer housing tube with four axial anti-rotation keyway slots
+  // at 45/135/225/315 deg (midway between the M3 cover screws) so the ring
+  // gear's four matching key lugs lock positively against full motor torque.
+  let housing_z_mid = (housing_bottom + housing_top) / 2.0
+  let housing_base_body = @cad.BodyPart::tube_mm(
+    name + "_housing",
+    housing_outer * 2.0,
+    housing_inner * 2.0,
+    housing_height,
+    z_mm=housing_z_mid,
+    density=@urdf.Density::carbon_fiber(),
+    color=@step_cad.Rgb::black(),
+  )
+  let keyway_width = 6.2
+  let keyway_depth = 2.65
+  let keyway_radial_len = keyway_depth + 2.0
+  let keyway_r_center = housing_inner + keyway_depth - keyway_radial_len / 2.0
+  let keyway_cutters : Array[@step_cad.SceneNode] = []
+  for ki in 0..<4 {
+    let ang_deg = 45.0 + 90.0 * ki.to_double()
+    let ang_rad = ang_deg * @math.PI / 180.0
+    let cutter = @step_cad.Cuboid::new(
+        keyway_radial_len,
+        keyway_width,
+        housing_height + 2.0,
+      )
+      .with_name(name + "_keyway_" + ki.to_string())
+      .translate(
+        x=-keyway_radial_len / 2.0,
+        y=-keyway_width / 2.0,
+        z=-(housing_height + 2.0) / 2.0,
+      )
+      .rotate_z(ang_deg)
+      .translate(
+        x=keyway_r_center * @math.cos(ang_rad),
+        y=keyway_r_center * @math.sin(ang_rad),
+        z=housing_z_mid,
+      )
+    keyway_cutters.push(cutter)
+  }
+  let keyed_housing_node = @step_cad.difference(
+    housing_base_body.node,
+    keyway_cutters,
+    name=name + "_housing",
+  ).with_color(@step_cad.Rgb::black())
+  let full_housing_node = if is_a12 {
+    let barrel_body = @cad.BodyPart::tube_mm(
+      name + "_a12_motor_barrel",
+      barrel_outer * 2.0,
+      95.0,
+      -motor_mount_z,
+      z_mm=motor_mount_z / 2.0,
+      density=@urdf.Density::carbon_fiber(),
+      color=@step_cad.Rgb::black(),
+    )
+    @step_cad.union_all(
+      [keyed_housing_node, barrel_body.node],
+      name=name + "_housing",
+    ).with_color(@step_cad.Rgb::black())
+  } else {
+    keyed_housing_node
+  }
+  let keyed_housing_body : @cad.BodyPart = {
+    ..housing_base_body,
+    node: full_housing_node,
+  }.with_part(housing_part)
   let mut housing = @cad.Component::new(
       name,
       description="Planetary BLDC actuator",
@@ -1844,17 +1911,7 @@ pub fn planetary_bldc_actuator(
     .with_param("planet_bearing", planet_bearing)
     .with_param("planet_pin_diam_mm", planet_pin_diam.to_string())
     .with_param("output_shaft_diam_mm", coupling_shaft_diam.to_string())
-    .add_body(
-      @cad.BodyPart::tube_mm(
-        name + "_housing",
-        housing_outer * 2.0,
-        housing_inner * 2.0,
-        housing_height,
-        z_mm=(housing_bottom + housing_top) / 2.0,
-        density=@urdf.Density::carbon_fiber(),
-        color=@step_cad.Rgb::black(),
-      ).with_part(housing_part),
-    )
+    .add_body(keyed_housing_body)
     .add_body(
       actuator_plate_body(
         name + "_motor_plate",
@@ -1922,10 +1979,10 @@ pub fn planetary_bldc_actuator(
     .add_fit(
       @cad.Fit::new(
         "ring_seat",
-        @cad.FitClass::Interference,
+        @cad.FitClass::Clearance,
         nominal_mm=ring_outer * 2.0,
-        min_mm=ring_outer * 2.0 - 0.1,
-        max_mm=ring_outer * 2.0,
+        min_mm=ring_outer * 2.0,
+        max_mm=ring_outer * 2.0 + 0.25,
       ),
     )
     .add_fit(
@@ -1937,19 +1994,6 @@ pub fn planetary_bldc_actuator(
         max_mm=22.05,
       ),
     )
-  if is_a12 {
-    housing = housing.add_body(
-      @cad.BodyPart::tube_mm(
-        name + "_a12_motor_barrel",
-        barrel_outer * 2.0,
-        95.0,
-        -motor_mount_z,
-        z_mm=motor_mount_z / 2.0,
-        density=@urdf.Density::carbon_fiber(),
-        color=@step_cad.Rgb::black(),
-      ).with_part(housing_part),
-    )
-  }
   // Motor and cover bolt mates.
   for i in 0..<4 {
     let theta = 2.0 * @math.PI * i.to_double() / 4.0
@@ -2425,11 +2469,48 @@ pub fn planetary_actuator_cartridge(
     output_shaft_diam_mm: 8.0,
     carrier_thickness_mm: 8.0,
     output_shaft_length_mm: 12.0,
-    tolerance_mm: 0.2,
+    tolerance_mm: 0.1,
     outer_thickness_mm: 6.0,
     include_carrier: false,
   }
-  planetary_print_in_place(name~, params~, detail~)
+  let mut cartridge = planetary_print_in_place(name~, params~, detail~)
+  // Add four integral anti-rotation key lugs at 45/135/225/315 deg around the
+  // outer ring gear so it locks positively into ACT-HOUSING's matching axial
+  // keyway slots (zero glue, zero plastic-on-plastic slip).
+  let pa_deg = 20.0
+  let deg = @math.PI / 180.0
+  let center_delta = 0.2
+  let ring_outer = module_mm *
+    (sun_teeth.to_double() + 2.0 * planet_teeth.to_double()) /
+    2.0 +
+    module_mm +
+    center_delta +
+    0.1 / @math.sin(pa_deg * deg) +
+    6.0
+  let key_width = 6.0
+  let key_protrusion = 2.5
+  let key_embed = 2.0
+  let key_radial_len = key_protrusion + key_embed
+  let key_r_center = ring_outer + key_protrusion - key_radial_len / 2.0
+  for ki in 0..<4 {
+    let ang_deg = 45.0 + 90.0 * ki.to_double()
+    let ang_rad = ang_deg * deg
+    cartridge = cartridge.add_body(
+      @cad.BodyPart::box_mm(
+        name + "_ring_key_" + ki.to_string(),
+        key_radial_len,
+        key_width,
+        gear_length_mm,
+        x_mm=key_r_center * @math.cos(ang_rad),
+        y_mm=key_r_center * @math.sin(ang_rad),
+        z_mm=gear_length_mm / 2.0,
+        rz_deg=ang_deg,
+        density=@urdf.Density::petg(),
+        color=@step_cad.Rgb::grey(),
+      ),
+    )
+  }
+  cartridge
 }
 
 ///|

@@ -61,7 +61,7 @@ pub fn PlanetaryGearboxParams::default() -> PlanetaryGearboxParams {
     output_shaft_diam_mm: 8.0,
     carrier_thickness_mm: 8.0,
     output_shaft_length_mm: 12.0,
-    tolerance_mm: 0.35,
+    tolerance_mm: 0.1,
     outer_thickness_mm: 10.0,
     include_carrier: true,
   }

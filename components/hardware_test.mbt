@@ -330,3 +330,22 @@ test "planetary gearbox is a valid robot in both smooth and swept modes" {
     assert_true(gearbox.total_mass_kg() > 0.0)
   }
 }
+
+///|
+test "Maker Store wrappers build with inherited STEP mates" {
+  let plate = @components.makerstore_l_plate()
+  check_component(plate, [
+    "base-face", "upright-face", "base-hole-1", "upright-hole-9",
+  ])
+  assert_true(plate.part is Some(_))
+  let spacer = @components.makerstore_aluminum_spacer()
+  check_component(spacer, ["bore", "outer-seat", "face-positive"])
+  let tnut = @components.makerstore_hex_tnut(thread="M5")
+  check_component(tnut, ["thread", "bearing-face"])
+  let slider = @components.makerstore_sliding_tnut(thread="M6")
+  check_component(slider, ["thread", "bearing-face"])
+  let bracket = @components.makerstore_corner_bracket(leg_mm=20.0)
+  check_component(bracket, ["base-face", "side-face"])
+  let bearing = @components.makerstore_thrust_bearing(designation="F5-10M")
+  check_component(bearing, ["bore", "outer-seat"])
+}

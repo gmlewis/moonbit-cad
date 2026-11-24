@@ -25,49 +25,55 @@
 /// See `examples/02-planetary-actuator/README.md` for the full attribution.
 
 ///|
-/// Display-only offset for the exploded, color-coded view.
+/// Display-only coaxial Z-axis offset for the exploded, color-coded view.
+/// Every part moves straight along its real physical assembly axis, with
+/// `ACT-HOUSING` anchored at z = 0.
 fn explode_offset(node : @step_cad.SceneNode) -> (Double, Double, Double) {
   let name = node.name
   if name.contains("herringbone-planetary") {
-    // The print-in-place gear set is one printed unit: keep the sun, planets,
-    // and ring in their assembled positions and move them together.
-    (0.0, 0.0, 20.0)
+    // Print-in-place gear set slides straight up out of the housing keyways.
+    (0.0, 0.0, 52.0)
   } else if name.contains("bearing-688") {
-    // A purchased bearing is one unit; move all of its layers together.
-    (0.0, 0.0, 95.0)
-  } else if name.contains("moteus") || name.contains("board_standoff") {
-    (0.0, 0.0, 250.0)
-  } else if name.contains("bearing-608") || name.contains("M3-12") {
-    (0.0, 0.0, 215.0)
-  } else if name.contains("output_cover") {
-    (0.0, 0.0, 190.0)
+    (0.0, 0.0, 90.0)
+  } else if name.contains("moteus") {
+    (0.0, 0.0, 305.0)
+  } else if name.contains("board_standoff") {
+    (0.0, 0.0, 280.0)
   } else if name.contains("output_magnet") {
-    (0.0, 0.0, 165.0)
+    (0.0, 0.0, 265.0)
   } else if name.contains("output_collar") {
-    (0.0, 0.0, 155.0)
+    (0.0, 0.0, 250.0)
+  } else if name.contains("M3-12") {
+    (0.0, 0.0, 235.0)
+  } else if name.contains("bearing-608") {
+    (0.0, 0.0, 210.0)
+  } else if name.contains("output_cover") {
+    (0.0, 0.0, 180.0)
   } else if name.contains("carrier_pin") ||
     name.contains("pin_washer") ||
     name.contains("carrier_output_shaft") {
-    (0.0, 0.0, 135.0)
+    (0.0, 0.0, 145.0)
   } else if name.contains("stage1_carrier") {
     (0.0, 0.0, 115.0)
-  } else if name.contains("stage1_sun") {
-    (0.0, 0.0, 45.0)
-  } else if name.contains("/ring") {
-    (0.0, 0.0, 25.0)
-  } else if name.contains("HEATSET") {
-    // Pull the wall hardware out of the housing so it is visible.
-    (150.0, 0.0, 10.0)
+  } else if name.contains("stage1_sun") ||
+    name.contains("stage1_planet") ||
+    name.contains("/ring") {
+    (0.0, 0.0, 52.0)
+  } else if name.contains("rear_insert") {
+    (0.0, 0.0, -20.0)
+  } else if name.contains("cover_insert") || name.contains("HEATSET") {
+    (0.0, 0.0, 20.0)
   } else if name.contains("M3-10") {
-    (150.0, 0.0, -10.0)
-  } else if name.contains("a12_motor_barrel") {
-    (105.0, 0.0, 0.0)
+    (0.0, 0.0, -145.0)
+  } else if name.contains("motor_plate") {
+    (0.0, 0.0, -110.0)
   } else if name.contains("_rotor_adapter") {
-    (0.0, 0.0, -35.0)
-  } else if name.contains("_housing") {
-    (105.0, 0.0, 0.0)
+    (0.0, 0.0, -28.0)
+  } else if name.contains("a12_motor_barrel") || name.contains("_housing") {
+    // Central housing stays anchored at z = 0.
+    (0.0, 0.0, 0.0)
   } else if name.contains("_motor") {
-    (0.0, 0.0, -80.0)
+    (0.0, 0.0, -65.0)
   } else {
     (0.0, 0.0, 0.0)
   }
@@ -79,7 +85,7 @@ fn explode_color(name : String) -> @step_cad.Rgb {
   if name.contains("output_cover") {
     @step_cad.Rgb::new(0.22, 0.24, 0.30)
   } else if name.contains("housing") {
-    @step_cad.Rgb::new(0.10, 0.10, 0.12)
+    @step_cad.Rgb::new(0.22, 0.24, 0.28)
   } else if name.contains("motor_plate") {
     @step_cad.Rgb::new(0.35, 0.35, 0.40)
   } else if name.contains("HEATSET") {
