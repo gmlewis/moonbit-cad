@@ -204,8 +204,8 @@ def _build_explode_metadata(
         entries.append({
             "name": nm,
             "occurrence": occ,
-            # RWGltf_CafWriter outputs Y-up glTF: (x, y, z)_gltf = (x, z, -y)_step
-            "offset_gltf": [round(dx, 6), round(dz, 6), round(-dy, 6)],
+            # RWGltf_CafWriter preserves the STEP Z-up frame (converted from mm to metres).
+            "offset_gltf": [round(dx, 6), round(dy, 6), round(dz, 6)],
             "offset_step_mm": [round(dx * 1000.0, 3), round(dy * 1000.0, 3), round(dz * 1000.0, 3)],
             "dist_m": round(dist, 6),
             "explode_color": exp_color,

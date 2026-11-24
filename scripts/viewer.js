@@ -163,10 +163,10 @@ async function init() {
 
   const explodeData = await loadExplodeData();
   const model = loaded.scene;
-  if (!loaded.isOcctGlb) {
-    // Legacy MoonBit glTF is Z-up; three.js and OCCT GLB are Y-up.
-    model.rotation.x = -Math.PI / 2;
-  }
+  // Both OCCT GLB (RWGltf_CafWriter) and MoonBit glTF preserve STEP Z-up;
+  // rotate the model container into Three.js Y-up so +Z points straight up
+  // and local Z-axis explode offsets slide every part coaxially.
+  model.rotation.x = -Math.PI / 2;
 
   const root = new THREE.Group();
   root.add(model);
@@ -306,7 +306,7 @@ async function init() {
       part.obj.position.copy(part.basePos).addScaledVector(part.offset, eased);
 
       if (part.roleColor) {
-        const colorMix = useRoleColors ? 1.0 : eased * 0.85;
+        const colorMix = useRoleColors ? 1.0 : 0.0;
         for (const mesh of part.meshes) {
           const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
           const baseColors = mesh.userData.baseColors || [];
