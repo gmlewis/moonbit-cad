@@ -13,6 +13,8 @@ Wrapper options (before or after the example):
   --view[=<path>]        Write STEP to _build/solidcraft-view/<example>.step
                         (or <path>) and open it in SolidCraft with --up z.
                         With -o, opens that path instead.
+  --3mf[=<path>]         Also write an OrcaSlicer-ready 3MF (default: <step>.3mf
+                        or <example>.3mf in the current directory).
   --headless, --no-open  Generate only; never open or raise SolidCraft. Writes
                         to /tmp/<example>.step (or the -o path) and prints it.
                         Agents must always use this instead of --view.
@@ -49,7 +51,7 @@ esac
 PREFIX_ARGS=()
 while [[ $# -gt 0 ]]; do
   case "${1:-}" in
-    --view | --view=* | --headless | --no-open | --release)
+    --view | --view=* | -3mf | --3mf | -3mf=* | --3mf=* | --headless | --no-open | --release)
       PREFIX_ARGS+=("$1")
       shift
       ;;
@@ -178,6 +180,9 @@ PACKAGE_REQUESTED=0
 VIEW_REQUESTED=0
 VIEW_PATH_ARG=""
 VIEW_STEP=""
+THREEMF_REQUESTED=0
+THREEMF_OUT_ARG=""
+THREEMF_OUT=""
 HEADLESS_REQUESTED=0
 RELEASE_MODE=0
 i=0
@@ -194,6 +199,13 @@ while (( i < ${#ARGS[@]} )); do
     --view=*)
       VIEW_REQUESTED=1
       VIEW_PATH_ARG="${arg#*=}"
+      ;;
+    -3mf | --3mf)
+      THREEMF_REQUESTED=1
+      ;;
+    -3mf=* | --3mf=*)
+      THREEMF_REQUESTED=1
+      THREEMF_OUT_ARG="${arg#*=}"
       ;;
     --headless | --no-open)
       HEADLESS_REQUESTED=1
@@ -265,6 +277,25 @@ if (( HEADLESS_REQUESTED )) && (( ! VIEW_REQUESTED )) && (( ! PACKAGE_REQUESTED 
   FORWARD_ARGS+=(-o "$OUT_PATH")
 fi
 
+# --- 3MF export -------------------------------------------------------------
+if (( THREEMF_REQUESTED )); then
+  if [[ -n "$THREEMF_OUT_ARG" ]]; then
+    THREEMF_OUT="$THREEMF_OUT_ARG"
+  elif [[ -n "$OUT_PATH" ]]; then
+    _base="$(basename "$OUT_PATH")"
+    _base="${_base%.*}"
+    THREEMF_OUT="$(dirname "$OUT_PATH")/${_base}.3mf"
+  else
+    THREEMF_OUT="${EXAMPLE_NAME}.3mf"
+  fi
+  if [[ -z "$OUT_PATH" ]]; then
+    STEP_TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/cad-step-out.XXXXXX")"
+    trap 'rm -rf "$STEP_TMP_DIR"' EXIT
+    OUT_PATH="$STEP_TMP_DIR/$EXAMPLE_NAME.step"
+    FORWARD_ARGS+=(-o "$OUT_PATH")
+  fi
+fi
+
 RUN_PATH="$ROOT_DIR/$EXAMPLE_PATH"
 if [[ -d "$RUN_PATH/cmd" ]]; then
   RUN_PATH="$RUN_PATH/cmd"
@@ -289,4 +320,16 @@ fi
 
 if (( VIEW_REQUESTED )) && (( ! HEADLESS_REQUESTED )); then
   open_in_solidcraft "$VIEW_STEP"
+fi
+
+if (( THREEMF_REQUESTED )); then
+  if [[ ! -s "$OUT_PATH" ]]; then
+    echo "Error: no STEP was written at $OUT_PATH; cannot export 3MF." >&2
+    exit 1
+  fi
+  if ! python3 "$ROOT_DIR/scripts/step_to_3mf.py" "$OUT_PATH" "$THREEMF_OUT"; then
+    echo "Error: failed to export 3MF from $OUT_PATH." >&2
+    exit 1
+  fi
+  echo "Wrote $THREEMF_OUT" >&2
 fi

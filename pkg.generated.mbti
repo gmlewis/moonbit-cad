@@ -51,6 +51,14 @@ pub fn parse_supplier_links(String) -> Array[SupplierLink]
 
 pub fn parse_thread_rep(String) -> @common.ThreadRepresentation?
 
+pub fn pattern_grid_mm(Int32, Int32, Double, Double, center_x? : Double, center_y? : Double) -> Array[(Double, Double)]
+
+pub fn pattern_line_mm(Int32, Double, angle_deg? : Double, center_x? : Double, center_y? : Double) -> Array[(Double, Double)]
+
+pub fn pattern_rect_mm(Double, Double, center_x? : Double, center_y? : Double) -> Array[(Double, Double)]
+
+pub fn pattern_ring_mm(Int32, diam_mm~ : Double, phase_deg? : Double, center_x? : Double, center_y? : Double) -> Array[(Double, Double)]
+
 pub fn rgb_to_rgba(@gmlewis/step/cad.Rgb, a? : Double) -> @urdf.Rgba
 
 pub fn rgba_to_rgb(@urdf.Rgba) -> @gmlewis/step/cad.Rgb
@@ -230,6 +238,9 @@ pub fn Component::assembly_checks(Self, bed? : PrintBedSpec) -> Array[String]
 pub fn Component::assembly_plan(Self) -> Array[AssemblyStep]
 pub fn Component::assembly_plan_text(Self) -> String
 pub fn Component::attach(Self, String, parent_mate~ : String, Self, child_mate? : String, spec? : JointSpec, bom_external? : Bool, explode? : ExplodeSpec?) -> Self
+pub fn Component::attach_pattern(Self, String, Array[(Double, Double)], (Int32) -> Self, z_mm? : Double, axis? : (Double, Double, Double), child_mate? : String, spec? : JointSpec, bom_external? : Bool, explode? : ExplodeSpec) -> Self
+pub fn Component::attach_rect(Self, String, width_mm~ : Double, height_mm~ : Double, (Int32) -> Self, center_x? : Double, center_y? : Double, z_mm? : Double, axis? : (Double, Double, Double), child_mate? : String, spec? : JointSpec, bom_external? : Bool, explode? : ExplodeSpec) -> Self
+pub fn Component::attach_ring(Self, String, count~ : Int32, diam_mm~ : Double, (Int32) -> Self, phase_deg? : Double, center_x? : Double, center_y? : Double, z_mm? : Double, axis? : (Double, Double, Double), child_mate? : String, spec? : JointSpec, bom_external? : Bool, explode? : ExplodeSpec) -> Self
 pub fn Component::attach_to(Self, String, String, parent_mate~ : String, Self, child_mate? : String, spec? : JointSpec, bom_external? : Bool, explode? : ExplodeSpec?) -> Self
 pub fn Component::bom(Self) -> Bom
 pub fn Component::build_manifest(Self, name? : String) -> String
@@ -362,6 +373,18 @@ pub(all) struct DomainRandSpec {
 }
 pub fn DomainRandSpec::new(mass_scale_range? : (Double, Double), friction_range? : (Double, Double), kp_scale_range? : (Double, Double), push_impulse_ns? : Double, obs_noise_std? : Double) -> Self
 
+pub(all) enum ExplodeAxis {
+  AxisX
+  AxisY
+  AxisZ
+}
+
+pub(all) struct ExplodeLayer {
+  patterns : Array[String]
+  gap_override_mm : Double?
+  predicate : ((@gmlewis/step/cad.SceneNode) -> Bool)?
+}
+
 #derive(Eq, @debug.Debug)
 pub(all) enum ExplodeSpec {
   AlongMate(Double, Int32)
@@ -371,6 +394,28 @@ pub(all) enum ExplodeSpec {
 pub fn ExplodeSpec::along_mate(distance_mm~ : Double, order? : Int32) -> Self
 pub fn ExplodeSpec::along_mate_local(distance_mm~ : Double, order? : Int32) -> Self
 pub fn ExplodeSpec::offset_mm(dx~ : Double, dy~ : Double, dz~ : Double, order? : Int32) -> Self
+
+pub struct ExplodeStack {
+  axis : ExplodeAxis
+  anchor_patterns : Array[String]
+  above_layers : Array[ExplodeLayer]
+  below_layers : Array[ExplodeLayer]
+  default_gap_mm : Double
+}
+pub fn ExplodeStack::above(Self, Array[String], gap_mm? : Double) -> Self
+pub fn ExplodeStack::above_list(Self, Array[String]) -> Self
+pub fn ExplodeStack::above_one(Self, String, gap_mm? : Double) -> Self
+pub fn ExplodeStack::above_where(Self, Array[String], (@gmlewis/step/cad.SceneNode) -> Bool, gap_mm? : Double) -> Self
+pub fn ExplodeStack::apply(Self, @gmlewis/step/cad.Design) -> @gmlewis/step/cad.Design
+pub fn ExplodeStack::below(Self, Array[String], gap_mm? : Double) -> Self
+pub fn ExplodeStack::below_list(Self, Array[String]) -> Self
+pub fn ExplodeStack::below_one(Self, String, gap_mm? : Double) -> Self
+pub fn ExplodeStack::below_where(Self, Array[String], (@gmlewis/step/cad.SceneNode) -> Bool, gap_mm? : Double) -> Self
+pub fn ExplodeStack::offsets(Self, @gmlewis/step/cad.Design) -> Array[(String, (Double, Double, Double))]
+pub fn ExplodeStack::with_anchor(Self, String) -> Self
+pub fn ExplodeStack::x_axis(anchor~ : String, gap_mm? : Double) -> Self
+pub fn ExplodeStack::y_axis(anchor~ : String, gap_mm? : Double) -> Self
+pub fn ExplodeStack::z_axis(anchor~ : String, gap_mm? : Double) -> Self
 
 pub(all) struct Fastener {
   name : String

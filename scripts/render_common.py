@@ -13,6 +13,7 @@ External tools:
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import tempfile
@@ -24,8 +25,12 @@ DEFAULT_CELL_H = 512
 
 
 def find_executable(*names: str) -> str | None:
-    """Return the first of ``names`` found on PATH."""
+    """Return the first of ``names`` found in ``~/tools/bin`` or on ``PATH``."""
+    home_tools = Path.home() / "tools" / "bin"
     for name in names:
+        cand = home_tools / name
+        if cand.is_file() and os.access(cand, os.X_OK):
+            return str(cand)
         found = shutil.which(name)
         if found:
             return found

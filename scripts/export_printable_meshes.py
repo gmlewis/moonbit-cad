@@ -30,6 +30,7 @@ import argparse
 import datetime
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -49,6 +50,9 @@ MODEL_NS = "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
 
 
 def find_solidcraft() -> str | None:
+    home_bin = Path.home() / "tools" / "bin" / "solidcraft-cli"
+    if home_bin.is_file() and os.access(home_bin, os.X_OK):
+        return str(home_bin)
     return shutil.which("solidcraft-cli")
 
 

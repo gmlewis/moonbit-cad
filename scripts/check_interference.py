@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -32,6 +33,9 @@ from pathlib import Path
 
 
 def find_solidcraft() -> str | None:
+    home_bin = Path.home() / "tools" / "bin" / "solidcraft-cli"
+    if home_bin.is_file() and os.access(home_bin, os.X_OK):
+        return str(home_bin)
     return shutil.which("solidcraft-cli")
 
 
