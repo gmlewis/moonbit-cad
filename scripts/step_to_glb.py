@@ -164,9 +164,20 @@ def _build_explode_metadata(
     exp_leaves: list[dict[str, Any]],
     glb_json: dict[str, Any],
 ) -> dict[str, Any]:
-    """Match assembly leaves to exploded leaves and emit per-node explode vectors
-    (in glTF metres, Z-up STEP frame -> viewer converts via glTF Y-up) plus
-    staged animation windows [t0, t1] so outer parts separate first."""
+    """Match assembly leaves to exploded leaves 1-to-1 by exact name and emit
+    per-node explode vectors (in glTF metres, STEP Z-up frame) plus staged
+    animation windows [t0, t1] so outer parts separate first.
+
+    Raises ValueError if assembly.step and exploded.step have mismatched part
+    counts or unmatched names (e.g. built with different --detail levels) or
+    if sub-parts of a rigid bearing diverge in their explode displacement."""
+    if len(asm_leaves) != len(exp_leaves):
+        raise ValueError(
+            f"assembly.step ({len(asm_leaves)} parts) and exploded.step "
+            f"({len(exp_leaves)} parts) do not match — rebuild both with the "
+            "same --detail level"
+        )
+
     # Map by exact name occurrence index so duplicate names match 1-to-1.
     exp_by_name: dict[str, list[dict[str, Any]]] = {}
     for leaf in exp_leaves:
@@ -176,20 +187,22 @@ def _build_explode_metadata(
     entries: list[dict[str, Any]] = []
     max_dist = 0.0
 
-    for i, a_leaf in enumerate(asm_leaves):
+    for a_leaf in asm_leaves:
         nm = a_leaf["name"]
         occ = name_counts.get(nm, 0)
         name_counts[nm] = occ + 1
 
-        e_leaf = None
-        if nm in exp_by_name and occ < len(exp_by_name[nm]):
-            e_leaf = exp_by_name[nm][occ]
-        elif i < len(exp_leaves):
-            e_leaf = exp_leaves[i]
+        if nm not in exp_by_name or occ >= len(exp_by_name[nm]):
+            raise ValueError(
+                f"Part {nm!r} (occurrence {occ}) in assembly.step has no "
+                "matching part in exploded.step — rebuild both with the same "
+                "--detail level"
+            )
+        e_leaf = exp_by_name[nm][occ]
 
         dx = dy = dz = 0.0
         exp_color = None
-        if e_leaf is not None and a_leaf["center_mm"] and e_leaf["center_mm"]:
+        if a_leaf["center_mm"] and e_leaf["center_mm"]:
             ac = a_leaf["center_mm"]
             ec = e_leaf["center_mm"]
             dx = (ec[0] - ac[0]) / 1000.0
@@ -210,6 +223,27 @@ def _build_explode_metadata(
             "dist_m": round(dist, 6),
             "explode_color": exp_color,
         })
+
+    # Rigid-bearing invariant: all sub-parts of a bearing (outer-ring,
+    # inner-ring, ball-*) sharing the same bearing prefix and occurrence must
+    # translate identically so a purchased bearing never breaks apart.
+    bearing_groups: dict[tuple[str, int], list[tuple[str, list[float]]]] = {}
+    for entry in entries:
+        nm = entry["name"]
+        if "bearing-" in nm and "/" in nm:
+            prefix = nm.rsplit("/", 1)[0]
+            bearing_groups.setdefault((prefix, entry["occurrence"]), []).append(
+                (nm, entry["offset_gltf"])
+            )
+    for (prefix, occ), members in bearing_groups.items():
+        ref_nm, ref_off = members[0]
+        for mem_nm, mem_off in members[1:]:
+            delta = max(abs(a - b) for a, b in zip(ref_off, mem_off))
+            if delta > 1e-4:
+                raise ValueError(
+                    f"Rigid bearing {prefix!r} (occ {occ}) broke apart during "
+                    f"explode: {ref_nm} offset={ref_off} vs {mem_nm} offset={mem_off}"
+                )
 
     # Compute staged animation windows [start, end] in [0, 1]:
     # Farther parts start moving immediately (t0 ≈ 0.0) and finish around 0.85–1.0;

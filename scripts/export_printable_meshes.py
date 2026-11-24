@@ -148,8 +148,48 @@ def build_provenance(
     return prov
 
 
+def _wrap_multibody_assembly(
+    root: ET.Element, ns: str, assembly_name: str
+) -> bool:
+    """Groups multiple top-level <build><item> entries into a single composite
+    <object><components>...</components></object> so OrcaSlicer / Bambu Studio /
+    PrusaSlicer load multi-body prints (such as print-in-place gear cartridges)
+    pre-assembled automatically without double-extrusion conflict warnings."""
+    resources = root.find(f"{{{ns}}}resources")
+    build = root.find(f"{{{ns}}}build")
+    if resources is None or build is None:
+        return False
+    items = list(build.findall(f"{{{ns}}}item"))
+    if len(items) <= 1:
+        return False
+
+    used_ids: set[int] = set()
+    for obj in resources.findall(f"{{{ns}}}object"):
+        raw_id = obj.attrib.get("id")
+        if raw_id and raw_id.isdigit():
+            used_ids.add(int(raw_id))
+    assembly_id = str((max(used_ids) if used_ids else 0) + 1)
+
+    asm_obj = ET.SubElement(
+        resources,
+        f"{{{ns}}}object",
+        {"id": assembly_id, "type": "model", "name": assembly_name},
+    )
+    comps = ET.SubElement(asm_obj, f"{{{ns}}}components")
+    for item in items:
+        comp_attrib: dict[str, str] = {"objectid": item.attrib["objectid"]}
+        if "transform" in item.attrib:
+            comp_attrib["transform"] = item.attrib["transform"]
+        ET.SubElement(comps, f"{{{ns}}}component", comp_attrib)
+        build.remove(item)
+
+    ET.SubElement(build, f"{{{ns}}}item", {"objectid": assembly_id})
+    return True
+
+
 def inject_3mf_provenance(three_mf_path: Path, prov: dict[str, object]) -> None:
-    """Embeds ``Metadata/provenance.json`` and 3MF ``<metadata>`` XML tags."""
+    """Embeds ``Metadata/provenance.json``, 3MF ``<metadata>`` XML tags, and
+    wraps multi-body ``<build>`` items into a single composite assembly."""
     ET.register_namespace("", MODEL_NS)
 
     tmp_path = three_mf_path.with_suffix(".3mf.tmp")
@@ -197,6 +237,7 @@ def inject_3mf_provenance(three_mf_path: Path, prov: dict[str, object]) -> None:
                     set_meta("CreationDate", str(prov.get("created_utc", "")))
                     if desc_parts:
                         set_meta("Description", " | ".join(desc_parts))
+                    _wrap_multibody_assembly(root, ns, three_mf_path.stem)
                     data = ET.tostring(root, encoding="utf-8", xml_declaration=True)
                 except ET.ParseError:
                     pass

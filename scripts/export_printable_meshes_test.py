@@ -133,6 +133,65 @@ class ExportPrintableMeshesTest(unittest.TestCase):
         self.assertEqual(prov["command"], cmd)
         self.assertEqual(prov["source_step"], "CUBE.step")
 
+    def test_multibody_3mf_is_preassembled(self) -> None:
+        import xml.etree.ElementTree as ET
+
+        step = self.printable / "TWOBOX.step"
+        script = [
+            {
+                "command": "solid.box",
+                "params": {
+                    "length": 10,
+                    "width": 10,
+                    "height": 10,
+                    "corner": [0, 0, 0],
+                    "body_name": "box_a",
+                },
+            },
+            {
+                "command": "solid.box",
+                "params": {
+                    "length": 6,
+                    "width": 6,
+                    "height": 10,
+                    "corner": [8, 2, 0],
+                    "body_name": "box_b",
+                },
+            },
+            {"command": "file.export_step", "params": {"path": str(step)}},
+        ]
+        script_path = self.printable / "make-twobox.json"
+        script_path.write_text(json.dumps(script))
+        proc = subprocess.run(
+            [self.tool, "run", str(script_path), "--validation", "off", "--quiet"],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr or proc.stdout)
+
+        result = subprocess.run(
+            [sys.executable, str(EXPORTER), str(step), "--formats", "3mf"],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
+        three_mf = self.printable / "TWOBOX.3mf"
+        with zipfile.ZipFile(three_mf) as archive:
+            root = ET.fromstring(archive.read("3D/3dmodel.model"))
+        ns = root.tag[1 : root.tag.index("}")]
+        build_items = root.findall(f"{{{ns}}}build/{{{ns}}}item")
+        self.assertEqual(len(build_items), 1)
+        asm_id = build_items[0].attrib["objectid"]
+        asm_obj = next(
+            o
+            for o in root.findall(f"{{{ns}}}resources/{{{ns}}}object")
+            if o.attrib.get("id") == asm_id
+        )
+        comps = asm_obj.findall(f"{{{ns}}}components/{{{ns}}}component")
+        self.assertEqual(len(comps), 2)
+
     def test_missing_build_directory_is_a_usage_error(self) -> None:
         result = subprocess.run(
             [sys.executable, str(EXPORTER), str(Path(self.tmp.name) / "nope")],

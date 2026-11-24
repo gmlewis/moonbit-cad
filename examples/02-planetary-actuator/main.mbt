@@ -32,12 +32,13 @@ fn explode_offset(node : @step_cad.SceneNode) -> (Double, Double, Double) {
   let name = node.name
   if name.contains("herringbone-planetary") {
     // Print-in-place gear set slides straight up out of the housing keyways.
-    (0.0, 0.0, 58.0)
+    (0.0, 0.0, 66.0)
   } else if name.contains("pin_washer") {
-    // Retaining washers sit on the bearing/planet side below the planets.
-    (0.0, 0.0, 48.0)
+    // Retaining washers sit on the bearing/planet side below the planets, with
+    // clear vertical separation so they are unmistakably visible.
+    (0.0, 0.0, 44.0)
   } else if name.contains("bearing-688") {
-    (0.0, 0.0, 90.0)
+    (0.0, 0.0, 96.0)
   } else if name.contains("moteus") {
     (0.0, 0.0, 305.0)
   } else if name.contains("board_standoff") {
@@ -56,16 +57,16 @@ fn explode_offset(node : @step_cad.SceneNode) -> (Double, Double, Double) {
     name.contains("carrier_output_shaft") {
     (0.0, 0.0, 145.0)
   } else if name.contains("stage1_carrier") {
-    (0.0, 0.0, 115.0)
+    (0.0, 0.0, 118.0)
   } else if name.contains("stage1_sun") ||
     name.contains("stage1_planet") ||
     name.contains("ring_key") ||
     name.contains("/ring") {
-    (0.0, 0.0, 58.0)
+    (0.0, 0.0, 66.0)
   } else if name.contains("rear_insert") {
-    (0.0, 0.0, -20.0)
+    (0.0, 0.0, -18.0)
   } else if name.contains("cover_insert") || name.contains("HEATSET") {
-    (0.0, 0.0, 20.0)
+    (0.0, 0.0, 14.0)
   } else if name.contains("M3-10") {
     (0.0, 0.0, -145.0)
   } else if name.contains("motor_plate") {
