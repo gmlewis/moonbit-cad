@@ -71,11 +71,21 @@ pub fn flattened_geometry(String, @gmlewis/cad.Component, x_mm? : Double, y_mm? 
 
 pub fn force_sensor(name? : String, body_len_mm? : Double, body_w_mm? : Double, body_h_mm? : Double, voltage_v? : Double, current_ma? : Double) -> @gmlewis/cad.Component
 
+pub fn gobilda_sonic_hub(name? : String, density? : @urdf.Density) -> @gmlewis/cad.Component
+
+pub fn gobilda_square_beam(name? : String, holes? : Int32, density? : @urdf.Density) -> @gmlewis/cad.Component
+
+pub fn gobilda_u_channel(name? : String, holes? : Int32, length_mm? : Double, density? : @urdf.Density) -> @gmlewis/cad.Component
+
 pub fn gt2_pulley_part(name? : String, teeth? : Int32, belt_width_mm? : Double, bore_diam_mm? : Double, flanges? : Bool, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
 
 pub fn heat_set_insert(name? : String, outer_diam_mm? : Double, inner_diam_mm? : Double, length_mm? : Double, density? : @urdf.Density, color? : @gmlewis/step/cad.Rgb) -> @gmlewis/cad.Component
 
 pub fn hex_standoff(name? : String, length_mm? : Double, across_flats_mm? : Double, bore_diam_mm? : Double, detail? : @common.DetailLevel, density? : @urdf.Density) -> @gmlewis/cad.Component
+
+pub fn hiwin_hgh_block(name? : String, size? : String, density? : @urdf.Density) -> @gmlewis/cad.Component
+
+pub fn hiwin_hgr_rail(name? : String, size? : String, length_mm? : Double, density? : @urdf.Density) -> @gmlewis/cad.Component
 
 pub fn hub_motor_assembly(name? : String, stator_diam_mm? : Double, stator_width_mm? : Double, tire_diam_mm? : Double, tire_width_mm? : Double, max_effort_nm? : Double, max_vel_rad_s? : Double, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
 
@@ -115,9 +125,13 @@ pub fn makerstore_hex_tnut(name? : String, thread? : String, slot_width_mm? : Do
 
 pub fn makerstore_l_plate(name? : String, leg_a_mm? : Double, leg_b_mm? : Double, width_mm? : Double, thickness_mm? : Double, hole_diam_mm? : Double, pitch_mm? : Double, density? : @urdf.Density) -> @gmlewis/cad.Component
 
+pub fn makerstore_low_profile_screw(name? : String, length_mm? : Double, density? : @urdf.Density) -> @gmlewis/cad.Component
+
 pub fn makerstore_sliding_tnut(name? : String, thread? : String, slot_width_mm? : Double) -> @gmlewis/cad.Component
 
 pub fn makerstore_thrust_bearing(name? : String, designation? : String) -> @gmlewis/cad.Component
+
+pub fn motedis_b_profile(name? : String, series? : String, length_mm? : Double, density? : @urdf.Density) -> @gmlewis/cad.Component
 
 pub fn moteus_c1_board(String, name? : String, source? : String) -> @gmlewis/cad.Component
 
@@ -160,6 +174,10 @@ pub fn qdd_actuator_pod(name? : String, housing_diam_mm? : Double, housing_lengt
 pub fn quadruped_leg_assembly(String, is_left~ : Bool, hip_offset_y_mm? : Double, thigh_length_mm? : Double, calf_length_mm? : Double, wheel_diam_mm? : Double, max_effort_nm? : Double, max_vel_rad_s? : Double, wheeled? : Bool, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
 
 pub fn resolve_flanged_bearing(String) -> FlangedBearingSpec
+
+pub fn rev_15mm_extrusion(name? : String, length_mm? : Double, density? : @urdf.Density) -> @gmlewis/cad.Component
+
+pub fn rev_45mm_uchannel(name? : String, length_mm? : Double, density? : @urdf.Density) -> @gmlewis/cad.Component
 
 pub fn rigid_coupling_part(name? : String, outer_diam_mm? : Double, bore_diam_mm? : Double, length_mm? : Double) -> @gmlewis/cad.Component
 

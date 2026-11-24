@@ -109,3 +109,30 @@ HARD-40S-TNUT-STEEL-SLID-18-M6 | Maker Store USA | https://makerstore.cc/product
 BRAC-90CAST | Maker Store USA | https://makerstore.cc/product/cast-90-degree-corner-bracket/ | Cast 20 x 20 x 17 mm 90-degree corner bracket | 1.80
 BRAC-40S-90CAST-B | Maker Store USA | https://makerstore.cc/product/brac-40s-90cast-b/ | 40-series cast 90-degree corner bracket | 3.40
 BEAR-F5-10M | Maker Store USA | https://makerstore.cc/product/thrust-bearings/ | F5-10M thrust bearing, 5 x 10 x 4 mm (F5-12M/F6-12M/F8-16M also listed) | 3.45
+
+# --- goBILDA (gobilda.com) 8 mm-pattern structure ---------------------------
+1120-0008-0216 | goBILDA | https://www.gobilda.com/1120-series-u-channel | 48 x 48 x 2.5 mm U-channel, 8 bearing holes, 216 mm (measured 1120 STEP) | 0.00
+1120-0001-0048 | goBILDA | https://www.gobilda.com/1120-series-u-channel | 48 x 48 x 2.5 mm U-channel, 1 bearing hole, 48 mm | 0.00
+1106-0004-0032 | goBILDA | https://www.gobilda.com/1106-series-square-beam-4-hole-32mm-length | 8 x 8 mm square beam, 4 holes, 32 mm, M4 end taps | 0.00
+1309-0016-4008 | goBILDA | https://www.gobilda.com/1309-series-sonic-hub-8mm-rex-bore | 1309 Sonic hub, 8 mm REX bore, measured flexure profile | 0.00
+
+# --- MotEDis B-type profiles (motedis.com) ----------------------------------
+P-series-20x20-B6 | MotEDis | https://www.motedis.com/en/B-Type-slot-6/Slot-profiles | 20 x 20 B-type, slot 6, measured section | 0.00
+P-series-30x30-B8 | MotEDis | https://www.motedis.com/en/B-Type-slot-8/Slot-profiles | 30 x 30 B-type, slot 8, measured section | 0.00
+P-series-40x40-B10 | MotEDis | https://www.motedis.com/en/B-Type-slot-10/Slot-profiles | 40 x 40 B-type, slot 10, measured section | 0.00
+
+# --- Hiwin linear guideways (hiwin.com) -------------------------------------
+HGR15R400 | Hiwin | https://www.hiwin.com/linear-guideways.html | HGR15 rail, 400 mm, P 60, counterbored M4 holes | 0.00
+HGR20R400 | Hiwin | https://www.hiwin.com/linear-guideways.html | HGR20 rail, 400 mm, P 60, counterbored M5 holes | 0.00
+HGH15CA | Hiwin | https://www.hiwin.com/linear-guideways.html | HGH15CA carriage, B x C 26 x 26 mm | 0.00
+HGH20CA | Hiwin | https://www.hiwin.com/linear-guideways.html | HGH20CA carriage, B x C 32 x 36 mm | 0.00
+
+# --- Maker Store USA low-profile screws --------------------------------------
+SCREWS-M5-LP-16 | Maker Store USA | https://makerstore.cc/product/m5-low-profile-screws/ | M5 low-profile screw, 1.5 mm head, 3 mm hex, 8.9 mm head diameter; 25-pack $3.05 (6 mm) to 10-pack $6.20 | 0.12
+
+# --- REV Robotics DUO structure (revrobotics.com) ---------------------------
+REV-41-1568 | REV Robotics | https://www.revrobotics.com/15mm-extrusions/ | 15 x 15 mm extrusion, 120 mm, measured section | 0.00
+REV-41-1431 | REV Robotics | https://www.revrobotics.com/15mm-extrusions/ | 15 x 15 mm extrusion, 225 mm | 0.00
+REV-41-1017 | REV Robotics | https://www.revrobotics.com/15mm-extrusions/ | 15 x 15 mm extrusion, 1000 mm, clear | 0.00
+REV-41-1741 | REV Robotics | https://www.revrobotics.com/45mm-u-channels/ | 45 x 45 mm U-channel, 440 mm, measured section | 0.00
+REV-41-1740 | REV Robotics | https://www.revrobotics.com/45mm-u-channels/ | 45 x 45 mm U-channel, 1000 mm | 0.00

@@ -112,22 +112,52 @@ class StepToGlbTest(unittest.TestCase):
                     f"bearing {prefix} (occ {occ}) split: {ref_nm}={ref_off} vs {mem_nm}={mem_off}",
                 )
 
-        # 3. All 4 pin washers must exist and sit strictly below the planets.
+        # 3. All 4 pin thrust washers must exist and sit strictly between the
+        #    688 planet bearings and the carrier plate.
         washer_z = [
             specs[0]["offset"][2]
             for name, specs in parts.items()
             if "pin_washer" in name
         ]
         self.assertEqual(len(washer_z), 4, "expected 4 pin_washers in build/02")
-        planet_z = [
+        bearing_688_z = [
             specs[0]["offset"][2]
             for name, specs in parts.items()
-            if "stage1_planet_" in name and "bearing" not in name
+            if "bearing-688/outer-ring" in name
         ]
-        self.assertGreater(len(planet_z), 0)
+        carrier_z = [
+            specs[0]["offset"][2]
+            for name, specs in parts.items()
+            if "stage1_carrier" in name
+            and "pin" not in name
+            and "shaft" not in name
+            and "screw" not in name
+        ]
+        self.assertGreater(len(bearing_688_z), 0)
+        self.assertGreater(len(carrier_z), 0)
         for wz in washer_z:
-            self.assertGreater(wz, 0.02, "washer should lift clear of housing")
-            self.assertLess(wz, min(planet_z), "washer must stay below planets")
+            self.assertGreater(wz, max(bearing_688_z), "washer must sit above 688 bearings")
+            self.assertLess(wz, min(carrier_z), "washer must sit below carrier plate")
+
+        # 4. Heat-set inserts: 4 top inserts seated near housing top (+20..24 mm)
+        #    and explode upward (+14 mm); 4 bottom inserts seated inside the
+        #    housing bottom pockets (-38..-34 mm) and explode downward (-18 mm).
+        inserts = [
+            spec
+            for name, specs in parts.items()
+            if "HEATSET" in name
+            for spec in specs
+        ]
+        self.assertEqual(len(inserts), 8, "expected 8 HEATSET inserts in build/02")
+        top_ins = [s for s in inserts if s["center"][2] > 0.0]
+        bot_ins = [s for s in inserts if s["center"][2] < 0.0]
+        self.assertEqual(len(top_ins), 4, "expected 4 top HEATSET inserts")
+        self.assertEqual(len(bot_ins), 4, "expected 4 bottom HEATSET inserts")
+        for s in top_ins:
+            self.assertGreater(s["offset"][2], 0.005, f"top insert should explode up: {s}")
+        for s in bot_ins:
+            self.assertGreater(s["center"][2], -0.040, f"bottom insert seated below motor plate: {s}")
+            self.assertLess(s["offset"][2], -0.005, f"bottom insert should explode down: {s}")
 
 
 if __name__ == "__main__":

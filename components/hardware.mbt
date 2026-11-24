@@ -1784,3 +1784,300 @@ pub fn makerstore_thrust_bearing(
     part=Some(part),
   )
 }
+
+///|
+/// zero_pad_left left-pads a non-negative integer with zeros.
+fn zero_pad_left(value : Int32, width : Int32) -> String {
+  let mut text = value.to_string()
+  while text.length() < width {
+    text = "0" + text
+  }
+  text
+}
+
+///|
+/// A goBILDA 1120-series U-channel with the measured 8 mm pattern on the base
+/// and both legs (SKU `1120-00NN-LLLL`).
+pub fn gobilda_u_channel(
+  name~ : String = "u_channel",
+  holes~ : Int32 = 8,
+  length_mm? : Double,
+  density~ : @urdf.Density = @urdf.Density::aluminum_6061(),
+) -> @cad.Component {
+  let step_comp = expect_step(
+    "goBILDA U-channel",
+    @step_gobilda.gobilda_u_channel(holes~, length_mm?),
+  )
+  let length = match length_mm {
+    Some(v) => v
+    None => (holes.to_double() + 1.0) * 24.0
+  }
+  let part = purchased_part(
+    "1120-00\{zero_pad_left(holes, 2)}-\{zero_pad_left(length.to_int(), 4)}",
+    "goBILDA 1120-series U-channel \{holes} hole (\{length} mm)",
+    "aluminium",
+    0.0,
+    supplier_url="https://www.gobilda.com/1120-series-u-channel",
+    supplier="goBILDA",
+  )
+  @cad.Component::from_step_component(
+    name,
+    step_comp,
+    density~,
+    part=Some(part),
+  ).with_param("holes", holes.to_string())
+}
+
+///|
+/// A goBILDA 1106-series square beam with M4 end tap drills (SKU
+/// `1106-00NN-LLLL`).
+pub fn gobilda_square_beam(
+  name~ : String = "square_beam",
+  holes~ : Int32 = 4,
+  density~ : @urdf.Density = @urdf.Density::aluminum_6061(),
+) -> @cad.Component {
+  let step_comp = expect_step(
+    "goBILDA square beam",
+    @step_gobilda.gobilda_square_beam(holes~),
+  )
+  let length = holes.to_double() * 8.0
+  let part = purchased_part(
+    "1106-00\{zero_pad_left(holes, 2)}-\{zero_pad_left(length.to_int(), 4)}",
+    "goBILDA 1106-series square beam \{holes} hole (\{length} mm)",
+    "aluminium",
+    0.0,
+    supplier_url="https://www.gobilda.com/1106-series-square-beam-4-hole-32mm-length",
+    supplier="goBILDA",
+  )
+  @cad.Component::from_step_component(
+    name,
+    step_comp,
+    density~,
+    part=Some(part),
+  ).with_param("holes", holes.to_string())
+}
+
+///|
+/// A goBILDA 1309 Sonic hub with the measured flexure profile (SKU
+/// `1309-0016-4008`).
+pub fn gobilda_sonic_hub(
+  name~ : String = "sonic_hub",
+  density~ : @urdf.Density = @urdf.Density::aluminum_6061(),
+) -> @cad.Component {
+  let step_comp = expect_step(
+    "goBILDA Sonic hub",
+    @step_gobilda.gobilda_sonic_hub(),
+  )
+  let part = purchased_part(
+    "1309-0016-4008",
+    "goBILDA 1309 Sonic hub (8 mm REX bore)",
+    "aluminium",
+    0.0,
+    supplier_url="https://www.gobilda.com/1309-series-sonic-hub-8mm-rex-bore",
+    supplier="goBILDA",
+  )
+  @cad.Component::from_step_component(
+    name,
+    step_comp,
+    density~,
+    part=Some(part),
+  )
+}
+
+///|
+/// A MotEDis B-type metric T-slot profile with the measured section (20/30/40).
+pub fn motedis_b_profile(
+  name~ : String = "motedis_b",
+  series~ : String = "40",
+  length_mm~ : Double = 500.0,
+  density~ : @urdf.Density = @urdf.Density::aluminum_6061(),
+) -> @cad.Component {
+  let step_comp = expect_step(
+    "MotEDis B-type profile",
+    @step_profiles.mot_edis_b_profile_of(series, length_mm~),
+  )
+  let slot = match series {
+    "20" => "6"
+    "30" => "8"
+    _ => "10"
+  }
+  let part = purchased_part(
+    "P-series-\{series}x\{series}-B\{slot}",
+    "MotEDis B-type \{series}x\{series} T-slot profile (slot \{slot})",
+    "aluminium",
+    0.0,
+    supplier_url="https://www.motedis.com/en/B-Type-slot-\{slot}/Slot-profiles",
+    supplier="MotEDis",
+  )
+  @cad.Component::from_step_component(
+    name,
+    step_comp,
+    density~,
+    part=Some(part),
+  )
+  .with_param("series", series)
+  .with_param("length_mm", length_mm.to_string())
+}
+
+///|
+/// A Hiwin HGR linear-guideway rail with counterbored mounting holes.
+pub fn hiwin_hgr_rail(
+  name~ : String = "hgr_rail",
+  size~ : String = "HGR15",
+  length_mm~ : Double = 400.0,
+  density~ : @urdf.Density = @urdf.Density::steel_mild(),
+) -> @cad.Component {
+  let step_comp = expect_step(
+    "Hiwin HGR rail",
+    @step_mechanisms.hiwin_hgr_rail(size~, length_mm~),
+  )
+  let part = purchased_part(
+    "\{size}R\{length_mm.to_int()}",
+    "Hiwin \{size} linear guideway rail (\{length_mm} mm)",
+    "bearing steel",
+    0.0,
+    supplier_url="https://www.hiwin.com/linear-guideways.html",
+    supplier="Hiwin",
+  )
+  @cad.Component::from_step_component(
+    name,
+    step_comp,
+    density~,
+    part=Some(part),
+  )
+  .with_param("size", size)
+  .with_param("length_mm", length_mm.to_string())
+}
+
+///|
+/// A Hiwin HGH linear-guideway carriage with the published B x C bolt pattern.
+pub fn hiwin_hgh_block(
+  name~ : String = "hgh_block",
+  size~ : String = "HGH15CA",
+  density~ : @urdf.Density = @urdf.Density::steel_mild(),
+) -> @cad.Component {
+  let step_comp = expect_step(
+    "Hiwin HGH carriage",
+    @step_mechanisms.hiwin_hgh_block(size~),
+  )
+  let part = purchased_part(
+    size,
+    "Hiwin \{size} linear guideway carriage",
+    "bearing steel",
+    0.0,
+    supplier_url="https://www.hiwin.com/linear-guideways.html",
+    supplier="Hiwin",
+  )
+  @cad.Component::from_step_component(
+    name,
+    step_comp,
+    density~,
+    part=Some(part),
+  ).with_param("size", size)
+}
+
+///|
+/// A Maker Store M5 low-profile socket screw (SKU `SCREWS-M5-LP`), 6-65 mm.
+pub fn makerstore_low_profile_screw(
+  name~ : String = "low_profile_screw",
+  length_mm~ : Double = 16.0,
+  density~ : @urdf.Density = @urdf.Density::steel_mild(),
+) -> @cad.Component {
+  let step_comp = expect_step(
+    "Maker Store low-profile screw",
+    @step_fasteners.low_profile_screw(length_mm~),
+  )
+  let part = purchased_part(
+    "SCREWS-M5-LP-\{length_mm.to_int()}",
+    "Maker Store M5 low-profile screw \{length_mm} mm",
+    "alloy steel",
+    0.0,
+    supplier_url="https://makerstore.cc/product/m5-low-profile-screws/",
+    supplier="Maker Store USA",
+  )
+  @cad.Component::from_step_component(
+    name,
+    step_comp,
+    density~,
+    part=Some(part),
+  )
+  .add_mate_mm_deg("head-seat")
+  .add_mate_mm_deg("thread")
+  .with_param("length_mm", length_mm.to_string())
+}
+
+///|
+/// A REV DUO 15 x 15 mm extrusion with the measured section (REV-41-1568 and
+/// its length siblings).
+pub fn rev_15mm_extrusion(
+  name~ : String = "rev_15mm",
+  length_mm~ : Double = 120.0,
+  density~ : @urdf.Density = @urdf.Density::aluminum_6061(),
+) -> @cad.Component {
+  let step_comp = expect_step(
+    "REV 15 mm extrusion",
+    @step_profiles.rev_15mm_extrusion(length_mm~),
+  )
+  let sku = match length_mm.to_int() {
+    120 => "REV-41-1568"
+    225 => "REV-41-1431"
+    420 => "REV-41-1432"
+    1000 => "REV-41-1017"
+    _ => "REV-41-15MM"
+  }
+  let part = purchased_part(
+    sku,
+    "REV DUO 15 x 15 mm extrusion (\{length_mm} mm)",
+    "aluminium 6063-T5",
+    0.0,
+    supplier_url="https://www.revrobotics.com/15mm-extrusions/",
+    supplier="REV Robotics",
+  )
+  @cad.Component::from_step_component(
+    name,
+    step_comp,
+    density~,
+    part=Some(part),
+  ).with_param("length_mm", length_mm.to_string())
+}
+
+///|
+/// A REV DUO 45 x 45 mm U-channel with the measured section (REV-41-1741 and
+/// its length siblings).
+pub fn rev_45mm_uchannel(
+  name~ : String = "rev_45mm_uchannel",
+  length_mm~ : Double = 440.0,
+  density~ : @urdf.Density = @urdf.Density::aluminum_6061(),
+) -> @cad.Component {
+  let step_comp = expect_step(
+    "REV 45 mm U-channel",
+    @step_profiles.rev_45mm_uchannel(length_mm~),
+  )
+  let sku = match length_mm.to_int() {
+    24 => "REV-41-1755"
+    56 => "REV-41-1753"
+    88 => "REV-41-1752"
+    152 => "REV-41-1750"
+    248 => "REV-41-1747"
+    312 => "REV-41-1745"
+    376 => "REV-41-1743"
+    408 => "REV-41-1742"
+    440 => "REV-41-1741"
+    1000 => "REV-41-1740"
+    _ => "REV-41-45MM-U"
+  }
+  let part = purchased_part(
+    sku,
+    "REV DUO 45 x 45 mm U-channel (\{length_mm} mm)",
+    "aluminium 6063-T6",
+    0.0,
+    supplier_url="https://www.revrobotics.com/45mm-u-channels/",
+    supplier="REV Robotics",
+  )
+  @cad.Component::from_step_component(
+    name,
+    step_comp,
+    density~,
+    part=Some(part),
+  ).with_param("length_mm", length_mm.to_string())
+}

@@ -34,9 +34,9 @@ fn explode_offset(node : @step_cad.SceneNode) -> (Double, Double, Double) {
     // Print-in-place gear set slides straight up out of the housing keyways.
     (0.0, 0.0, 66.0)
   } else if name.contains("pin_washer") {
-    // Retaining washers sit on the bearing/planet side below the planets, with
-    // clear vertical separation so they are unmistakably visible.
-    (0.0, 0.0, 44.0)
+    // Inner-race thrust shim washers sit on top of the 688 bearings, right
+    // between the bearings (+96 mm) and the carrier plate (+122 mm).
+    (0.0, 0.0, 108.0)
   } else if name.contains("bearing-688") {
     (0.0, 0.0, 96.0)
   } else if name.contains("moteus") {
@@ -55,9 +55,9 @@ fn explode_offset(node : @step_cad.SceneNode) -> (Double, Double, Double) {
     (0.0, 0.0, 180.0)
   } else if name.contains("carrier_pin") ||
     name.contains("carrier_output_shaft") {
-    (0.0, 0.0, 145.0)
+    (0.0, 0.0, 150.0)
   } else if name.contains("stage1_carrier") {
-    (0.0, 0.0, 118.0)
+    (0.0, 0.0, 122.0)
   } else if name.contains("stage1_sun") ||
     name.contains("stage1_planet") ||
     name.contains("ring_key") ||
@@ -66,7 +66,14 @@ fn explode_offset(node : @step_cad.SceneNode) -> (Double, Double, Double) {
   } else if name.contains("rear_insert") {
     (0.0, 0.0, -18.0)
   } else if name.contains("cover_insert") || name.contains("HEATSET") {
-    (0.0, 0.0, 14.0)
+    if node.tz < 0.0 {
+      (0.0, 0.0, -18.0)
+    } else {
+      (0.0, 0.0, 14.0)
+    }
+  } else if name.contains("M4-14") {
+    // Four M4x14 screws bolting ACT-ROTOR-ADAPTER down onto the A12 rotor.
+    (0.0, 0.0, -14.0)
   } else if name.contains("M3-10") {
     (0.0, 0.0, -145.0)
   } else if name.contains("motor_plate") {
@@ -88,7 +95,7 @@ fn explode_offset(node : @step_cad.SceneNode) -> (Double, Double, Double) {
 fn explode_color(name : String) -> @step_cad.Rgb {
   if name.contains("output_cover") {
     @step_cad.Rgb::new(0.22, 0.24, 0.30)
-  } else if name.contains("housing") {
+  } else if name.contains("housing") || name.contains("internal_chamfer") {
     @step_cad.Rgb::new(0.22, 0.24, 0.28)
   } else if name.contains("motor_plate") {
     @step_cad.Rgb::new(0.35, 0.35, 0.40)
@@ -96,7 +103,7 @@ fn explode_color(name : String) -> @step_cad.Rgb {
     @step_cad.Rgb::new(0.95, 0.75, 0.10)
   } else if name.contains("board_standoff") {
     @step_cad.Rgb::new(0.75, 0.55, 0.20)
-  } else if name.contains("M3-10") {
+  } else if name.contains("M3-10") || name.contains("M4-14") {
     @step_cad.Rgb::new(0.20, 0.45, 0.90)
   } else if name.contains("M3-12") {
     @step_cad.Rgb::new(0.40, 0.75, 0.95)

@@ -1129,6 +1129,7 @@ fn keyed_housing_body_mm(
   keyway_depth_mm : Double,
   height_mm : Double,
   z0_mm : Double,
+  extra_holes : Array[(Double, Double, Double)],
   density : @urdf.Density,
   color : @step_cad.Rgb,
 ) -> @cad.BodyPart {
@@ -1167,7 +1168,13 @@ fn keyed_housing_body_mm(
     hole.push(@step_cad.ProfileSegment::SegmentLine(p_back1, p_in1))
     hole.push(@step_cad.ProfileSegment::SegmentArc(p_in1, p_next0, (0.0, 0.0)))
   }
-  arc_profile_body(name, outer, height_mm, [hole], density, color, z0_mm)
+  let all_holes : Array[Array[@step_cad.ProfileSegment]] = [hole]
+  for eh in extra_holes {
+    all_holes.push(
+      arc_segments_at(@step_gears.arc_circle_segments(eh.2), eh.0, eh.1),
+    )
+  }
+  arc_profile_body(name, outer, height_mm, all_holes, density, color, z0_mm)
 }
 
 ///|
@@ -1951,36 +1958,133 @@ pub fn planetary_bldc_actuator(
     )
   }
   // Build the outer housing tube with four exact analytic axial anti-rotation
-  // keyway slots at 45/135/225/315 deg (midway between the M3 cover screws) so
-  // the ring gear's four matching key lugs lock positively against full motor
-  // torque and render cleanly in assembly.step, exploded.step, GLB, and 3MF.
+  // keyway slots at 45/135/225/315 deg (midway between the M3 cover screws)
+  // plus blind 6.0 mm deep M3 heat-set insert pockets (4.4 mm dia; 4 mm insert
+  // + 2 mm bolt-tip/melt clearance) at 0/90/180/270 deg on both ends.
+  // For the A12 stepped housing, also add a 45-degree internal conical overhang
+  // chamfer between the 95 mm motor bore and the keyed ring bore so ACT-HOUSING
+  // prints cleanly with zero supports.
   let keyway_width = 6.2
   let keyway_depth = 2.65
+  let insert_pocket_depth = 6.0
+  let top_insert_holes : Array[(Double, Double, Double)] = []
+  for i in 0..<4 {
+    let theta = 2.0 * @math.PI * i.to_double() / 4.0
+    top_insert_holes.push(
+      (
+        bolt_circle / 2.0 * @math.cos(theta),
+        bolt_circle / 2.0 * @math.sin(theta),
+        4.4,
+      ),
+    )
+  }
+  let top_pocket_h = if housing_height > insert_pocket_depth + 1.0 {
+    insert_pocket_depth
+  } else {
+    housing_height
+  }
+  let lower_ring_h = housing_height - top_pocket_h
   let keyed_ring_body = keyed_housing_body_mm(
     name + "_housing",
     housing_outer,
     housing_inner,
     keyway_width,
     keyway_depth,
-    housing_height,
-    housing_bottom,
+    top_pocket_h,
+    housing_top - top_pocket_h,
+    top_insert_holes,
     @urdf.Density::carbon_fiber(),
     @step_cad.Rgb::black(),
   )
-  let full_housing_node = if is_a12 {
-    let barrel_body = @cad.BodyPart::tube_mm(
-      name + "_a12_motor_barrel",
-      barrel_outer * 2.0,
-      95.0,
-      -motor_mount_z,
-      z_mm=motor_mount_z / 2.0,
-      density=@urdf.Density::carbon_fiber(),
-      color=@step_cad.Rgb::black(),
+  let housing_nodes : Array[@step_cad.SceneNode] = [keyed_ring_body.node]
+  if lower_ring_h > 0.1 {
+    let lower_ring_body = keyed_housing_body_mm(
+      name + "_housing_lower",
+      housing_outer,
+      housing_inner,
+      keyway_width,
+      keyway_depth,
+      lower_ring_h,
+      housing_bottom,
+      [],
+      @urdf.Density::carbon_fiber(),
+      @step_cad.Rgb::black(),
     )
-    @step_cad.union_all(
-      [keyed_ring_body.node, barrel_body.node],
-      name=name + "_housing",
-    ).with_color(@step_cad.Rgb::black())
+    housing_nodes.push(lower_ring_body.node)
+  }
+  let full_housing_node = if is_a12 {
+    let barrel_inner_r = 47.5
+    let barrel_total_h = -motor_mount_z
+    let rear_pocket_h = if barrel_total_h > insert_pocket_depth + 1.0 {
+      insert_pocket_depth
+    } else {
+      barrel_total_h
+    }
+    let barrel_solid_h = barrel_total_h - rear_pocket_h
+    let rear_pocket_holes : Array[(Double, Double, Double)] = [
+      (0.0, 0.0, barrel_inner_r * 2.0),
+    ]
+    for i in 0..<4 {
+      let theta = 2.0 * @math.PI * i.to_double() / 4.0
+      rear_pocket_holes.push(
+        (
+          rear_bolt_circle / 2.0 * @math.cos(theta),
+          rear_bolt_circle / 2.0 * @math.sin(theta),
+          4.4,
+        ),
+      )
+    }
+    let barrel_pocket_body = actuator_plate_body(
+      name + "_a12_motor_barrel_rear",
+      barrel_outer * 2.0,
+      rear_pocket_h,
+      motor_mount_z,
+      rear_pocket_holes,
+      @urdf.Density::carbon_fiber(),
+      @step_cad.Rgb::black(),
+      detail,
+    )
+    housing_nodes.push(barrel_pocket_body.node)
+    if barrel_solid_h > 0.1 {
+      let barrel_solid_body = actuator_plate_body(
+        name + "_a12_motor_barrel",
+        barrel_outer * 2.0,
+        barrel_solid_h,
+        motor_mount_z + rear_pocket_h,
+        [(0.0, 0.0, barrel_inner_r * 2.0)],
+        @urdf.Density::carbon_fiber(),
+        @step_cad.Rgb::black(),
+        detail,
+      )
+      housing_nodes.push(barrel_solid_body.node)
+    }
+    // 45-degree internal transition chamfer eliminating the 90-degree step
+    // overhang from barrel_inner_r (47.5 mm) inward to housing_inner (44.09 mm).
+    let ramp_h = barrel_inner_r - housing_inner
+    if ramp_h > 0.2 {
+      let ramp_outer_r = barrel_inner_r + 0.5
+      let ramp_profile = @step_cad.RevolvedProfile::polyline(
+        [
+          (barrel_inner_r, -ramp_h),
+          (ramp_outer_r, -ramp_h),
+          (ramp_outer_r, 0.0),
+          (housing_inner, 0.0),
+        ],
+        closed=true,
+      )
+      let ramp_node = ramp_profile
+        .as_shape()
+        .with_name(name + "_internal_chamfer")
+        .with_color(@step_cad.Rgb::black())
+      housing_nodes.push(ramp_node)
+    }
+    @step_cad.union_all(housing_nodes, name=name + "_housing").with_color(
+      @step_cad.Rgb::black(),
+    )
+  } else if housing_nodes.length() > 1 {
+    @step_cad.union_all(housing_nodes, name=name + "_housing").with_color(
+      @step_cad.Rgb::black(),
+    )
   } else {
     keyed_ring_body.node
   }
@@ -2207,6 +2311,8 @@ pub fn planetary_bldc_actuator(
       let theta = 2.0 * @math.PI * i.to_double() / 4.0
       let bx = bolt_circle / 2.0 * @math.cos(theta)
       let by = bolt_circle / 2.0 * @math.sin(theta)
+      let rbx = rear_bolt_circle / 2.0 * @math.cos(theta)
+      let rby = rear_bolt_circle / 2.0 * @math.sin(theta)
       housing = housing
         .add_mate_mm_deg(
           "cover_insert_\{i}",
@@ -2215,6 +2321,7 @@ pub fn planetary_bldc_actuator(
           z=housing_top,
           rx_deg=180.0,
         )
+        .add_mate_mm_deg("rear_insert_\{i}", x=rbx, y=rby, z=motor_mount_z)
         .attach(
           "cover_insert_merge_\{i}",
           parent_mate="cover_insert_\{i}",
@@ -2229,14 +2336,14 @@ pub fn planetary_bldc_actuator(
         )
         .attach(
           "rear_insert_merge_\{i}",
-          parent_mate="housing_bolt_\{i}",
+          parent_mate="rear_insert_\{i}",
           heat_set_insert(
             name="\{name}_rear_insert_\{i}",
             outer_diam_mm=4.5,
             inner_diam_mm=3.0,
             length_mm=4.0,
           ),
-          child_mate="top",
+          child_mate="seat",
           spec=@cad.JointSpec::merge_rigid(),
         )
     }
@@ -2306,13 +2413,37 @@ pub fn planetary_bldc_actuator(
         name=name + "_rotor_adapter_flange",
       ).with_color(@step_cad.Rgb::orange()),
     }.with_part(adapter_part)
-    let adapter = @cad.Component::new(
+    let mut adapter = @cad.Component::new(
         name + "_rotor_adapter",
         description="Bolted 4xM4 A12 rotor-to-sun hexagonal drive adapter",
       )
       .with_part(adapter_part)
       .add_body(adapter_monolith)
       .add_mate_mm_deg("rotor_seat")
+    // Four M4 x 14 mm socket head cap screws bolt ACT-ROTOR-ADAPTER down onto
+    // the A12 rotor's 23 mm prop-adapter bolt circle.
+    for i in 0..<4 {
+      let theta = 2.0 * @math.PI * i.to_double() / 4.0
+      adapter = adapter
+        .add_mate_mm_deg(
+          "adapter_bolt_\{i}",
+          x=prop_bolt_r * @math.cos(theta),
+          y=prop_bolt_r * @math.sin(theta),
+          z=adapter_len,
+        )
+        .attach(
+          "adapter_screw_merge_\{i}",
+          parent_mate="adapter_bolt_\{i}",
+          iso_shcs_screw(
+            name="\{name}_rotor_adapter_screw_\{i}",
+            size=@step_standards.M4,
+            length_mm=14.0,
+            detail~,
+          ),
+          child_mate="head_seat",
+          spec=@cad.JointSpec::merge_rigid(),
+        )
+    }
     housing = housing.attach_to(
       name + "_motor_rotor",
       name + "_rotor_adapter_merge",

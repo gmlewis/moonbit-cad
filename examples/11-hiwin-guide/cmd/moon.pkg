@@ -1,0 +1,5 @@
+import {
+  "gmlewis/cad/examples/11-hiwin-guide" @hiwin_guide,
+}
+
+pkgtype(kind: "executable")

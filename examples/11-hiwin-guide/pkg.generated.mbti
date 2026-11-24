@@ -1,0 +1,19 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "gmlewis/cad/examples/11-hiwin-guide"
+
+import {
+  "gmlewis/cad",
+}
+
+// Values
+pub fn build_example(length_mm? : Double, travel_mm? : Double) -> @cad.Component
+
+pub async fn run_cli() -> Unit
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

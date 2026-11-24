@@ -214,9 +214,15 @@ def _build_explode_metadata(
         if dist > max_dist:
             max_dist = dist
 
+        ac_m = (
+            [round(a_leaf["center_mm"][0] / 1000.0, 6), round(a_leaf["center_mm"][1] / 1000.0, 6), round(a_leaf["center_mm"][2] / 1000.0, 6)]
+            if a_leaf["center_mm"]
+            else [0.0, 0.0, 0.0]
+        )
         entries.append({
             "name": nm,
             "occurrence": occ,
+            "center_gltf": ac_m,
             # RWGltf_CafWriter preserves the STEP Z-up frame (converted from mm to metres).
             "offset_gltf": [round(dx, 6), round(dy, 6), round(dz, 6)],
             "offset_step_mm": [round(dx * 1000.0, 3), round(dy * 1000.0, 3), round(dz * 1000.0, 3)],
@@ -258,10 +264,11 @@ def _build_explode_metadata(
             t0, t1 = 0.0, 1.0
         entry["window"] = [t0, t1]
 
-    # Build quick lookup by name -> list of entries (in traversal order)
+    # Build quick lookup by name -> list of entries (with assembled center for exact spatial matching)
     by_name: dict[str, list[dict[str, Any]]] = {}
     for entry in entries:
         by_name.setdefault(entry["name"], []).append({
+            "center": entry["center_gltf"],
             "offset": entry["offset_gltf"],
             "window": entry["window"],
             "color": entry["explode_color"],

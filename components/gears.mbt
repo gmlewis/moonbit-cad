@@ -307,9 +307,10 @@ fn pgb_carrier_component(
     "steel",
     0.80,
   )
+  let washer_od = pin_diam + 3.0
   let washer_part = purchased_part(
-    "WASHER-\{pin_diam + 6.0}x\{pin_diam + 0.2}x1",
-    "Retaining washer \{pin_diam + 6.0} x \{pin_diam + 0.2} x 1 mm",
+    "WASHER-\{washer_od}x\{pin_diam + 0.2}x1",
+    "Bearing inner-race thrust shim washer \{washer_od} x \{pin_diam + 0.2} x 1 mm (place between the planet bearing inner race and the carrier plate)",
     "steel",
     0.15,
   )
@@ -451,12 +452,12 @@ fn pgb_carrier_component(
       .add_body(
         @cad.BodyPart::tube_mm(
           "\{name}_pin_washer_\{i}",
-          pin_diam + 6.0,
+          washer_od,
           pin_diam + 0.2,
-          1.0,
+          carrier_clearance,
           x_mm=planet.x,
           y_mm=-planet.z,
-          z_mm=-layout.gear_length_mm - carrier_clearance - 0.5,
+          z_mm=-carrier_clearance / 2.0,
           density=@urdf.Density::steel_mild(),
           color=@step_cad.Rgb::grey(),
         ).with_part(washer_part),

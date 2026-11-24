@@ -9,11 +9,12 @@ fn purchased_part(
   material : String,
   unit_cost_usd : Double,
   supplier_url~ : String = "",
+  supplier~ : String = "generic",
 ) -> @cad.PartMeta {
   @cad.PartMeta::new(
     part_number,
     description~,
-    supplier="generic",
+    supplier~,
     supplier_url~,
     material~,
     process="purchased",

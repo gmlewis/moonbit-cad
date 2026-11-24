@@ -8,6 +8,7 @@ import {
   "gmlewis/step/components/differential" @step_differential,
   "gmlewis/step/components/fasteners" @step_fasteners,
   "gmlewis/step/components/gears" @step_gears,
+  "gmlewis/step/components/gobilda" @step_gobilda,
   "gmlewis/step/components/harmonic" @step_harmonic,
   "gmlewis/step/components/mechanisms" @step_mechanisms,
   "gmlewis/step/components/motion" @step_motion,

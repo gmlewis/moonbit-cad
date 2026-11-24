@@ -102,10 +102,16 @@ function createToolbar(panelEl, hasExplode) {
       <button type="button" class="viewer-btn" data-action="reset-view" title="Re-center camera on current view">
         Reset View
       </button>
+      <button type="button" class="viewer-btn" data-action="fullscreen" title="Expand 3D viewer to full screen">
+        ⛶ Full Screen
+      </button>
     `
     : `
       <button type="button" class="viewer-btn" data-action="reset-view" title="Re-center camera">
         Reset View
+      </button>
+      <button type="button" class="viewer-btn" data-action="fullscreen" title="Expand 3D viewer to full screen">
+        ⛶ Full Screen
       </button>
     `;
   panelEl.appendChild(bar);
@@ -115,7 +121,24 @@ function createToolbar(panelEl, hasExplode) {
   tooltip.hidden = true;
   panelEl.appendChild(tooltip);
 
-  return { bar, tooltip };
+  const ctxMenu = document.createElement("div");
+  ctxMenu.className = "viewer-context-menu";
+  ctxMenu.hidden = true;
+  ctxMenu.innerHTML = `
+    <div class="viewer-context-header"></div>
+    <button type="button" class="viewer-context-item" data-action="copy-part-name">
+      <span>📋</span>
+      <span>Copy Part Name to Clipboard</span>
+    </button>
+  `;
+  panelEl.appendChild(ctxMenu);
+
+  const toast = document.createElement("div");
+  toast.className = "viewer-toast";
+  toast.hidden = true;
+  panelEl.appendChild(toast);
+
+  return { bar, tooltip, ctxMenu, toast };
 }
 
 async function init() {
@@ -187,10 +210,19 @@ async function init() {
   }
   const lookupPartSpecs = (name) => {
     if (!name) return null;
-    return sanitizedPartMap.get(name) || sanitizedPartMap.get(sanitizeKey(name)) || null;
+    if (sanitizedPartMap.has(name)) return { key: name, list: sanitizedPartMap.get(name) };
+    const sk = sanitizeKey(name);
+    if (sanitizedPartMap.has(sk)) return { key: sk, list: sanitizedPartMap.get(sk) };
+    // Three.js GLTFLoader appends _1, _2, _3 to duplicate node names (e.g.
+    // identical M3-10 screws or brass inserts). Strip the numeric suffix.
+    const stripped = sk.replace(/_\d+$/, "");
+    if (stripped !== sk && sanitizedPartMap.has(stripped)) {
+      return { key: stripped, list: sanitizedPartMap.get(stripped) };
+    }
+    return null;
   };
 
-  const occCounter = new Map();
+  const usedSpecs = new Map();
   const animatedParts = [];
   const pickableMeshes = [];
   const boundObjects = new Set();
@@ -236,13 +268,50 @@ async function init() {
       if (boundObjects.has(p)) return;
       p = p.parent;
     }
-    const list = lookupPartSpecs(obj.name);
-    if (!list || list.length === 0) return;
+    const found = lookupPartSpecs(obj.name);
+    if (!found || !found.list || found.list.length === 0) return;
 
-    const key = sanitizeKey(obj.name);
-    const occ = occCounter.get(key) || 0;
-    occCounter.set(key, occ + 1);
-    const spec = list[Math.min(occ, list.length - 1)];
+    const { key, list } = found;
+    let used = usedSpecs.get(key);
+    if (!used) {
+      used = new Set();
+      usedSpecs.set(key, used);
+    }
+    // Compute this object's local (STEP Z-up metres) bounding-box center so
+    // duplicate-named instances (like top vs bottom HEATSET inserts) match
+    // their exact 3D counterpart in explode.json regardless of traversal order.
+    let specIdx = -1;
+    if (list.length > 1 && list[0].center) {
+      model.updateMatrixWorld(true);
+      const localBox = new THREE.Box3().setFromObject(obj);
+      const worldCenter = localBox.getCenter(new THREE.Vector3());
+      const invModel = new THREE.Matrix4().copy(model.matrixWorld).invert();
+      const objCenter = worldCenter.applyMatrix4(invModel);
+      let bestDist = Infinity;
+      for (let i = 0; i < list.length; i++) {
+        if (used.has(i) || !list[i].center) continue;
+        const c = list[i].center;
+        const d =
+          (objCenter.x - c[0]) ** 2 +
+          (objCenter.y - c[1]) ** 2 +
+          (objCenter.z - c[2]) ** 2;
+        if (d < bestDist) {
+          bestDist = d;
+          specIdx = i;
+        }
+      }
+    }
+    if (specIdx < 0) {
+      for (let i = 0; i < list.length; i++) {
+        if (!used.has(i)) {
+          specIdx = i;
+          break;
+        }
+      }
+      if (specIdx < 0) specIdx = list.length - 1;
+    }
+    used.add(specIdx);
+    const spec = list[specIdx];
     const offset = new THREE.Vector3(spec.offset[0], spec.offset[1], spec.offset[2]);
     const roleColor = spec.color
       ? new THREE.Color(spec.color[0], spec.color[1], spec.color[2])
@@ -367,14 +436,92 @@ async function init() {
     camAnim = null;
   });
 
-  // Build interactive toolbar & tooltip.
-  const { bar, tooltip } = createToolbar(panel, hasExplode);
+  // Build interactive toolbar, tooltip, context menu & toast.
+  const { bar, tooltip, ctxMenu, toast } = createToolbar(panel, hasExplode);
+  const ctxHeader = ctxMenu.querySelector(".viewer-context-header");
+  const ctxCopyBtn = ctxMenu.querySelector('[data-action="copy-part-name"]');
+  let ctxTargetName = "";
+  let toastTimer = null;
+
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.hidden = false;
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      toast.hidden = true;
+    }, 1800);
+  }
+
+  function copyTextSync(text) {
+    // Mount inside fullscreenElement if in fullscreen so focus/select works
+    // in the browser's top layer; avoid opacity:0 which Safari may skip.
+    const host =
+      document.fullscreenElement ||
+      document.webkitFullscreenElement ||
+      document.body;
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    ta.style.top = "0";
+    ta.style.fontSize = "16px";
+    host.appendChild(ta);
+    ta.focus();
+    ta.select();
+    ta.setSelectionRange(0, text.length);
+    let ok = false;
+    try {
+      ok = document.execCommand("copy");
+    } catch (_) {
+      ok = false;
+    }
+    host.removeChild(ta);
+    return ok;
+  }
+
+  function hideContextMenu() {
+    ctxMenu.hidden = true;
+    ctxTargetName = "";
+  }
+
+  if (ctxCopyBtn) {
+    ctxCopyBtn.addEventListener("click", () => {
+      const nameToCopy = ctxTargetName;
+      hideContextMenu();
+      if (!nameToCopy) return;
+      if (window.isSecureContext && navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(nameToCopy).then(
+          () => showToast(`Copied: ${nameToCopy}`),
+          () => {
+            const ok = copyTextSync(nameToCopy);
+            showToast(ok ? `Copied: ${nameToCopy}` : `Copy failed — ${nameToCopy}`);
+          },
+        );
+      } else {
+        const ok = copyTextSync(nameToCopy);
+        showToast(ok ? `Copied: ${nameToCopy}` : `Copy failed — ${nameToCopy}`);
+      }
+    });
+  }
+
+  document.addEventListener("pointerdown", (ev) => {
+    if (!ctxMenu.hidden && !ctxMenu.contains(ev.target)) {
+      hideContextMenu();
+    }
+  });
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape" && !ctxMenu.hidden) {
+      hideContextMenu();
+    }
+  });
   const toggleBtn = bar.querySelector('[data-action="toggle-explode"]');
   const toggleLabel = toggleBtn ? toggleBtn.querySelector(".viewer-btn-label") : null;
   const slider = bar.querySelector(".viewer-slider");
   const sliderPct = bar.querySelector(".viewer-slider-pct");
   const colorBtn = bar.querySelector('[data-action="toggle-colors"]');
   const resetBtn = bar.querySelector('[data-action="reset-view"]');
+  const fsBtn = bar.querySelector('[data-action="fullscreen"]');
 
   function syncUI() {
     if (slider) slider.value = String(Math.round(currentT * 1000) / 10);
@@ -426,6 +573,31 @@ async function init() {
     });
   }
 
+  if (fsBtn) {
+    const syncFsButton = () => {
+      const active =
+        document.fullscreenElement === panel ||
+        document.webkitFullscreenElement === panel;
+      fsBtn.textContent = active ? "✕ Exit Full Screen" : "⛶ Full Screen";
+      fsBtn.classList.toggle("is-active", active);
+      resize();
+    };
+    fsBtn.addEventListener("click", () => {
+      const active =
+        document.fullscreenElement === panel ||
+        document.webkitFullscreenElement === panel;
+      if (active) {
+        if (document.exitFullscreen) document.exitFullscreen();
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+      } else {
+        if (panel.requestFullscreen) panel.requestFullscreen();
+        else if (panel.webkitRequestFullscreen) panel.webkitRequestFullscreen();
+      }
+    });
+    document.addEventListener("fullscreenchange", syncFsButton);
+    document.addEventListener("webkitfullscreenchange", syncFsButton);
+  }
+
   // Hover part inspection via raycaster.
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
@@ -470,6 +642,45 @@ async function init() {
     setHoverEmissive(hoveredMesh, false);
     hoveredMesh = null;
     tooltip.hidden = true;
+  });
+
+  // Right-click context menu (only on clean click, < 5 px drag so right-drag pan still works).
+  let rDownPos = null;
+  canvas.addEventListener("pointerdown", (ev) => {
+    if (ev.button === 2) {
+      rDownPos = { x: ev.clientX, y: ev.clientY };
+    }
+  });
+  canvas.addEventListener("contextmenu", (ev) => {
+    ev.preventDefault();
+    if (rDownPos) {
+      const moved = Math.hypot(ev.clientX - rDownPos.x, ev.clientY - rDownPos.y);
+      rDownPos = null;
+      if (moved > 5) return;
+    }
+    const rect = canvas.getBoundingClientRect();
+    pointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(pointer, camera);
+    const hits = raycaster.intersectObjects(pickableMeshes, false);
+    const hit = hits.length > 0 ? hits[0].object : null;
+    const partName = hit && hit.userData.displayName ? hit.userData.displayName : "";
+    if (!partName) {
+      hideContextMenu();
+      return;
+    }
+    ctxTargetName = partName;
+    if (ctxHeader) ctxHeader.textContent = partName;
+    const panelRect = panel.getBoundingClientRect();
+    let left = ev.clientX - panelRect.left;
+    let top = ev.clientY - panelRect.top;
+    ctxMenu.hidden = false;
+    const menuW = ctxMenu.offsetWidth || 220;
+    const menuH = ctxMenu.offsetHeight || 72;
+    if (left + menuW > panelRect.width - 8) left = Math.max(8, panelRect.width - menuW - 8);
+    if (top + menuH > panelRect.height - 8) top = Math.max(8, panelRect.height - menuH - 8);
+    ctxMenu.style.left = `${left}px`;
+    ctxMenu.style.top = `${top}px`;
   });
 
   if (fallback) fallback.hidden = true;
