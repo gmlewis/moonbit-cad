@@ -16,17 +16,28 @@ pub fn build_example(
     "carriage_seat",
     x=travel_mm,
     z=15.0,
+    axis=(1.0, 0.0, 0.0),
   )
   let carriage = @components.hiwin_hgh_block(name="carriage", size="HGH15CA").add_mate_mm_deg(
     "carriage_base",
     z=0.0,
   )
+  let lower_m = -travel_mm / 1000.0
+  let upper_m = (length_mm - travel_mm) / 1000.0
   rail.attach(
     "rail_to_carriage",
     parent_mate="carriage_seat",
     carriage,
     child_mate="carriage_base",
-    spec=@cad.JointSpec::fixed(),
+    spec=@cad.JointSpec::prismatic(
+      @urdf.JointLimit::new(
+        effort=200.0,
+        velocity=1.0,
+        lower=Some(lower_m),
+        upper=Some(upper_m),
+      ),
+    ),
+    explode=Some(@cad.ExplodeSpec::offset_mm(dx=0.0, dy=0.0, dz=35.0)),
   )
 }
 

@@ -35,6 +35,7 @@ pub fn build_example(
     spacer_b,
     child_mate="face-negative",
     spec=@cad.JointSpec::fixed(),
+    explode=Some(@cad.ExplodeSpec::offset_mm(dx=0.0, dy=0.0, dz=18.0)),
   )
   plate.attach(
     "plate_to_post",
@@ -42,6 +43,7 @@ pub fn build_example(
     post,
     child_mate="spacer_stack",
     spec=@cad.JointSpec::fixed(),
+    explode=Some(@cad.ExplodeSpec::offset_mm(dx=0.0, dy=0.0, dz=16.0)),
   )
 }
 

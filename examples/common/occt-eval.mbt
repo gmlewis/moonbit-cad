@@ -365,7 +365,9 @@ fn radial_offset(
   node : @step_cad.SceneNode,
   distance : Double,
 ) -> (Double, Double, Double) {
-  let (x, y) = (node.tx, node.ty)
+  let (x0, x1, y0, y1, _, _) = node.bounding_box()
+  let x = (x0 + x1) / 2.0
+  let y = (y0 + y1) / 2.0
   let r = (x * x + y * y).sqrt()
   if r < 1.0e-6 {
     (distance, 0.0, 0.0)

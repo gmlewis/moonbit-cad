@@ -140,23 +140,23 @@ class StepToGlbTest(unittest.TestCase):
             self.assertLess(wz, min(carrier_z), "washer must sit below carrier plate")
 
         # 4. Heat-set inserts: 4 top inserts seated near housing top (+20..24 mm)
-        #    and explode upward (+14 mm); 4 bottom inserts seated inside the
-        #    housing bottom pockets (-38..-34 mm) and explode downward (-18 mm).
+        #    and explode upward (+14 mm); 4 housing bottom inserts (-38..-34 mm)
+        #    and 4 rear motor-plate moteus C1 inserts (-44..-40 mm) explode downward.
         inserts = [
             spec
             for name, specs in parts.items()
             if "HEATSET" in name
             for spec in specs
         ]
-        self.assertEqual(len(inserts), 8, "expected 8 HEATSET inserts in build/02")
+        self.assertEqual(len(inserts), 12, "expected 12 HEATSET inserts in build/02")
         top_ins = [s for s in inserts if s["center"][2] > 0.0]
         bot_ins = [s for s in inserts if s["center"][2] < 0.0]
         self.assertEqual(len(top_ins), 4, "expected 4 top HEATSET inserts")
-        self.assertEqual(len(bot_ins), 4, "expected 4 bottom HEATSET inserts")
+        self.assertEqual(len(bot_ins), 8, "expected 8 lower HEATSET inserts (4 housing + 4 moteus)")
         for s in top_ins:
             self.assertGreater(s["offset"][2], 0.005, f"top insert should explode up: {s}")
         for s in bot_ins:
-            self.assertGreater(s["center"][2], -0.040, f"bottom insert seated below motor plate: {s}")
+            self.assertGreater(s["center"][2], -0.045, f"bottom insert seated below motor plate: {s}")
             self.assertLess(s["offset"][2], -0.005, f"bottom insert should explode down: {s}")
 
 

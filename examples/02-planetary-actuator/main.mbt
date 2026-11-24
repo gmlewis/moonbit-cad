@@ -40,13 +40,17 @@ fn explode_offset(node : @step_cad.SceneNode) -> (Double, Double, Double) {
   } else if name.contains("bearing-688") {
     (0.0, 0.0, 96.0)
   } else if name.contains("moteus") {
-    (0.0, 0.0, 305.0)
+    // Rear-mounted moteus C1 (qdd100 layout) slides out behind the motor plate.
+    (0.0, 0.0, -215.0)
   } else if name.contains("board_standoff") {
-    (0.0, 0.0, 280.0)
-  } else if name.contains("output_magnet") {
-    (0.0, 0.0, 265.0)
+    (0.0, 0.0, -185.0)
+  } else if name.contains("rear_magnet") || name.contains("output_magnet") {
+    (0.0, 0.0, -165.0)
+  } else if name.contains("output_flange") {
+    // Open front bolted load flange slides straight off the 8 mm output shaft.
+    (0.0, 0.0, 275.0)
   } else if name.contains("output_collar") {
-    (0.0, 0.0, 250.0)
+    (0.0, 0.0, 248.0)
   } else if name.contains("M3-12") {
     (0.0, 0.0, 235.0)
   } else if name.contains("bearing-608") {
@@ -66,7 +70,10 @@ fn explode_offset(node : @step_cad.SceneNode) -> (Double, Double, Double) {
   } else if name.contains("rear_insert") {
     (0.0, 0.0, -18.0)
   } else if name.contains("cover_insert") || name.contains("HEATSET") {
-    if node.tz < 0.0 {
+    if node.tz < -41.0 {
+      // Four rear motor-plate M3 heat-set inserts holding the moteus C1 standoffs.
+      (0.0, 0.0, -135.0)
+    } else if node.tz < 0.0 {
       (0.0, 0.0, -18.0)
     } else {
       (0.0, 0.0, 14.0)
@@ -75,7 +82,13 @@ fn explode_offset(node : @step_cad.SceneNode) -> (Double, Double, Double) {
     // Four M4x14 screws bolting ACT-ROTOR-ADAPTER down onto the A12 rotor.
     (0.0, 0.0, -14.0)
   } else if name.contains("M3-10") {
-    (0.0, 0.0, -145.0)
+    if node.tz < -46.0 {
+      // Four M3x10 screws behind moteus C1 threading through the standoffs into
+      // the motor-plate heat-set inserts.
+      (0.0, 0.0, -245.0)
+    } else {
+      (0.0, 0.0, -145.0)
+    }
   } else if name.contains("motor_plate") {
     (0.0, 0.0, -110.0)
   } else if name.contains("_rotor_adapter") {
@@ -113,9 +126,11 @@ fn explode_color(name : String) -> @step_cad.Rgb {
     @step_cad.Rgb::new(0.45, 0.65, 0.85)
   } else if name.contains("set_screw") {
     @step_cad.Rgb::new(0.60, 0.02, 0.02)
+  } else if name.contains("output_flange") {
+    @step_cad.Rgb::new(0.10, 0.72, 0.85)
   } else if name.contains("output_collar") {
     @step_cad.Rgb::new(0.95, 0.20, 0.20)
-  } else if name.contains("output_magnet") {
+  } else if name.contains("rear_magnet") || name.contains("output_magnet") {
     @step_cad.Rgb::new(0.65, 0.20, 0.85)
   } else if name.contains("sun_hub") {
     @step_cad.Rgb::new(0.95, 0.55, 0.15)
@@ -397,9 +412,12 @@ async fn main {
       num_elbows~,
       detail~,
       motor_source="brushless",
-      // The moteus C1 is the output sensor/controller; there is no separate
-      // small PCB on the cover.
+      // Mount moteus C1 on the REAR behind ACT-MOTOR-PLATE (mjbots qdd100
+      // layout) so the FRONT 8 mm output shaft is completely open for a bolted
+      // 6xM4 load-mounting flange (`ACT-OUTPUT-FLANGE`).
+      output_encoder=false,
       output_sensor="none",
+      output_shaft_extension_mm=12.0,
       magnet_diameter_mm~,
       magnet_height_mm~,
     )
@@ -410,10 +428,9 @@ async fn main {
     } else {
       act
     }
-    // The exact moteus C1 r1.2 board (Apache-2.0, © mjbots). Its AS5047P
-    // chip U6 is at the board center on the bottom face; the measured package
-    // bottom is 1.2 mm below the board origin and the PCB bottom is 0.8 mm
-    // above it.
+    // The exact moteus C1 r1.2 board (Apache-2.0, © mjbots), mounted on the
+    // REAR of ACT-MOTOR-PLATE (z = -44 mm) so its AS5047P encoder faces +Z
+    // toward the rear shaft sense magnet while leaving the front output open.
     // Vendored at components/vendor/20240305-moteus-c1-r1_2.step.
     let board_path = "components/vendor/20240305-moteus-c1-r1_2.step"
     let board_data = @fs.read_file(board_path) catch {
@@ -428,23 +445,20 @@ async fn main {
         abort("")
       }
     }
-    let magnet_top_z = match act.get_mate("output_shaft") {
+    let rear_plate_z = match act.get_mate("housing_bolt_0") {
       Some(mate) => mate.placement.apply_point((0.0, 0.0, 0.0)).2
-      None => abort("error: actuator has no output_shaft mate")
+      None => -44.0
     }
-    let sensor_base_z = match act.get_mate("sensor_base") {
-      Some(mate) => mate.placement.apply_point((0.0, 0.0, 0.0)).2
-      None => abort("error: actuator has no sensor_base mate")
-    }
-    // Put the chip bottom `sensor_gap_mm` above the magnet top. With the board
-    // rotated +90 deg about X, local +Y is world +Z and local -Y (the chip
-    // side) faces the magnet.
-    let board_z = magnet_top_z + sensor_gap_mm + 1.2
-    let board_pcb_bottom_z = board_z + 0.8
-    let standoff_length_mm = board_pcb_bottom_z - sensor_base_z
+    // Sense magnet sits on the rear motor shaft centerline flush with the rear
+    // face of ACT-MOTOR-PLATE; moteus C1 is flipped (-90 deg about X) so its
+    // centered AS5047P chip faces +Z across `sensor_gap_mm`.
+    let magnet_bottom_z = rear_plate_z - magnet_height_mm
+    let board_z = magnet_bottom_z - sensor_gap_mm - 1.2
+    let board_pcb_top_z = board_z - 0.8
+    let standoff_length_mm = rear_plate_z - board_pcb_top_z
     let board_part = @cad.PartMeta::new(
       "MOTEUS-C1-R1.2",
-      description="moteus C1 r1.2 controller board",
+      description="moteus C1 r1.2 controller board (rear-mounted qdd100 layout)",
       supplier="mjbots",
       supplier_url="https://github.com/mjbots/moteus",
       material="FR-4",
@@ -469,7 +483,7 @@ async fn main {
     )
     let mut board = @cad.Component::new(
         "moteus_c1",
-        description="moteus C1 r1.2 controller and on-axis output sensor",
+        description="moteus C1 r1.2 controller and rear-mounted AS5047P encoder",
       )
       .add_body(
         @cad.BodyPart::imported_step(
@@ -480,7 +494,7 @@ async fn main {
           color=@step_cad.Rgb::green(),
           part=Some(board_part),
           z_mm=board_z,
-          rx_deg=90.0,
+          rx_deg=-90.0,
         ),
       )
       .add_port(
@@ -519,27 +533,60 @@ async fn main {
           part=Some(board_screw_part),
         ),
       )
-    // Four M3 tapped standoffs reach from the cover-plate top to the board's
-    // 6 mm corner holes. They are outside the cover boss and the board's edge
-    // components, so the chip can sit close to the magnet.
+    // Four M3 tapped standoffs, four M3 brass heat-set inserts pressed into
+    // ACT-MOTOR-PLATE's drilled 4.4 mm holes, and four M3x10 socket-head cap
+    // screws passing through moteus C1 and the standoffs into those inserts.
     for i in 0..<4 {
       let sx = if i % 2 == 0 { 16.0 } else { -16.0 }
       let sy = if i < 2 { -16.0 } else { 16.0 }
-      board = board.add_body(
-        @cad.BodyPart::tube_mm(
-          "board_standoff_\{i}",
-          5.77,
-          2.5,
-          standoff_length_mm,
-          x_mm=sx,
-          y_mm=sy,
-          z_mm=(sensor_base_z + board_pcb_bottom_z) / 2.0,
-          density=@urdf.Density::g_per_cm3(8.5),
-          color=@step_cad.Rgb::grey(),
-        ).with_part(standoff_part),
-      )
+      board = board
+        .add_body(
+          @cad.BodyPart::tube_mm(
+            "board_standoff_\{i}",
+            5.77,
+            2.5,
+            standoff_length_mm,
+            x_mm=sx,
+            y_mm=sy,
+            z_mm=(rear_plate_z + board_pcb_top_z) / 2.0,
+            density=@urdf.Density::g_per_cm3(8.5),
+            color=@step_cad.Rgb::grey(),
+          ).with_part(standoff_part),
+        )
+        .add_mate_mm_deg("moteus_insert_mate_\{i}", x=sx, y=sy, z=rear_plate_z)
+        .attach(
+          "moteus_insert_merge_\{i}",
+          parent_mate="moteus_insert_mate_\{i}",
+          @components.heat_set_insert(
+            name="moteus_c1_insert_\{i}",
+            outer_diam_mm=4.5,
+            inner_diam_mm=3.0,
+            length_mm=4.0,
+          ),
+          child_mate="seat",
+          spec=@cad.JointSpec::merge_rigid(),
+        )
+        .add_mate_mm_deg(
+          "moteus_bolt_mate_\{i}",
+          x=sx,
+          y=sy,
+          z=board_pcb_top_z - 1.6,
+          rx_deg=180.0,
+        )
+        .attach(
+          "moteus_bolt_merge_\{i}",
+          parent_mate="moteus_bolt_mate_\{i}",
+          @components.iso_shcs_screw(
+            name="moteus_c1_screw_\{i}",
+            size=@step_standards.M3,
+            length_mm=10.0,
+            detail~,
+          ),
+          child_mate="head_seat",
+          spec=@cad.JointSpec::merge_rigid(),
+          bom_external=false,
+        )
     }
-    // Reusing the sensor-mount frame keeps the attach snap an identity.
     let sensor_mount = match act.get_mate("sensor_mount") {
       Some(mate) => mate
       None => {
@@ -555,6 +602,168 @@ async fn main {
       child_mate="mount",
       spec=@cad.JointSpec::merge_rigid(),
     )
+    // Rear diametric sense magnet on the A12 rotor axis facing moteus C1's AS5047P.
+    assembly = assembly
+      .add_mate_mm_deg("rear_magnet_seat", z=rear_plate_z)
+      .attach(
+        "rear_magnet_merge",
+        parent_mate="rear_magnet_seat",
+        @components.encoder_magnet(
+          name="bldc_actuator_rear_magnet",
+          diameter_mm=magnet_diameter_mm,
+          thickness_mm=magnet_height_mm,
+        ),
+        child_mate="top",
+        spec=@cad.JointSpec::merge_rigid(),
+      )
+    // Open front bolted output flange (`ACT-OUTPUT-FLANGE`): clamps onto the
+    // protruding 8 mm steel output shaft above ACT-OUTPUT-COVER and provides
+    // six M4 mounting holes on a 34 mm bolt circle so you can bolt on a robot
+    // arm, quadruped leg, wheel, pulley, or torque-test lever.
+    let flange_part = @cad.PartMeta::new(
+      "ACT-OUTPUT-FLANGE",
+      description="Printed bolted output flange (46 mm OD, 6xM4 on 34 mm BCD, 8.1 mm bore) — slide onto the open front 8 mm output shaft and bolt your robot arm, leg, or wheel directly to it",
+      material="carbon fiber nylon",
+      process="3D print",
+      unit_cost_usd=5.0,
+    )
+    let flange_outer = @step_gears.arc_circle_segments(46.0)
+    let flange_holes : Array[Array[@step_cad.ProfileSegment]] = [
+      @step_gears.arc_circle_segments(8.1),
+    ]
+    for i in 0..<6 {
+      let a = 2.0 * @math.PI * i.to_double() / 6.0
+      let hx = 17.0 * @math.cos(a)
+      let hy = 17.0 * @math.sin(a)
+      let hole_segs = @step_gears.arc_circle_segments(4.3).map(fn(seg) {
+        match seg {
+          @step_cad.ProfileSegment::SegmentLine((x0, y0), (x1, y1)) =>
+            @step_cad.ProfileSegment::SegmentLine(
+              (x0 + hx, y0 + hy),
+              (x1 + hx, y1 + hy),
+            )
+          @step_cad.ProfileSegment::SegmentArc((x0, y0), (x1, y1), (cx, cy)) =>
+            @step_cad.ProfileSegment::SegmentArc(
+              (x0 + hx, y0 + hy),
+              (x1 + hx, y1 + hy),
+              (cx + hx, cy + hy),
+            )
+        }
+      })
+      flange_holes.push(hole_segs)
+    }
+    let flange_disk_shape = @step_cad.ExtrudedArcProfile::new(
+      flange_outer,
+      8.0,
+      holes=flange_holes,
+    ).as_shape()
+    let flange_boss_body = @cad.BodyPart::tube_mm(
+      "bldc_actuator_output_flange_boss",
+      20.0,
+      8.1,
+      6.0,
+      z_mm=3.0,
+      density=@urdf.Density::carbon_fiber(),
+      color=@step_cad.Rgb::new(0.10, 0.72, 0.85),
+    )
+    let flange_disk_node = flange_disk_shape
+      .with_name("bldc_actuator_output_flange_disk")
+      .with_color(@step_cad.Rgb::new(0.10, 0.72, 0.85))
+      .translate(z=6.0)
+    // Two radial M4 tap/pilot holes at 0 deg and 90 deg in the 20 mm clamping
+    // boss for two M4 cup-point set screws locking onto a flatted 8 mm shaft.
+    let set_hole_0 = @step_cad.Cylinder::new(1.7, 12.0)
+      .with_name("flange_set_hole_0")
+      .rotate_y(90.0)
+      .translate(x=2.0, z=3.0)
+    let set_hole_1 = @step_cad.Cylinder::new(1.7, 12.0)
+      .with_name("flange_set_hole_1")
+      .rotate_x(-90.0)
+      .translate(y=2.0, z=3.0)
+    let flange_boss_drilled = @step_cad.difference(
+      flange_boss_body.node,
+      [set_hole_0, set_hole_1],
+      name="bldc_actuator_output_flange_boss",
+    ).with_color(@step_cad.Rgb::new(0.10, 0.72, 0.85))
+    let flange_boss_part : @cad.BodyPart = {
+      ..flange_boss_body,
+      node: flange_boss_drilled,
+    }.with_part(flange_part)
+    let flange_disk_part : @cad.BodyPart = {
+      ..flange_boss_body,
+      name: "bldc_actuator_output_flange_disk",
+      node: flange_disk_node,
+    }.with_part(flange_part)
+    let flange_set_screw_part = @cad.PartMeta::new(
+      "SET-M4x12",
+      description="M4 x 12 socket set screw (locks ACT-OUTPUT-FLANGE onto flatted 8 mm output shaft; trim to 6 mm or use M4 x 6)",
+      material="steel",
+      process="purchased",
+      unit_cost_usd=0.25,
+    )
+    let output_flange_comp = @cad.Component::new(
+        "bldc_actuator_output_flange",
+        description="Bolted 6xM4 front output load flange with dual radial M4 set screws",
+      )
+      .with_part(flange_part)
+      .add_body(flange_boss_part)
+      .add_body(flange_disk_part)
+      .add_body(
+        @cad.BodyPart::cylinder_mm(
+          "bldc_actuator_output_flange_set_screw_0",
+          4.0,
+          6.0,
+          x_mm=7.0,
+          z_mm=3.0,
+          ry_deg=90.0,
+          density=@urdf.Density::steel_mild(),
+          color=@step_cad.Rgb::grey(),
+        ).with_part(flange_set_screw_part),
+      )
+      .add_body(
+        @cad.BodyPart::cylinder_mm(
+          "bldc_actuator_output_flange_set_screw_1",
+          4.0,
+          6.0,
+          y_mm=7.0,
+          z_mm=3.0,
+          rx_deg=90.0,
+          density=@urdf.Density::steel_mild(),
+          color=@step_cad.Rgb::grey(),
+        ).with_part(flange_set_screw_part),
+      )
+      .add_fastener(
+        @cad.Fastener::new(
+          "output_flange_set_screws",
+          @cad.FastenerKind::Screw,
+          thread="M4",
+          length_mm=6.0,
+          engagement_mm=5.0,
+          quantity=2,
+          torque_nm=1.5,
+          references=["bldc_actuator_output_flange"],
+          part=Some(flange_set_screw_part),
+        ),
+      )
+      .add_mate_mm_deg("shaft_seat")
+      .add_mate_mm_deg("load_face", z=14.0)
+    let out_shaft_top_z = match act.get_mate("output_shaft") {
+      Some(mate) => mate.placement.apply_point((0.0, 0.0, 0.0)).2
+      None => 52.5
+    }
+    let out_carrier_name = act.parameters
+      .get("output_joint")
+      .unwrap_or("bldc_actuator_stage1_carrier_joint")
+      .replace(old="_joint", new="")
+    assembly = assembly.attach_to(
+      out_carrier_name,
+      "output_flange_merge",
+      parent_mate="output_shaft",
+      output_flange_comp,
+      child_mate="load_face",
+      spec=@cad.JointSpec::merge_rigid(),
+    )
+    let _ = out_shaft_top_z
     assembly = assembly.add_wire_run(
       @cad.WireRun::new(
         "motor_can",

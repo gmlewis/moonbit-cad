@@ -1693,7 +1693,7 @@ pub fn planetary_bldc_actuator(
   planet_count~ : Int32 = 4,
   gear_length_mm~ : Double = 10.0,
   gear_type~ : String = "herringbone",
-  num_elbows~ : Int32 = 2,
+  num_elbows~ : Int32 = 4,
   detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
   joint_name~ : String = "",
   add_binding~ : Bool = true,
@@ -1945,6 +1945,15 @@ pub fn planetary_bldc_actuator(
       5.0,
     ),
   )
+  // Four M3 heat-set insert holes (4.4 mm dia) at (+/-16, +/-16) mm on the
+  // rear motor plate for mounting the rear moteus C1 controller standoffs.
+  if is_a12 {
+    for i in 0..<4 {
+      let sx = if i % 2 == 0 { 16.0 } else { -16.0 }
+      let sy = if i < 2 { -16.0 } else { 16.0 }
+      plate_holes.push((sx, sy, 4.4))
+    }
+  }
   let cover_holes : Array[(Double, Double, Double)] = []
   cover_holes.push((0.0, 0.0, actuator_bearing_outer("608") + 0.2))
   for i in 0..<4 {
@@ -1995,24 +2004,25 @@ pub fn planetary_bldc_actuator(
     top_insert_holes,
     @urdf.Density::carbon_fiber(),
     @step_cad.Rgb::black(),
-  )
-  let housing_nodes : Array[@step_cad.SceneNode] = [keyed_ring_body.node]
+  ).with_part(housing_part)
+  let extra_housing_bodies : Array[@cad.BodyPart] = []
   if lower_ring_h > 0.1 {
-    let lower_ring_body = keyed_housing_body_mm(
-      name + "_housing_lower",
-      housing_outer,
-      housing_inner,
-      keyway_width,
-      keyway_depth,
-      lower_ring_h,
-      housing_bottom,
-      [],
-      @urdf.Density::carbon_fiber(),
-      @step_cad.Rgb::black(),
+    extra_housing_bodies.push(
+      keyed_housing_body_mm(
+        name + "_housing_lower",
+        housing_outer,
+        housing_inner,
+        keyway_width,
+        keyway_depth,
+        lower_ring_h,
+        housing_bottom,
+        [],
+        @urdf.Density::carbon_fiber(),
+        @step_cad.Rgb::black(),
+      ).with_part(housing_part),
     )
-    housing_nodes.push(lower_ring_body.node)
   }
-  let full_housing_node = if is_a12 {
+  if is_a12 {
     let barrel_inner_r = 47.5
     let barrel_total_h = -motor_mount_z
     let rear_pocket_h = if barrel_total_h > insert_pocket_depth + 1.0 {
@@ -2034,29 +2044,31 @@ pub fn planetary_bldc_actuator(
         ),
       )
     }
-    let barrel_pocket_body = actuator_plate_body(
-      name + "_a12_motor_barrel_rear",
-      barrel_outer * 2.0,
-      rear_pocket_h,
-      motor_mount_z,
-      rear_pocket_holes,
-      @urdf.Density::carbon_fiber(),
-      @step_cad.Rgb::black(),
-      detail,
-    )
-    housing_nodes.push(barrel_pocket_body.node)
-    if barrel_solid_h > 0.1 {
-      let barrel_solid_body = actuator_plate_body(
-        name + "_a12_motor_barrel",
+    extra_housing_bodies.push(
+      actuator_plate_body(
+        name + "_a12_motor_barrel_rear",
         barrel_outer * 2.0,
-        barrel_solid_h,
-        motor_mount_z + rear_pocket_h,
-        [(0.0, 0.0, barrel_inner_r * 2.0)],
+        rear_pocket_h,
+        motor_mount_z,
+        rear_pocket_holes,
         @urdf.Density::carbon_fiber(),
         @step_cad.Rgb::black(),
         detail,
+      ).with_part(housing_part),
+    )
+    if barrel_solid_h > 0.1 {
+      extra_housing_bodies.push(
+        actuator_plate_body(
+          name + "_a12_motor_barrel",
+          barrel_outer * 2.0,
+          barrel_solid_h,
+          motor_mount_z + rear_pocket_h,
+          [(0.0, 0.0, barrel_inner_r * 2.0)],
+          @urdf.Density::carbon_fiber(),
+          @step_cad.Rgb::black(),
+          detail,
+        ).with_part(housing_part),
       )
-      housing_nodes.push(barrel_solid_body.node)
     }
     // 45-degree internal transition chamfer eliminating the 90-degree step
     // overhang from barrel_inner_r (47.5 mm) inward to housing_inner (44.09 mm).
@@ -2076,22 +2088,16 @@ pub fn planetary_bldc_actuator(
         .as_shape()
         .with_name(name + "_internal_chamfer")
         .with_color(@step_cad.Rgb::black())
-      housing_nodes.push(ramp_node)
+      extra_housing_bodies.push(
+        {
+          ..keyed_ring_body,
+          name: name + "_internal_chamfer",
+          node: ramp_node,
+        }.with_part(housing_part),
+      )
     }
-    @step_cad.union_all(housing_nodes, name=name + "_housing").with_color(
-      @step_cad.Rgb::black(),
-    )
-  } else if housing_nodes.length() > 1 {
-    @step_cad.union_all(housing_nodes, name=name + "_housing").with_color(
-      @step_cad.Rgb::black(),
-    )
-  } else {
-    keyed_ring_body.node
   }
-  let keyed_housing_body : @cad.BodyPart = {
-    ..keyed_ring_body,
-    node: full_housing_node,
-  }.with_part(housing_part)
+  let keyed_housing_body = keyed_ring_body
   let mut housing = @cad.Component::new(
       name,
       description="Planetary BLDC actuator",
@@ -2104,6 +2110,10 @@ pub fn planetary_bldc_actuator(
     .with_param("planet_pin_diam_mm", planet_pin_diam.to_string())
     .with_param("output_shaft_diam_mm", coupling_shaft_diam.to_string())
     .add_body(keyed_housing_body)
+  for hb in extra_housing_bodies {
+    housing = housing.add_body(hb)
+  }
+  housing = housing
     .add_body(
       actuator_plate_body(
         name + "_motor_plate",
@@ -2471,7 +2481,7 @@ pub fn planetary_bldc_actuator(
   let mut output_joint = name + "_stage1_carrier_joint"
   let mut output_carrier = name + "_stage1_carrier"
   if stage_count >= 2 {
-    let second = pgb_build(
+    let mut second = pgb_build(
       name + "_stage2",
       {
         gear_module: module_mm,
@@ -2498,6 +2508,34 @@ pub fn planetary_bldc_actuator(
       detail,
       false,
     )
+    // Add the four matching 45-deg anti-rotation key lugs to Stage 2's ring
+    // gear as well so it locks positively into ACT-HOUSING's four keyways.
+    let s2_ring_part = if second.bodies.length() > 0 {
+      second.bodies[0].part
+    } else {
+      None
+    }
+    for ki in 0..<4 {
+      let ang_deg = 45.0 + 90.0 * ki.to_double()
+      let ang_rad = ang_deg * deg
+      let lug = @cad.BodyPart::box_mm(
+        name + "_stage2_ring_key_" + ki.to_string(),
+        key_radial_len,
+        key_width,
+        gear_length_mm,
+        x_mm=key_r_center * @math.cos(ang_rad),
+        y_mm=key_r_center * @math.sin(ang_rad),
+        z_mm=gear_length_mm / 2.0,
+        rz_deg=ang_deg,
+        density=@urdf.Density::petg(),
+        color=@step_cad.Rgb::grey(),
+      )
+      let lug_assigned : @cad.BodyPart = match s2_ring_part {
+        Some(pm) => lug.with_part(pm)
+        None => lug
+      }
+      second = second.add_body(lug_assigned)
+    }
     let stage2_z = stage_gap + stage_pitch
     housing = housing
       .add_mate_mm_deg("stage2_mount", z=stage2_z)
@@ -2742,23 +2780,31 @@ pub fn planetary_actuator_cartridge(
   let key_embed = 2.0
   let key_radial_len = key_protrusion + key_embed
   let key_r_center = ring_outer + key_protrusion - key_radial_len / 2.0
+  let cart_part = if cartridge.bodies.length() > 0 {
+    cartridge.bodies[0].part
+  } else {
+    None
+  }
   for ki in 0..<4 {
     let ang_deg = 45.0 + 90.0 * ki.to_double()
     let ang_rad = ang_deg * deg
-    cartridge = cartridge.add_body(
-      @cad.BodyPart::box_mm(
-        name + "_ring_key_" + ki.to_string(),
-        key_radial_len,
-        key_width,
-        gear_length_mm,
-        x_mm=key_r_center * @math.cos(ang_rad),
-        y_mm=key_r_center * @math.sin(ang_rad),
-        z_mm=gear_length_mm / 2.0,
-        rz_deg=ang_deg,
-        density=@urdf.Density::petg(),
-        color=@step_cad.Rgb::grey(),
-      ),
+    let lug = @cad.BodyPart::box_mm(
+      name + "_ring_key_" + ki.to_string(),
+      key_radial_len,
+      key_width,
+      gear_length_mm,
+      x_mm=key_r_center * @math.cos(ang_rad),
+      y_mm=key_r_center * @math.sin(ang_rad),
+      z_mm=gear_length_mm / 2.0,
+      rz_deg=ang_deg,
+      density=@urdf.Density::petg(),
+      color=@step_cad.Rgb::grey(),
     )
+    let lug_assigned : @cad.BodyPart = match cart_part {
+      Some(pm) => lug.with_part(pm)
+      None => lug
+    }
+    cartridge = cartridge.add_body(lug_assigned)
   }
   cartridge
 }

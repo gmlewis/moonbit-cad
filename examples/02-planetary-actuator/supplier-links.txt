@@ -18,6 +18,7 @@ ISO4762-M4x14 | McMaster-Carr | https://www.mcmaster.com/screws/socket-head-cap-
 BLDC-5010_360kv | Amazon | https://www.amazon.com/GoolRC-Brushless-MultiCopter-Quadcopter-Multi-axis/dp/B0C2YRNX1Z | 5010 360KV outrunner (GoolRC) | 27.98
 SET-M3x5.9 | Amazon | https://www.amazon.com/HanTof-Set-Screws-Grub/dp/B07CKFJ8GY | M3-M8 grub-screw kit; M3 x 6 mm is the closest length | 0.03
 SHAFT-8x18 | McMaster-Carr | https://www.mcmaster.com/91595A558/ | 8 x 20 mm DIN 6325 hardened pins, 10-pack; cut to 18 mm | 1.50
+SHAFT-8x30 | McMaster-Carr | https://www.mcmaster.com/91595A562/ | 8 x 30 mm DIN 6325 hardened steel dowel shaft (open front output shaft for ACT-OUTPUT-FLANGE) | 1.80
 DOWEL-8x18.5 | McMaster-Carr | https://www.mcmaster.com/91595A558/ | Same 8 x 20 mm hardened pins; cut to 18.5 mm | 1.50
 WASHER-14x8.2x1 | McMaster-Carr | https://www.mcmaster.com/98055A115/ | DIN 988 spring-steel shim, 8 x 14 x 1 mm, pack of 50 | 0.20
 WASHER-11x8.2x1 | McMaster-Carr | https://www.mcmaster.com/98055A115/ | DIN 988 spring-steel inner-race thrust shim, 8.2 mm ID x 11 mm OD x 1 mm | 0.20

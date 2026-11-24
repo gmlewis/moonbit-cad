@@ -4,6 +4,8 @@ import {
   "gmlewis/cad/examples/common",
   "gmlewis/step/cad" @step_cad,
   "gmlewis/step/cli",
+  "gmlewis/step/components/gears" @step_gears,
+  "gmlewis/step/components/standards" @step_standards,
   "gmlewis/urdf",
   "moonbitlang/async/fs",
   "moonbitlang/core/math",

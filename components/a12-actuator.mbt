@@ -86,8 +86,9 @@ fn a12_layout_params(
       num_elbows=params.num_elbows,
       resolution=a12_resolution(params.detail),
       hole_type="Circular",
-      hole_radius_mm=6.2,
-      sun_hole_radius_mm=6.2,
+      sun_hole_type="Hexagonal",
+      hole_radius_mm=3.5,
+      sun_hole_radius_mm=3.5,
       planet_hole_radius_mm=bearing.outer_mm / 2.0 - 0.03,
       tolerance_mm=params.tolerance_mm,
       outer_thickness_mm~,
@@ -305,8 +306,10 @@ pub fn a12_planetary_actuator(params : A12ActuatorParams) -> @cad.Component {
     )
   }
   let carrier_r = center_distance + bearing.bore_mm * 0.9
+  // 0.10 mm radial slip clearance on the 12.7 mm steel shaft and 0.05 mm on
+  // planet dowel pins so printed PETG/CF-nylon parts assemble cleanly.
   let carrier_holes : Array[Array[(Double, Double)]] = [
-    a12_circle(0.0, 0.0, 6.35, 16),
+    a12_circle(0.0, 0.0, 6.45, 16),
   ]
   for j in 0..<params.planet_count {
     let a = 2.0 * @math.PI * j.to_double() / params.planet_count.to_double()
@@ -314,13 +317,13 @@ pub fn a12_planetary_actuator(params : A12ActuatorParams) -> @cad.Component {
       a12_circle(
         center_distance * @math.cos(a),
         center_distance * @math.sin(a),
-        bearing.bore_mm / 2.0,
+        bearing.bore_mm / 2.0 + 0.05,
         12,
       ),
     )
   }
   let hub_holes : Array[Array[(Double, Double)]] = [
-    a12_circle(0.0, 0.0, 6.35, 16),
+    a12_circle(0.0, 0.0, 6.45, 16),
   ]
   for i in 0..<4 {
     let a = (45.0 + 90.0 * i.to_double()) * @math.PI / 180.0
@@ -411,15 +414,44 @@ pub fn a12_planetary_actuator(params : A12ActuatorParams) -> @cad.Component {
       ).with_part(housing_part),
     )
     .add_body(
-      @cad.BodyPart::tube_mm(
-        params.name + "_sun_adapter",
-        34.0,
-        12.4,
-        5.0,
-        z_mm=gear_z0 - 2.5,
-        density=@urdf.Density::petg(),
-        color=a12_hub_color(),
-      ).with_part(adapter_part),
+      // Bolted 4xM4 (23 mm BCD) rotor-to-sun flange + integral 6.7 mm
+      // across-flats hexagonal drive post engaging the sun gear's 7.0 mm hex
+      // bore (zero slip under full A12 torque).
+      {
+        let prop_r = 11.5
+        let flange_holes : Array[(Double, Double, Double)] = []
+        for i in 0..<4 {
+          let theta = 2.0 * @math.PI * i.to_double() / 4.0
+          flange_holes.push(
+            (prop_r * @math.cos(theta), prop_r * @math.sin(theta), 4.3),
+          )
+        }
+        let flange = actuator_plate_body(
+          params.name + "_sun_adapter",
+          34.0,
+          5.0,
+          gear_z0 - 5.0,
+          flange_holes,
+          @urdf.Density::petg(),
+          a12_hub_color(),
+          params.detail,
+        )
+        let hex_post = hex_prism_body_mm(
+          params.name + "_sun_adapter_hex_post",
+          3.35,
+          params.gear_length_mm - 0.5,
+          gear_z0,
+          @urdf.Density::petg(),
+          a12_hub_color(),
+        )
+        {
+          ..flange,
+          node: @step_cad.union_all(
+            [flange.node, hex_post.node],
+            name=params.name + "_sun_adapter",
+          ).with_color(a12_hub_color()),
+        }.with_part(adapter_part)
+      },
     )
     .add_body(
       @cad.BodyPart::extruded_profile_mm(

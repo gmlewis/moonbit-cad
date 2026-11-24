@@ -278,7 +278,7 @@ async fn main {
           module_mm~,
           sun_teeth=12,
           planet_teeth=18,
-          planet_count=3,
+          planet_count=4,
           gear_length_mm=stage_length,
           wheel_diam_mm=rear_wheel_diam,
           wheel_width_mm=52.0,

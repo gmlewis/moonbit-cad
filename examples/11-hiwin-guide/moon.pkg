@@ -3,4 +3,5 @@ import {
   "gmlewis/cad/components",
   "gmlewis/cad/examples/common",
   "gmlewis/step/cli",
+  "gmlewis/urdf",
 }

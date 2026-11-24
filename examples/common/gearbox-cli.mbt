@@ -70,7 +70,7 @@ pub fn GearboxConfig::new(
   num_planets~ : String = "4",
   gear_lengths~ : String = "10",
   num_elbows~ : String = "4",
-  tolerance_mm~ : Double = 0.2,
+  tolerance_mm~ : Double = 0.1,
   planet_bearings~ : String = "FR8-2RS",
   casing_wall_mm~ : Double = 6.0,
   flange_thickness_mm~ : Double = 6.0,

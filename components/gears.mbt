@@ -52,7 +52,7 @@ pub fn PlanetaryGearboxParams::default() -> PlanetaryGearboxParams {
     planet_teeth: 12,
     num_planets: 4,
     pressure_angle_deg: 20.0,
-    num_elbows: 2,
+    num_elbows: 4,
     resolution: 5,
     bore_radius_mm: 6.0,
     planet_bore_radius_mm: 6.0,
@@ -852,7 +852,7 @@ pub fn planetary_gearset_stage(
   output_shaft_length_mm~ : Double = 12.0,
   smooth~ : Bool = true,
   housing~ : Bool = true,
-  num_elbows~ : Int32 = 2,
+  num_elbows~ : Int32 = 4,
   detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
 ) -> @cad.Component {
   let planet_bore = if planet_bore_mm > 0.0 {

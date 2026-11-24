@@ -55,7 +55,7 @@ pub fn FoxBotParams::default() -> FoxBotParams {
     gear_module_mm: 2.0,
     gear_length_mm: 12.0,
     num_elbows: 4,
-    tolerance_mm: 0.2,
+    tolerance_mm: 0.1,
     pose: "mid",
     roll_deg: 0.0,
     pitch_deg: 0.0,
@@ -1654,7 +1654,9 @@ fn attach_fox_leg(
     hip_act,
     child_mate="mount_flange",
     spec=@cad.JointSpec::merge_rigid(),
-    explode=Some(@cad.ExplodeSpec::along_mate(distance_mm=65.0, order=1)),
+    // Negative distance explodes opposing left/right hip actuators OUTBOARD
+    // away from the 24 mm center channel so they never collide.
+    explode=Some(@cad.ExplodeSpec::along_mate(distance_mm=-65.0, order=1)),
   )
   .add_mate_mm_deg(
     hip_pivot_mate,
