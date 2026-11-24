@@ -32,7 +32,10 @@ fn explode_offset(node : @step_cad.SceneNode) -> (Double, Double, Double) {
   let name = node.name
   if name.contains("herringbone-planetary") {
     // Print-in-place gear set slides straight up out of the housing keyways.
-    (0.0, 0.0, 52.0)
+    (0.0, 0.0, 58.0)
+  } else if name.contains("pin_washer") {
+    // Retaining washers sit on the bearing/planet side below the planets.
+    (0.0, 0.0, 48.0)
   } else if name.contains("bearing-688") {
     (0.0, 0.0, 90.0)
   } else if name.contains("moteus") {
@@ -50,7 +53,6 @@ fn explode_offset(node : @step_cad.SceneNode) -> (Double, Double, Double) {
   } else if name.contains("output_cover") {
     (0.0, 0.0, 180.0)
   } else if name.contains("carrier_pin") ||
-    name.contains("pin_washer") ||
     name.contains("carrier_output_shaft") {
     (0.0, 0.0, 145.0)
   } else if name.contains("stage1_carrier") {
@@ -59,7 +61,7 @@ fn explode_offset(node : @step_cad.SceneNode) -> (Double, Double, Double) {
     name.contains("stage1_planet") ||
     name.contains("ring_key") ||
     name.contains("/ring") {
-    (0.0, 0.0, 52.0)
+    (0.0, 0.0, 58.0)
   } else if name.contains("rear_insert") {
     (0.0, 0.0, -20.0)
   } else if name.contains("cover_insert") || name.contains("HEATSET") {
