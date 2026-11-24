@@ -1117,6 +1117,86 @@ fn actuator_plate_body(
 }
 
 ///|
+/// Builds an extruded cylindrical housing sleeve with four axial anti-rotation
+/// keyway slots at 45/135/225/315 deg using exact analytic arcs and lines (no
+/// boolean cut required, so all four keyways appear in assembly.step,
+/// exploded.step, GLB, and printable STEP/3MF).
+fn keyed_housing_body_mm(
+  name : String,
+  outer_radius_mm : Double,
+  inner_radius_mm : Double,
+  keyway_width_mm : Double,
+  keyway_depth_mm : Double,
+  height_mm : Double,
+  z0_mm : Double,
+  density : @urdf.Density,
+  color : @step_cad.Rgb,
+) -> @cad.BodyPart {
+  let outer = @step_gears.arc_circle_segments(outer_radius_mm * 2.0)
+  let half_w = keyway_width_mm / 2.0
+  let half_ang = @math.asin(half_w / inner_radius_mm)
+  let r_back = inner_radius_mm + keyway_depth_mm
+  let hole : Array[@step_cad.ProfileSegment] = []
+  let deg = @math.PI / 180.0
+  for ki in 0..<4 {
+    let ang_k = (45.0 + 90.0 * ki.to_double()) * deg
+    let ang_next = (45.0 + 90.0 * (ki + 1).to_double()) * deg
+    let c = @math.cos(ang_k)
+    let s = @math.sin(ang_k)
+    let tx = -s
+    let ty = c
+    let a0 = ang_k - half_ang
+    let a1 = ang_k + half_ang
+    let p_in0 = (
+      inner_radius_mm * @math.cos(a0),
+      inner_radius_mm * @math.sin(a0),
+    )
+    let p_back0 = (r_back * c - half_w * tx, r_back * s - half_w * ty)
+    let p_back1 = (r_back * c + half_w * tx, r_back * s + half_w * ty)
+    let p_in1 = (
+      inner_radius_mm * @math.cos(a1),
+      inner_radius_mm * @math.sin(a1),
+    )
+    let a_next0 = ang_next - half_ang
+    let p_next0 = (
+      inner_radius_mm * @math.cos(a_next0),
+      inner_radius_mm * @math.sin(a_next0),
+    )
+    hole.push(@step_cad.ProfileSegment::SegmentLine(p_in0, p_back0))
+    hole.push(@step_cad.ProfileSegment::SegmentLine(p_back0, p_back1))
+    hole.push(@step_cad.ProfileSegment::SegmentLine(p_back1, p_in1))
+    hole.push(@step_cad.ProfileSegment::SegmentArc(p_in1, p_next0, (0.0, 0.0)))
+  }
+  arc_profile_body(name, outer, height_mm, [hole], density, color, z0_mm)
+}
+
+///|
+/// Builds a regular hexagonal prism (6-sided positive-drive post) matching
+/// `hb_polygon_hole(6, inradius_mm)` with vertices at 0, 60, ..., 300 deg.
+fn hex_prism_body_mm(
+  name : String,
+  inradius_mm : Double,
+  height_mm : Double,
+  z0_mm : Double,
+  density : @urdf.Density,
+  color : @step_cad.Rgb,
+) -> @cad.BodyPart {
+  let r = inradius_mm / @math.cos(@math.PI / 6.0)
+  let segs : Array[@step_cad.ProfileSegment] = []
+  for i in 0..<6 {
+    let a0 = 2.0 * @math.PI * i.to_double() / 6.0
+    let a1 = 2.0 * @math.PI * ((i + 1) % 6).to_double() / 6.0
+    segs.push(
+      @step_cad.ProfileSegment::SegmentLine(
+        (r * @math.cos(a0), r * @math.sin(a0)),
+        (r * @math.cos(a1), r * @math.sin(a1)),
+      ),
+    )
+  }
+  arc_profile_body(name, segs, height_mm, [], density, color, z0_mm)
+}
+
+///|
 /// The front-bearing outside diameter of a BLDC preset, for sizing an adapter
 /// plate's bearing clearance bore.
 pub fn bldc_front_bearing_outer(preset : String) -> Double {
@@ -1718,10 +1798,11 @@ pub fn planetary_bldc_actuator(
     final_shaft_len
   }
   let stage1_sun_bore = if is_a12 {
-    2.25
+    3.5
   } else {
     p.shaft_diameter_mm / 2.0 + 0.1
   }
+  let stage1_sun_hole_type = if is_a12 { "Hexagonal" } else { "" }
   let coupling_shaft_diam = 8.0
   let coupling_bore = coupling_shaft_diam / 2.0 + 0.1
   // A 688 bearing (8 x 16 x 5) needs a planet root radius above about 9.5 mm
@@ -1732,7 +1813,7 @@ pub fn planetary_bldc_actuator(
   let planet_bore_radius = if use_planet_bearing { 8.0 } else { 2.0 }
   let planet_pin_diam = if use_planet_bearing { 8.0 } else { 3.8 }
   let planet_bearing = if use_planet_bearing { "688" } else { "" }
-  let first = pgb_build(
+  let mut first = pgb_build(
     name + "_stage1",
     {
       gear_module: module_mm,
@@ -1758,7 +1839,42 @@ pub fn planetary_bldc_actuator(
     smooth,
     detail,
     false,
+    sun_hole_type=stage1_sun_hole_type,
   )
+  // Add the four matching anti-rotation key lugs onto stage 1's ring gear so
+  // assembly.step, exploded.step, and START-HERE.html show the positive lock
+  // between the ring gear and ACT-HOUSING's four axial keyway slots.
+  let key_width = 6.0
+  let key_protrusion = 2.5
+  let key_embed = 2.0
+  let key_radial_len = key_protrusion + key_embed
+  let key_r_center = ring_outer + key_protrusion - key_radial_len / 2.0
+  let ring_part_meta = if first.bodies.length() > 0 {
+    first.bodies[0].part
+  } else {
+    None
+  }
+  for ki in 0..<4 {
+    let ang_deg = 45.0 + 90.0 * ki.to_double()
+    let ang_rad = ang_deg * deg
+    let lug_body = @cad.BodyPart::box_mm(
+      name + "_stage1_ring_key_" + ki.to_string(),
+      key_radial_len,
+      key_width,
+      gear_length_mm,
+      x_mm=key_r_center * @math.cos(ang_rad),
+      y_mm=key_r_center * @math.sin(ang_rad),
+      z_mm=gear_length_mm / 2.0,
+      rz_deg=ang_deg,
+      density=@urdf.Density::petg(),
+      color=@step_cad.Rgb::grey(),
+    )
+    let lug_assigned : @cad.BodyPart = match ring_part_meta {
+      Some(pm) => lug_body.with_part(pm)
+      None => lug_body
+    }
+    first = first.add_body(lug_assigned)
+  }
   let housing_part = fabricated_part(
     "ACT-HOUSING", "Printed planetary actuator housing with four 45-deg anti-rotation keyways; slide the keyed ring cartridge in and bolt the cover with M3 screws",
     "carbon fiber nylon", "3D print", 18.0,
@@ -1834,51 +1950,23 @@ pub fn planetary_bldc_actuator(
       ),
     )
   }
-  // Build the outer housing tube with four axial anti-rotation keyway slots
-  // at 45/135/225/315 deg (midway between the M3 cover screws) so the ring
-  // gear's four matching key lugs lock positively against full motor torque.
-  let housing_z_mid = (housing_bottom + housing_top) / 2.0
-  let housing_base_body = @cad.BodyPart::tube_mm(
-    name + "_housing",
-    housing_outer * 2.0,
-    housing_inner * 2.0,
-    housing_height,
-    z_mm=housing_z_mid,
-    density=@urdf.Density::carbon_fiber(),
-    color=@step_cad.Rgb::black(),
-  )
+  // Build the outer housing tube with four exact analytic axial anti-rotation
+  // keyway slots at 45/135/225/315 deg (midway between the M3 cover screws) so
+  // the ring gear's four matching key lugs lock positively against full motor
+  // torque and render cleanly in assembly.step, exploded.step, GLB, and 3MF.
   let keyway_width = 6.2
   let keyway_depth = 2.65
-  let keyway_radial_len = keyway_depth + 2.0
-  let keyway_r_center = housing_inner + keyway_depth - keyway_radial_len / 2.0
-  let keyway_cutters : Array[@step_cad.SceneNode] = []
-  for ki in 0..<4 {
-    let ang_deg = 45.0 + 90.0 * ki.to_double()
-    let ang_rad = ang_deg * @math.PI / 180.0
-    let cutter = @step_cad.Cuboid::new(
-        keyway_radial_len,
-        keyway_width,
-        housing_height + 2.0,
-      )
-      .with_name(name + "_keyway_" + ki.to_string())
-      .translate(
-        x=-keyway_radial_len / 2.0,
-        y=-keyway_width / 2.0,
-        z=-(housing_height + 2.0) / 2.0,
-      )
-      .rotate_z(ang_deg)
-      .translate(
-        x=keyway_r_center * @math.cos(ang_rad),
-        y=keyway_r_center * @math.sin(ang_rad),
-        z=housing_z_mid,
-      )
-    keyway_cutters.push(cutter)
-  }
-  let keyed_housing_node = @step_cad.difference(
-    housing_base_body.node,
-    keyway_cutters,
-    name=name + "_housing",
-  ).with_color(@step_cad.Rgb::black())
+  let keyed_ring_body = keyed_housing_body_mm(
+    name + "_housing",
+    housing_outer,
+    housing_inner,
+    keyway_width,
+    keyway_depth,
+    housing_height,
+    housing_bottom,
+    @urdf.Density::carbon_fiber(),
+    @step_cad.Rgb::black(),
+  )
   let full_housing_node = if is_a12 {
     let barrel_body = @cad.BodyPart::tube_mm(
       name + "_a12_motor_barrel",
@@ -1890,14 +1978,14 @@ pub fn planetary_bldc_actuator(
       color=@step_cad.Rgb::black(),
     )
     @step_cad.union_all(
-      [keyed_housing_node, barrel_body.node],
+      [keyed_ring_body.node, barrel_body.node],
       name=name + "_housing",
     ).with_color(@step_cad.Rgb::black())
   } else {
-    keyed_housing_node
+    keyed_ring_body.node
   }
   let keyed_housing_body : @cad.BodyPart = {
-    ..housing_base_body,
+    ..keyed_ring_body,
     node: full_housing_node,
   }.with_part(housing_part)
   let mut housing = @cad.Component::new(
@@ -2176,29 +2264,54 @@ pub fn planetary_bldc_actuator(
     @urdf.JointMimic::new(rotor_joint, multiplier=1.0),
   )
   // Couple the A12 rotor prop adapter (`output_face` at z = -6.0) to Stage 1 sun
-  // (`z = 4.0`), or clamp the compact BLDC shaft with `sun_clamp_hub`.
+  // (`z = 4.0`) with a bolted 4xM4 flange + integral 6.7 mm across-flats hex
+  // drive post that engages the sun gear's 7.0 mm hexagonal bore (zero slip).
   if is_a12 {
     let adapter_len = -motor_mount_z - 32.0 + stage_gap
+    let hex_post_len = gear_length_mm - 0.5
     let adapter_part = fabricated_part(
-      "ACT-ROTOR-ADAPTER", "Printed A12 rotor-to-sun drive adapter flange", "carbon fiber nylon",
-      "3D print", 6.0,
+      "ACT-ROTOR-ADAPTER", "Printed A12 rotor-to-sun hex drive adapter: bolts to the A12 23 mm 4xM4 prop mount and slides its integral 6.7 mm hex post straight into the sun gear's hexagonal bore",
+      "carbon fiber nylon", "3D print", 6.0,
     )
+    let prop_bolt_r = 11.5
+    let flange_holes : Array[(Double, Double, Double)] = []
+    for i in 0..<4 {
+      let theta = 2.0 * @math.PI * i.to_double() / 4.0
+      flange_holes.push(
+        (prop_bolt_r * @math.cos(theta), prop_bolt_r * @math.sin(theta), 4.3),
+      )
+    }
+    let flange_body = actuator_plate_body(
+      name + "_rotor_adapter_flange",
+      31.0,
+      adapter_len,
+      0.0,
+      flange_holes,
+      @urdf.Density::carbon_fiber(),
+      @step_cad.Rgb::orange(),
+      detail,
+    )
+    let hex_post_body = hex_prism_body_mm(
+      name + "_rotor_adapter_hex_post",
+      3.35,
+      hex_post_len,
+      adapter_len,
+      @urdf.Density::carbon_fiber(),
+      @step_cad.Rgb::orange(),
+    )
+    let adapter_monolith : @cad.BodyPart = {
+      ..flange_body,
+      node: @step_cad.union_all(
+        [flange_body.node, hex_post_body.node],
+        name=name + "_rotor_adapter_flange",
+      ).with_color(@step_cad.Rgb::orange()),
+    }.with_part(adapter_part)
     let adapter = @cad.Component::new(
         name + "_rotor_adapter",
-        description="Bolted A12 rotor-to-sun adapter",
+        description="Bolted 4xM4 A12 rotor-to-sun hexagonal drive adapter",
       )
       .with_part(adapter_part)
-      .add_body(
-        @cad.BodyPart::tube_mm(
-          name + "_rotor_adapter_flange",
-          31.0,
-          4.5,
-          adapter_len,
-          z_mm=adapter_len / 2.0,
-          density=@urdf.Density::carbon_fiber(),
-          color=@step_cad.Rgb::orange(),
-        ).with_part(adapter_part),
-      )
+      .add_body(adapter_monolith)
       .add_mate_mm_deg("rotor_seat")
     housing = housing.attach_to(
       name + "_motor_rotor",
@@ -2451,7 +2564,7 @@ pub fn planetary_actuator_cartridge(
     num_elbows,
     resolution: 5,
     bore_radius_mm: if p.name == "A12-8318-100KV" {
-      2.25
+      3.5
     } else {
       p.shaft_diameter_mm / 2.0 + 0.1
     },
@@ -2473,7 +2586,13 @@ pub fn planetary_actuator_cartridge(
     outer_thickness_mm: 6.0,
     include_carrier: false,
   }
-  let mut cartridge = planetary_print_in_place(name~, params~, detail~)
+  let sun_hole_type = if p.name == "A12-8318-100KV" { "Hexagonal" } else { "" }
+  let mut cartridge = planetary_print_in_place(
+    name~,
+    params~,
+    detail~,
+    sun_hole_type~,
+  )
   // Add four integral anti-rotation key lugs at 45/135/225/315 deg around the
   // outer ring gear so it locks positively into ACT-HOUSING's matching axial
   // keyway slots (zero glue, zero plastic-on-plastic slip).

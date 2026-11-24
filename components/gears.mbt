@@ -159,6 +159,7 @@ fn pgb_step_params(
   params : PlanetaryGearboxParams,
   smooth : Bool,
   detail : @step_common.DetailLevel,
+  sun_hole_type~ : String = "",
 ) -> @step_planetary.HerringbonePlanetaryParams {
   let half = 0.5
   let dedendum = 1.25
@@ -189,6 +190,7 @@ fn pgb_step_params(
       num_elbows=pgb_elbows(params, smooth, detail),
       resolution=pgb_resolution(params, detail),
       hole_type~,
+      sun_hole_type=if sun_hole_type == "" { hole_type } else { sun_hole_type },
       hole_radius_mm=sun_hole,
       sun_hole_radius_mm=sun_hole,
       planet_hole_radius_mm=planet_hole,
@@ -345,35 +347,41 @@ fn pgb_carrier_component(
   )
   // The printed plate is its own component so the standalone print export
   // contains only the printed body, not the steel pins or output shaft.
+  // Union the plate and central hub into one monolithic solid so there are no
+  // coplanar overlapping seam circles on the top face.
+  let carrier_plate_body = actuator_plate_body(
+    name + "_plate",
+    plate_radius * 2.0,
+    thickness,
+    0.0,
+    plate_holes,
+    @urdf.Density::petg(),
+    @step_cad.Rgb::purple(),
+    detail,
+  )
+  let carrier_hub_body = @cad.BodyPart::tube_mm(
+    name + "_plate_hub",
+    hub_diam,
+    shaft_diam + 0.1,
+    hub_height,
+    z_mm=thickness - hub_height / 2.0,
+    density=@urdf.Density::petg(),
+    color=@step_cad.Rgb::purple(),
+  )
+  let carrier_monolith : @cad.BodyPart = {
+    ..carrier_plate_body,
+    node: @step_cad.union_all(
+      [carrier_plate_body.node, carrier_hub_body.node],
+      name=name + "_plate",
+    ).with_color(@step_cad.Rgb::purple()),
+  }.with_part(part)
   let printed = @cad.Component::new(
       name + "_printed",
       description="Printed planetary carrier plate",
     )
     .with_param("plate_diameter_mm", (plate_radius * 2.0).to_string())
     .with_param("shaft_bore_mm", (shaft_diam + 0.1).to_string())
-    .add_body(
-      actuator_plate_body(
-        name + "_plate",
-        plate_radius * 2.0,
-        thickness,
-        0.0,
-        plate_holes,
-        @urdf.Density::petg(),
-        @step_cad.Rgb::purple(),
-        detail,
-      ).with_part(part),
-    )
-    .add_body(
-      @cad.BodyPart::tube_mm(
-        name + "_plate_hub",
-        hub_diam,
-        shaft_diam + 0.1,
-        hub_height,
-        z_mm=thickness - hub_height / 2.0,
-        density=@urdf.Density::petg(),
-        color=@step_cad.Rgb::purple(),
-      ).with_part(part),
-    )
+    .add_body(carrier_monolith)
     .add_body(
       @cad.BodyPart::cylinder_mm(
         name + "_hub_set_screw",
@@ -476,8 +484,9 @@ fn pgb_build(
   detail : @step_common.DetailLevel,
   include_housing : Bool,
   carrier_transmission_reduction~ : Double? = None,
+  sun_hole_type~ : String = "",
 ) -> @cad.Component {
-  let step_params = pgb_step_params(params, smooth, detail)
+  let step_params = pgb_step_params(params, smooth, detail, sun_hole_type~)
   let layout = @step_planetary.herringbone_planetary_layout(step_params)
   let step_comp = expect_step(
     "planetary gearbox",
@@ -739,8 +748,9 @@ pub fn planetary_print_in_place(
   name~ : String = "planetary_cartridge",
   params~ : PlanetaryGearboxParams = PlanetaryGearboxParams::default(),
   detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Detailed,
+  sun_hole_type~ : String = "",
 ) -> @cad.Component {
-  let step_params = pgb_step_params(params, false, detail)
+  let step_params = pgb_step_params(params, false, detail, sun_hole_type~)
   let step_comp = expect_step(
     "print-in-place gear set",
     @step_planetary.herringbone_planetary_gearbox(step_params),

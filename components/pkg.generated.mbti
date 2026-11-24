@@ -149,7 +149,7 @@ pub fn planetary_gearbox(name? : String, params? : PlanetaryGearboxParams, smoot
 
 pub fn planetary_gearset_stage(name? : String, module_mm? : Double, sun_teeth? : Int32, planet_teeth? : Int32, planet_count? : Int32, face_width_mm? : Double, pressure_angle_deg? : Double, sun_bore_mm? : Double, planet_bore_mm? : Double, carrier_pin_diam_mm? : Double, carrier_bearing? : String, output_shaft_length_mm? : Double, smooth? : Bool, housing? : Bool, num_elbows? : Int32, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
 
-pub fn planetary_print_in_place(name? : String, params? : PlanetaryGearboxParams, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
+pub fn planetary_print_in_place(name? : String, params? : PlanetaryGearboxParams, detail? : @common.DetailLevel, sun_hole_type? : String) -> @gmlewis/cad.Component
 
 pub fn planetary_reduction(Int32, Int32, Int32) -> Double
 

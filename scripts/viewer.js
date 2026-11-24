@@ -173,14 +173,31 @@ async function init() {
   scene.add(root);
 
   // Enhance materials and bind each part node to its explode vector & window.
-  const partMap = (explodeData && explodeData.parts) || {};
+  // OCCT GLB meshes with multiple primitives load as a THREE.Group (carrying
+  // the real part name) whose children are THREE.Mesh leaves, while single-
+  // primitive meshes load directly as a THREE.Mesh. Three.js also sanitizes
+  // node names (removing '/' etc.), so we match both exact and sanitized keys.
+  const rawPartMap = (explodeData && explodeData.parts) || {};
+  const sanitizeKey = (s) => (s || "").replace(/[\/\[\].:\s]/g, "");
+  const sanitizedPartMap = new Map();
+  for (const [k, v] of Object.entries(rawPartMap)) {
+    sanitizedPartMap.set(k, v);
+    const sk = sanitizeKey(k);
+    if (!sanitizedPartMap.has(sk)) sanitizedPartMap.set(sk, v);
+  }
+  const lookupPartSpecs = (name) => {
+    if (!name) return null;
+    return sanitizedPartMap.get(name) || sanitizedPartMap.get(sanitizeKey(name)) || null;
+  };
+
   const occCounter = new Map();
   const animatedParts = [];
   const pickableMeshes = [];
+  const boundObjects = new Set();
 
+  // First pass: enhance all mesh materials and record base colors.
   model.traverse((obj) => {
     if (!obj.isMesh) return;
-    // Clone material per mesh so hover highlight & role-color cross-fade are isolated.
     if (Array.isArray(obj.material)) {
       obj.material = obj.material.map((m) => m.clone());
     } else if (obj.material) {
@@ -204,30 +221,50 @@ async function init() {
       }
       baseColors.push(m.color.clone());
     }
-
-    const name = obj.name || (obj.parent && obj.parent.name) || "";
-    obj.userData.displayName = humanizePartName(name);
     obj.userData.baseColors = baseColors;
+    const rawName = (obj.parent && obj.parent !== model && obj.parent.name) ? obj.parent.name : obj.name;
+    obj.userData.displayName = humanizePartName(rawName);
     pickableMeshes.push(obj);
+  });
 
-    const list = partMap[name];
-    if (list && list.length > 0) {
-      const occ = occCounter.get(name) || 0;
-      occCounter.set(name, occ + 1);
-      const spec = list[Math.min(occ, list.length - 1)];
-      const offset = new THREE.Vector3(spec.offset[0], spec.offset[1], spec.offset[2]);
-      const roleColor = spec.color
-        ? new THREE.Color(spec.color[0], spec.color[1], spec.color[2])
-        : null;
-      animatedParts.push({
-        obj,
-        basePos: obj.position.clone(),
-        offset,
-        window: spec.window || [0, 1],
-        baseColors,
-        roleColor,
+  // Second pass: bind top-most named part nodes (Group or single Mesh) to explode vectors.
+  model.traverse((obj) => {
+    if (obj === model) return;
+    // Skip children of an already-bound part group.
+    let p = obj.parent;
+    while (p && p !== model) {
+      if (boundObjects.has(p)) return;
+      p = p.parent;
+    }
+    const list = lookupPartSpecs(obj.name);
+    if (!list || list.length === 0) return;
+
+    const key = sanitizeKey(obj.name);
+    const occ = occCounter.get(key) || 0;
+    occCounter.set(key, occ + 1);
+    const spec = list[Math.min(occ, list.length - 1)];
+    const offset = new THREE.Vector3(spec.offset[0], spec.offset[1], spec.offset[2]);
+    const roleColor = spec.color
+      ? new THREE.Color(spec.color[0], spec.color[1], spec.color[2])
+      : null;
+
+    const meshes = [];
+    if (obj.isMesh) {
+      meshes.push(obj);
+    } else {
+      obj.traverse((child) => {
+        if (child.isMesh) meshes.push(child);
       });
     }
+    boundObjects.add(obj);
+    animatedParts.push({
+      obj,
+      basePos: obj.position.clone(),
+      offset,
+      window: spec.window || [0, 1],
+      meshes,
+      roleColor,
+    });
   });
 
   const hasExplode = animatedParts.some((p) => p.offset.lengthSq() > 1e-8);
@@ -269,12 +306,15 @@ async function init() {
       part.obj.position.copy(part.basePos).addScaledVector(part.offset, eased);
 
       if (part.roleColor) {
-        const mats = Array.isArray(part.obj.material) ? part.obj.material : [part.obj.material];
         const colorMix = useRoleColors ? 1.0 : eased * 0.85;
-        for (let i = 0; i < mats.length; i++) {
-          const m = mats[i];
-          if (m && m.color && part.baseColors[i]) {
-            m.color.copy(part.baseColors[i]).lerp(part.roleColor, colorMix);
+        for (const mesh of part.meshes) {
+          const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+          const baseColors = mesh.userData.baseColors || [];
+          for (let i = 0; i < mats.length; i++) {
+            const m = mats[i];
+            if (m && m.color && baseColors[i]) {
+              m.color.copy(baseColors[i]).lerp(part.roleColor, colorMix);
+            }
           }
         }
       }

@@ -420,6 +420,14 @@ def sheet_svg(
 
 
 def write_pdf(svg_path: Path, pdf_path: Path) -> bool:
+    vc = find_executable("vectorcraft-cli")
+    if vc:
+        result = subprocess.run(
+            [vc, "run", "--in", str(svg_path), "--export", str(pdf_path)],
+            capture_output=True,
+        )
+        if result.returncode == 0 and pdf_path.is_file():
+            return True
     inkscape = find_executable("inkscape")
     if not inkscape:
         return False
@@ -556,8 +564,8 @@ def main() -> int:
     )
     (out_dir / "index.md").write_text("\n".join(index) + "\n", encoding="utf-8")
     print(f"Wrote {len(rows)} drawing sheet(s) to {out_dir}")
-    if not find_executable("inkscape"):
-        print("Note: Inkscape was not found; SVG sheets were kept, PDFs skipped.")
+    if not find_executable("vectorcraft-cli") and not find_executable("inkscape"):
+        print("Note: neither vectorcraft-cli nor Inkscape was found; SVG sheets were kept, PDFs skipped.")
     return 0
 
 

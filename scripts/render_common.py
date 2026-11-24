@@ -42,9 +42,40 @@ def find_solidcraft() -> str | None:
     return find_executable("solidcraft-cli", "SolidCraft")
 
 
+def find_vectorcraft() -> str | None:
+    """Locate the VectorCraft CLI."""
+    return find_executable("vectorcraft-cli")
+
+
 def find_inkscape() -> str | None:
     """Locate Inkscape."""
     return find_executable("inkscape")
+
+
+def find_svg_exporter() -> tuple[str, str] | None:
+    """Return ('vectorcraft', path) or ('inkscape', path), preferring VectorCraft."""
+    vc = find_vectorcraft()
+    if vc:
+        return ("vectorcraft", vc)
+    inc = find_inkscape()
+    if inc:
+        return ("inkscape", inc)
+    return None
+
+
+def export_svg(svg_path: Path | str, out_path: Path | str) -> bool:
+    """Export an SVG to PNG or PDF via VectorCraft (preferred) or Inkscape."""
+    exporter = find_svg_exporter()
+    if not exporter:
+        return False
+    kind, exe = exporter
+    cmd = (
+        [exe, "run", "--in", str(svg_path), "--export", str(out_path)]
+        if kind == "vectorcraft"
+        else [exe, f"--export-filename={out_path}", str(svg_path)]
+    )
+    result = subprocess.run(cmd, capture_output=True)
+    return result.returncode == 0 and Path(out_path).is_file()
 
 
 def _ppm_to_png(ppm: Path, png: Path) -> bool:
@@ -225,9 +256,8 @@ def composite_views(
     cell_w: int = DEFAULT_CELL_W,
     cell_h: int = DEFAULT_CELL_H,
 ) -> bool:
-    """Composite four view PNGs into one 2x2 PNG with Inkscape."""
-    inkscape = find_inkscape()
-    if not inkscape:
+    """Composite four view PNGs into one 2x2 PNG with VectorCraft or Inkscape."""
+    if not find_svg_exporter():
         return False
     svg_text = _svg_composite(views, labels, cell_w, cell_h)
     with tempfile.NamedTemporaryFile(
@@ -236,11 +266,7 @@ def composite_views(
         tmp_svg.write(svg_text)
         tmp_svg_path = tmp_svg.name
     try:
-        result = subprocess.run(
-            [inkscape, f"--export-filename={output_png}", tmp_svg_path],
-            capture_output=True,
-        )
-        return result.returncode == 0 and output_png.is_file()
+        return export_svg(tmp_svg_path, output_png)
     except Exception as exc:  # noqa: BLE001 - report and let the caller fall back
         print(f"      Compositing failed: {exc}")
         return False

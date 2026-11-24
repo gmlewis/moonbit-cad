@@ -57,6 +57,7 @@ fn explode_offset(node : @step_cad.SceneNode) -> (Double, Double, Double) {
     (0.0, 0.0, 115.0)
   } else if name.contains("stage1_sun") ||
     name.contains("stage1_planet") ||
+    name.contains("ring_key") ||
     name.contains("/ring") {
     (0.0, 0.0, 52.0)
   } else if name.contains("rear_insert") {
