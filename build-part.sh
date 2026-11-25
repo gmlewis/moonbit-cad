@@ -5,12 +5,30 @@
 # three questions: what to 3D-print, what to buy, and how to assemble it.
 set -euo pipefail
 
+# Resolve the repository root from this script's own location (following
+# symlinks) and work from there, so the script runs from any directory and
+# build/<example>/ always lands under the repository root.
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+  DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+if ! cd "$SCRIPT_DIR"; then
+  echo "error: cannot change to the repository root: $SCRIPT_DIR" >&2
+  exit 2
+fi
+
 usage() {
   cat <<'EOF'
 build-part.sh — build one example's complete build package.
 
 Usage:
   ./build-part.sh [example] [options]
+
+Runs from any directory; output always goes to <repo>/build/<example>/. For
+example, `/path/to/moonbit-19-cad/build-part.sh 02` works from anywhere.
 
 Examples:
   ./build-part.sh 01      # motorized wheel (1-stage 5.33:1 for Galileo X feet)
@@ -28,18 +46,20 @@ Options:
   --min-overlap=MM3            Ignore overlaps below this volume (default 1.0)
   --exclude-pattern=REGEX      Body-name pattern for intentional contacts
   --meshes                     Export printable/*.3mf and printable/*.stl
-  --fast                       With --meshes, skip large gear cartridges
+  --3mf                        Export only printable/*.3mf (implied by --meshes)
+  --fast                       With --meshes/--3mf, skip large gear cartridges
   -h, --help                   Show this help and exit
 
 Every build also renders views/{iso,front,left,top,exploded}.png when
 solidcraft-cli is on PATH, and START-HERE.html embeds them.
 
-Everything is written to build/<example>/. Open START-HERE.html first.
+Everything is written to build/<example>/ under the repository root. Open
+START-HERE.html first.
 EOF
 }
 
-if [[ ! -d "examples" ]]; then
-  echo "error: run this from the repository root." >&2
+if [[ ! -d "examples" || ! -f "moon.mod" ]]; then
+  echo "error: this does not look like the moonbit-19-cad repository root: $(pwd)" >&2
   exit 2
 fi
 
@@ -47,6 +67,7 @@ CHECK_INTERFERENCES=0
 MIN_OVERLAP=1.0
 EXCLUDE_PATTERN=""
 EXPORT_MESHES=0
+MESH_FORMATS="3mf,stl"
 FAST_MESHES=0
 EXAMPLE=""
 for arg in "$@"; do
@@ -66,6 +87,11 @@ for arg in "$@"; do
       ;;
     --meshes)
       EXPORT_MESHES=1
+      MESH_FORMATS="3mf,stl"
+      ;;
+    --3mf)
+      EXPORT_MESHES=1
+      MESH_FORMATS="3mf"
       ;;
     --fast)
       FAST_MESHES=1
@@ -175,9 +201,10 @@ if [[ -f scripts/render_views.py ]]; then
 fi
 
 # Optional slicer-ready meshes. Parts are already laid flat by the CAD
-# exporter; --fast skips the large print-in-place cartridges.
+# exporter; --fast skips the large print-in-place cartridges. --3mf narrows
+# the formats to 3MF only, --meshes (the default when requested) writes both.
 if (( EXPORT_MESHES )); then
-  MESH_ARGS=("${OUT}")
+  MESH_ARGS=("${OUT}" --formats "${MESH_FORMATS}")
   if (( FAST_MESHES )); then
     MESH_ARGS+=(--fast)
   fi
@@ -195,6 +222,12 @@ if command -v pandoc >/dev/null 2>&1; then
   START_HTML="${OUT}/START-HERE.html"
 fi
 
+if (( EXPORT_MESHES )); then
+  MESH_LINE="  6. MESHES   ${OUT}/printable/       (${MESH_FORMATS} files)"
+else
+  MESH_LINE="  6. MESHES   rerun with --3mf (or --meshes) for slicer-ready files"
+fi
+
 cat <<EOF
 
 Done. Everything you need is in: ${OUT}/
@@ -204,7 +237,7 @@ Done. Everything you need is in: ${OUT}/
   3. ASSEMBLE ${START_HTML}           (section 3)
   4. VIEW     ${OUT}/exploded.step    (exploded, color-coded)
   5. VIEWS    ${OUT}/views/           (iso, front, left, top, exploded PNGs)
-  6. MESHES   ${OUT}/printable/       (*.3mf / *.stl when built with --meshes)
+${MESH_LINE}
 
 Open it now:
   open ${START_HTML}
