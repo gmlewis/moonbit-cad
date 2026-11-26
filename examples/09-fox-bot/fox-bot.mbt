@@ -55,7 +55,7 @@ pub fn FoxBotParams::default() -> FoxBotParams {
     gear_module_mm: 2.0,
     gear_length_mm: 12.0,
     num_elbows: 4,
-    tolerance_mm: 0.1,
+    tolerance_mm: @step_common.DEFAULT_GEAR_TOLERANCE_MM,
     pose: "mid",
     roll_deg: 0.0,
     pitch_deg: 0.0,

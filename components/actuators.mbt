@@ -1751,7 +1751,7 @@ pub fn planetary_bldc_actuator(
   let gear_outer_thickness = 6.0
   let center_delta = 0.2
   // Printed gears use our calibrated 0.10 mm flank clearance.
-  let tolerance = 0.1
+  let tolerance = @step_common.DEFAULT_GEAR_TOLERANCE_MM
   let pa_deg = 20.0
   let deg = @math.PI / 180.0
   let ring_outer = module_mm *
@@ -2751,7 +2751,7 @@ pub fn planetary_actuator_cartridge(
     output_shaft_diam_mm: 8.0,
     carrier_thickness_mm: 8.0,
     output_shaft_length_mm: 12.0,
-    tolerance_mm: 0.1,
+    tolerance_mm: @step_common.DEFAULT_GEAR_TOLERANCE_MM,
     outer_thickness_mm: 6.0,
     include_carrier: false,
   }

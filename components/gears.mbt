@@ -61,7 +61,7 @@ pub fn PlanetaryGearboxParams::default() -> PlanetaryGearboxParams {
     output_shaft_diam_mm: 8.0,
     carrier_thickness_mm: 8.0,
     output_shaft_length_mm: 12.0,
-    tolerance_mm: 0.1,
+    tolerance_mm: @step_common.DEFAULT_GEAR_TOLERANCE_MM,
     outer_thickness_mm: 10.0,
     include_carrier: true,
   }
@@ -877,7 +877,7 @@ pub fn planetary_gearset_stage(
     output_shaft_diam_mm: 8.0,
     carrier_thickness_mm: 8.0,
     output_shaft_length_mm,
-    tolerance_mm: 0.1,
+    tolerance_mm: @step_common.DEFAULT_GEAR_TOLERANCE_MM,
     outer_thickness_mm: 6.0,
     include_carrier: true,
   }

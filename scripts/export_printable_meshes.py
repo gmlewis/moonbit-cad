@@ -31,6 +31,7 @@ import datetime
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -38,6 +39,7 @@ import tempfile
 import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
+from xml.sax.saxutils import escape as xml_escape
 
 FORMATS = ("3mf", "stl")
 FAST_MAX_BYTES = 20 * 1024 * 1024
@@ -96,6 +98,62 @@ def _sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
+def _parse_step_header(step_path: Path) -> dict[str, object]:
+    """Extract self-documentation metadata from a STEP file's HEADER; block."""
+    try:
+        with step_path.open("rb") as fh:
+            head = fh.read(65536).decode("utf-8", errors="replace")
+    except OSError:
+        return {}
+    endsec = head.find("ENDSEC;")
+    header_text = head[:endsec] if endsec != -1 else head
+    comments = re.findall(r"/\*(.*?)\*/", header_text, flags=re.DOTALL)
+    meta: dict[str, object] = {}
+    params: dict[str, str] = {}
+    raw_lines: list[str] = []
+    field_map = {
+        "repository": "repository",
+        "example": "example",
+        "command": "command",
+        "component": "component",
+        "standard": "standard",
+        "family": "family",
+        "size": "size",
+    }
+    for block in comments:
+        in_params = False
+        for raw in block.splitlines():
+            stripped = raw.strip()
+            if not stripped:
+                continue
+            raw_lines.append(stripped)
+            if stripped == "Parameters:":
+                in_params = True
+                continue
+            if in_params:
+                if raw.startswith(("    ", "\t")) or stripped.startswith("--"):
+                    if "=" in stripped:
+                        k, v = stripped.split("=", 1)
+                        params[k.strip()] = v.strip()
+                        continue
+                in_params = False
+            if ":" in stripped and not stripped.startswith(("http://", "https://")):
+                k, v = stripped.split(":", 1)
+                norm = k.strip().lower()
+                if norm in field_map and v.strip():
+                    meta[field_map[norm]] = v.strip()
+                    continue
+            if "=" in stripped and " " not in stripped.split("=", 1)[0]:
+                k, v = stripped.split("=", 1)
+                if v.strip():
+                    params[k.strip()] = v.strip()
+    if params:
+        meta["parameters"] = params
+    if raw_lines:
+        meta["step_header_lines"] = raw_lines
+    return meta
+
+
 def build_provenance(
     step_path: Path,
     quality: str,
@@ -118,6 +176,14 @@ def build_provenance(
         },
     }
 
+    merged_params: dict[str, str] = {}
+    step_meta = _parse_step_header(step_path)
+    if isinstance(step_meta.get("parameters"), dict):
+        merged_params.update(step_meta["parameters"])
+    for k, v in step_meta.items():
+        if k != "parameters" and v not in (None, "", []):
+            prov[k] = v
+
     # Load build-level provenance.json written by MoonBit if present.
     candidates: list[Path] = []
     if build_dir is not None:
@@ -134,13 +200,18 @@ def build_provenance(
                         "command",
                         "argv",
                         "elephant_foot_chamfer_mm",
-                        "parameters",
                     ):
                         if k in loaded and loaded[k] not in (None, ""):
                             prov[k] = loaded[k]
+                    if isinstance(loaded.get("parameters"), dict):
+                        for pk, pv in loaded["parameters"].items():
+                            merged_params[str(pk)] = str(pv)
                 break
             except Exception:  # noqa: BLE001
                 pass
+
+    if merged_params:
+        prov["parameters"] = merged_params
 
     if command_override:
         prov["command"] = command_override
@@ -191,60 +262,152 @@ def _wrap_multibody_assembly(
     return True
 
 
+_RE_MODEL_OPEN = re.compile(rb"<model\b[^>]*>")
+_RE_RESOURCES_OPEN = re.compile(rb"<resources\b[^>]*>")
+_RE_OBJECT_ID = re.compile(rb'<object\b[^>]*\bid="(\d+)"')
+_RE_BUILD_BLOCK = re.compile(rb"<build\b[^>]*>(.*?)</build>", flags=re.DOTALL)
+_RE_ITEM_TAG = re.compile(rb"<item\b([^>]*)/?>")
+_RE_ATTR = re.compile(rb'(\w+)="([^"]*)"')
+
+
+def _splice_3dmodel_xml(
+    data: bytes, prov: dict[str, object], assembly_name: str
+) -> bytes:
+    """Surgically inject `<metadata>` tags at the top and wrap multi-body
+    `<build><item>` entries at the bottom without DOM-parsing huge meshes."""
+    m_model = _RE_MODEL_OPEN.search(data, 0, min(len(data), 16384))
+    if m_model is None:
+        return data
+
+    m_res = _RE_RESOURCES_OPEN.search(data, m_model.end(), min(len(data), 65536))
+    header_end = m_res.start() if m_res is not None else m_model.end()
+    header_slice = data[m_model.end() : header_end]
+
+    desc_parts: list[str] = []
+    if prov.get("command"):
+        desc_parts.append(f"Command: {prov['command']}")
+    git_info = prov.get("git")
+    if isinstance(git_info, dict) and git_info.get("short_commit"):
+        dirty = " (dirty)" if git_info.get("dirty") else ""
+        desc_parts.append(f"Git: {git_info['short_commit']}{dirty}")
+    if prov.get("elephant_foot_chamfer_mm") is not None:
+        desc_parts.append(f"BottomChamferMM: {prov['elephant_foot_chamfer_mm']}")
+
+    entries: list[tuple[str, str]] = [
+        ("Title", str(prov.get("source_step", assembly_name))),
+        ("Application", "moonbit-19-cad / solidcraft-cli"),
+        ("CreationDate", str(prov.get("created_utc", ""))),
+    ]
+    if desc_parts:
+        entries.append(("Description", " | ".join(desc_parts)))
+    if prov.get("command"):
+        entries.append(("MoonBit:Command", str(prov["command"])))
+    if prov.get("component"):
+        entries.append(("MoonBit:Component", str(prov["component"])))
+    if isinstance(prov.get("parameters"), dict) and prov["parameters"]:
+        entries.append(
+            ("MoonBit:Parameters", json.dumps(prov["parameters"], sort_keys=True))
+        )
+    if isinstance(git_info, dict) and git_info.get("commit"):
+        dirty = " (dirty)" if git_info.get("dirty") else ""
+        entries.append(("MoonBit:GitCommit", f"{git_info['commit']}{dirty}"))
+    if prov.get("source_step_sha256"):
+        entries.append(("MoonBit:SourceStepSHA256", str(prov["source_step_sha256"])))
+    entries = [(k, v) for k, v in entries if v]
+    managed_names = {k for k, _ in entries}
+
+    def _strip_managed(match: re.Match[bytes]) -> bytes:
+        name = match.group(1).decode("utf-8", errors="replace")
+        return b"" if name in managed_names else match.group(0)
+
+    cleaned_header = re.sub(
+        rb'\s*<metadata\b[^>]*\bname="([^"]*)"[^>]*>.*?</metadata>',
+        _strip_managed,
+        header_slice,
+        flags=re.DOTALL,
+    )
+    meta_xml = "".join(
+        f'\n  <metadata name="{xml_escape(k)}">{xml_escape(v)}</metadata>'
+        for k, v in entries
+    ).encode("utf-8")
+
+    prefix = data[: m_model.end()] + meta_xml + cleaned_header
+    body_and_tail = data[header_end:]
+    tail_scan_start = max(0, len(body_and_tail) - 131072)
+    m_build = _RE_BUILD_BLOCK.search(body_and_tail, tail_scan_start)
+    if m_build is None:
+        return prefix + body_and_tail
+
+    items: list[dict[str, str]] = []
+    for im in _RE_ITEM_TAG.finditer(m_build.group(1)):
+        attrs = {
+            am.group(1).decode("utf-8"): am.group(2).decode("utf-8")
+            for am in _RE_ATTR.finditer(im.group(1))
+        }
+        if "objectid" in attrs:
+            items.append(attrs)
+    if len(items) <= 1:
+        return prefix + body_and_tail
+
+    res_close = body_and_tail.rfind(b"</resources>", tail_scan_start, m_build.start())
+    if res_close == -1:
+        res_close = body_and_tail.rfind(b"</resources>", 0, m_build.start())
+    if res_close == -1:
+        return prefix + body_and_tail
+
+    max_id = 0
+    for om in _RE_OBJECT_ID.finditer(body_and_tail):
+        oid = int(om.group(1))
+        if oid > max_id:
+            max_id = oid
+    assembly_id = str(max_id + 1)
+
+    comp_lines = []
+    for it in items:
+        extra = (
+            f' transform="{xml_escape(it["transform"])}"'
+            if "transform" in it
+            else ""
+        )
+        comp_lines.append(
+            f'      <component objectid="{xml_escape(it["objectid"])}"{extra}/>'
+        )
+    asm_xml = (
+        f'\n  <object id="{assembly_id}" type="model" name="{xml_escape(assembly_name)}">\n'
+        "    <components>\n"
+        + "\n".join(comp_lines)
+        + "\n    </components>\n  </object>\n"
+    ).encode("utf-8")
+    new_build = f'<build>\n    <item objectid="{assembly_id}"/>\n  </build>'.encode(
+        "utf-8"
+    )
+
+    return (
+        prefix
+        + body_and_tail[:res_close]
+        + asm_xml
+        + body_and_tail[res_close : m_build.start()]
+        + new_build
+        + body_and_tail[m_build.end() :]
+    )
+
+
 def inject_3mf_provenance(three_mf_path: Path, prov: dict[str, object]) -> None:
     """Embeds ``Metadata/provenance.json``, 3MF ``<metadata>`` XML tags, and
     wraps multi-body ``<build>`` items into a single composite assembly."""
-    ET.register_namespace("", MODEL_NS)
-
     tmp_path = three_mf_path.with_suffix(".3mf.tmp")
     with (
         zipfile.ZipFile(three_mf_path, "r") as zin,
-        zipfile.ZipFile(tmp_path, "w", compression=zipfile.ZIP_DEFLATED) as zout,
+        zipfile.ZipFile(
+            tmp_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=1
+        ) as zout,
     ):
         for item in zin.infolist():
             if item.filename == PROVENANCE_MEMBER:
                 continue
             data = zin.read(item.filename)
-            if item.filename == "3D/3dmodel.model":
-                try:
-                    root = ET.fromstring(data)
-                    ns = MODEL_NS
-                    if root.tag.startswith("{") and "}" in root.tag:
-                        ns = root.tag[1 : root.tag.index("}")]
-                        ET.register_namespace("", ns)
-
-                    def set_meta(name: str, value: str) -> None:
-                        tag = f"{{{ns}}}metadata"
-                        for existing in root.findall(tag):
-                            if existing.attrib.get("name") == name:
-                                existing.text = value
-                                return
-                        el = ET.Element(tag, {"name": name})
-                        el.text = value
-                        root.insert(0, el)
-
-                    desc_parts = []
-                    if prov.get("command"):
-                        desc_parts.append(f"Command: {prov['command']}")
-                    git_info = prov.get("git")
-                    if isinstance(git_info, dict) and git_info.get("short_commit"):
-                        dirty = " (dirty)" if git_info.get("dirty") else ""
-                        desc_parts.append(
-                            f"Git: {git_info['short_commit']}{dirty}"
-                        )
-                    if prov.get("elephant_foot_chamfer_mm") is not None:
-                        desc_parts.append(
-                            f"BottomChamferMM: {prov['elephant_foot_chamfer_mm']}"
-                        )
-                    set_meta("Title", str(prov.get("source_step", three_mf_path.stem)))
-                    set_meta("Application", "moonbit-19-cad / solidcraft-cli")
-                    set_meta("CreationDate", str(prov.get("created_utc", "")))
-                    if desc_parts:
-                        set_meta("Description", " | ".join(desc_parts))
-                    _wrap_multibody_assembly(root, ns, three_mf_path.stem)
-                    data = ET.tostring(root, encoding="utf-8", xml_declaration=True)
-                except ET.ParseError:
-                    pass
+            if item.filename.lower() == "3d/3dmodel.model":
+                data = _splice_3dmodel_xml(data, prov, three_mf_path.stem)
             zout.writestr(item, data)
         zout.writestr(
             PROVENANCE_MEMBER,

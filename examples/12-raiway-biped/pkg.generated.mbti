@@ -1,0 +1,61 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "gmlewis/cad/examples/12-raiway-biped"
+
+import {
+  "gmlewis/cad",
+  "gmlewis/cad/components",
+  "gmlewis/step/components/common",
+}
+
+// Values
+pub const HIP_POD_DROP_MM : Double = 74.0
+
+pub fn build_raiway(params? : RaiwayParams) -> @cad.Component
+
+pub fn hip_knee_actuator_params(RaiwayParams, String) -> @components.A12ActuatorParams
+
+pub fn pose_positions(RaiwayParams, pose? : String, wheel_spin_deg? : Double) -> Map[String, Double]
+
+pub async fn run_cli() -> Unit
+
+pub fn solve_leg_ik(RaiwayParams, Double) -> LegIK
+
+pub fn standing_hip_z_mm(RaiwayParams) -> Double
+
+pub fn standing_leg_drop_mm(RaiwayParams) -> Double
+
+pub fn wheel_actuator_params(RaiwayParams, String) -> @components.A12ActuatorParams
+
+// Errors
+
+// Types and methods
+pub(all) struct LegIK {
+  hip_rad : Double
+  knee_rad : Double
+  vertical_drop_mm : Double
+  knee_offset_x_mm : Double
+}
+
+pub(all) struct RaiwayParams {
+  total_height_mm : Double
+  torso_height_mm : Double
+  torso_width_mm : Double
+  torso_depth_mm : Double
+  thigh_len_mm : Double
+  shin_len_mm : Double
+  wheel_radius_mm : Double
+  wheel_width_mm : Double
+  track_width_mm : Double
+  hip_gear_module_mm : Double
+  hip_gear_length_mm : Double
+  wheel_gear_module_mm : Double
+  wheel_gear_length_mm : Double
+  num_elbows : Int32
+  tolerance_mm : Double
+  detail : @common.DetailLevel
+}
+pub fn RaiwayParams::new(total_height_mm? : Double, torso_height_mm? : Double, torso_width_mm? : Double, torso_depth_mm? : Double, thigh_len_mm? : Double, shin_len_mm? : Double, wheel_radius_mm? : Double, wheel_width_mm? : Double, track_width_mm? : Double, hip_gear_module_mm? : Double, hip_gear_length_mm? : Double, wheel_gear_module_mm? : Double, wheel_gear_length_mm? : Double, num_elbows? : Int32, tolerance_mm? : Double, detail? : @common.DetailLevel) -> Self
+
+// Type aliases
+
+// Traits

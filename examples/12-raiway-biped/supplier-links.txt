@@ -1,0 +1,9 @@
+# Supplier links for 12-raiway-biped
+RAIWAY-TIRE-20X2.1 | https://www.amazon.com/s?k=20+inch+2.1+knobby+bicycle+tire
+RAIWAY-FOAM-INSERT-20 | https://www.amazon.com/s?k=20+inch+bicycle+tire+foam+insert
+RAIWAY-RIM-20IN | https://www.amazon.com/s?k=20+inch+406+aluminum+bicycle+rim
+RAIWAY-HUB-20IN | https://www.amazon.com/s?k=bicycle+wheel+hub+disc+brake+6+bolt
+RAIWAY-BATTERY-12S | https://www.amazon.com/s?k=12s+lipo+battery+pack
+RAIWAY-IMU-6DOF | https://www.sparkfun.com/products/22397
+RAIWAY-POWERBOARD | https://mjbots.com/products/power_dist-r4-5b
+RAIWAY-ONBOARD-PC | https://www.amazon.com/s?k=mini+pc+ubuntu+robotics

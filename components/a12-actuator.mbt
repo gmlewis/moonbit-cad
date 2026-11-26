@@ -31,7 +31,7 @@ pub fn A12ActuatorParams::new(
   gear_module_mm~ : Double = 2.0,
   gear_length_mm~ : Double = 12.0,
   num_elbows~ : Int32 = 4,
-  tolerance_mm~ : Double = 0.1,
+  tolerance_mm~ : Double = @step_common.DEFAULT_GEAR_TOLERANCE_MM,
   hub_offset_mm~ : Double = 8.0,
   flange_start_deg~ : Double = 30.0,
   detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Detailed,
@@ -347,12 +347,82 @@ pub fn a12_planetary_actuator(params : A12ActuatorParams) -> @cad.Component {
     }
   }
 
-  let step_gb = match
-    @step_planetary.herringbone_planetary_gearbox(
-      a12_layout_params(params, wall),
-    ) {
-    Ok(c) => c
-    Err(e) => abort("A12 planetary cartridge failed: " + e.message())
+  let gear_comp = match params.detail {
+    @step_common.DetailLevel::Simplified => {
+      // Smooth pitch-diameter planetary cartridge for fast multi-actuator
+      // `--view` rendering (keeps STEP well under SolidCraft's 20M parameter
+      // cap while preserving exact outer envelope, mass, and BOM). Detailed /
+      // FullyModeled and standalone printable cartridges emit full 4-elbow
+      // herringbone involute teeth.
+      let ring_inner_d = params.gear_module_mm *
+        (params.sun_teeth + 2 * params.planet_teeth).to_double()
+      let sun_d = params.gear_module_mm * params.sun_teeth.to_double()
+      let planet_d = params.gear_module_mm * params.planet_teeth.to_double()
+      let z_mid = params.gear_length_mm / 2.0
+      let mut sc = @cad.Component::new(params.name + "_planetary")
+        .add_body(
+          @cad.BodyPart::tube_mm(
+            params.name + "_ring_simple",
+            2.0 * outer_r,
+            ring_inner_d,
+            params.gear_length_mm,
+            z_mm=z_mid,
+            density=@urdf.Density::petg(),
+            color=a12_shell_color(),
+          ).with_part(cartridge_part),
+        )
+        .add_body(
+          @cad.BodyPart::tube_mm(
+            params.name + "_sun_simple",
+            sun_d,
+            7.0,
+            params.gear_length_mm,
+            z_mm=z_mid,
+            density=@urdf.Density::petg(),
+            color=a12_hub_color(),
+          ),
+        )
+      for j in 0..<params.planet_count {
+        let a = 2.0 * @math.PI * j.to_double() / params.planet_count.to_double()
+        sc = sc.add_body(
+          @cad.BodyPart::tube_mm(
+            params.name + "_planet_simple_\{j}",
+            planet_d,
+            bearing.outer_mm,
+            params.gear_length_mm,
+            x_mm=center_distance * @math.cos(a),
+            y_mm=center_distance * @math.sin(a),
+            z_mm=z_mid,
+            density=@urdf.Density::petg(),
+            color=a12_hub_color(),
+          ),
+        )
+      }
+      sc.with_collision_cylinder_mm(
+        radius_mm=outer_r,
+        length_mm=params.gear_length_mm,
+        z_mm=z_mid,
+      )
+    }
+    _ => {
+      let step_gb = match
+        @step_planetary.herringbone_planetary_gearbox(
+          a12_layout_params(params, wall),
+        ) {
+        Ok(c) => c
+        Err(e) => abort("A12 planetary cartridge failed: " + e.message())
+      }
+      @cad.Component::from_step_component(
+        params.name + "_planetary",
+        step_gb,
+        density=@urdf.Density::petg(),
+        part=Some(cartridge_part),
+      ).with_collision_cylinder_mm(
+        radius_mm=outer_r,
+        length_mm=params.gear_length_mm,
+        z_mm=params.gear_length_mm / 2.0,
+      )
+    }
   }
   let a12_motor = step_a12_motor(
     name=params.name + "_a12",
@@ -543,16 +613,7 @@ pub fn a12_planetary_actuator(params : A12ActuatorParams) -> @cad.Component {
     .attach(
       params.name + "_gears_mount",
       parent_mate="gear_seat",
-      @cad.Component::from_step_component(
-        params.name + "_planetary",
-        step_gb,
-        density=@urdf.Density::petg(),
-        part=Some(cartridge_part),
-      ).with_collision_cylinder_mm(
-        radius_mm=outer_r,
-        length_mm=params.gear_length_mm,
-        z_mm=params.gear_length_mm / 2.0,
-      ),
+      gear_comp,
       spec=@cad.JointSpec::merge_rigid(),
     )
 

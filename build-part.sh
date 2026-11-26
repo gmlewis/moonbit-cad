@@ -40,6 +40,7 @@ Examples:
   ./build-part.sh 07      # Roadrunner bipedal wheeled robot
   ./build-part.sh 08      # Ascento-inspired 4-bar wheeled bipedal robot (A12 + 4-elbow)
   ./build-part.sh 09      # FOX_BOT wheeled-quadruped (8x A12 + 4-elbow + TIRE-MOUNT-86.3 + 7in tire)
+  ./build-part.sh 12      # RAIWAY large-wheeled bipedal robot (6x A12 + 20in wheels, 1140mm tall)
 
 Options:
   --check-interferences        Run the exact SMLib solid-solid overlap check

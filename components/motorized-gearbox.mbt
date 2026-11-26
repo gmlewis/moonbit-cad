@@ -1533,7 +1533,7 @@ pub fn motorized_stage_cartridge(
   min_smooth_wall_mm~ : Double = 6.0,
   top_gap_mm~ : Double = 1.0,
   coupling_shaft_mm~ : Double = 8.0,
-  tolerance_mm~ : Double = 0.1,
+  tolerance_mm~ : Double = @step_common.DEFAULT_GEAR_TOLERANCE_MM,
   motor_source~ : String = "preset",
   detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Detailed,
 ) -> @cad.Component {
@@ -1829,7 +1829,7 @@ pub fn motorized_gearbox(
   min_smooth_wall_mm~ : Double = 6.0,
   top_gap_mm~ : Double = 1.0,
   coupling_shaft_mm~ : Double = 8.0,
-  tolerance_mm~ : Double = 0.1,
+  tolerance_mm~ : Double = @step_common.DEFAULT_GEAR_TOLERANCE_MM,
   output_bearing~ : String = "FR8-2RS",
   output_free_length_mm~ : Double = 15.0,
   output_collar_width_mm~ : Double = 11.1,

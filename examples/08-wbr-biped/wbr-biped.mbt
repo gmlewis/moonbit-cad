@@ -138,7 +138,7 @@ pub fn WbrParams::new(
   planet_teeth~ : Int32 = 20,
   planet_count~ : Int32 = 4,
   num_elbows~ : Int32 = 4,
-  tolerance_mm~ : Double = 0.1,
+  tolerance_mm~ : Double = @step_common.DEFAULT_GEAR_TOLERANCE_MM,
   detail~ : @step_common.DetailLevel = @step_common.DetailLevel::Simplified,
 ) -> WbrParams {
   let s = if scale < 0.65 { 0.65 } else if scale > 2.0 { 2.0 } else { scale }

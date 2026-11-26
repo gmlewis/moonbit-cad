@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+ORIG_CMD="./run-example.sh $*"
+
 usage() {
   cat <<'EOF'
 run-example.sh — run one of the gmlewis/cad showcase examples.
@@ -327,7 +329,7 @@ if (( THREEMF_REQUESTED )); then
     echo "Error: no STEP was written at $OUT_PATH; cannot export 3MF." >&2
     exit 1
   fi
-  if ! python3 "$ROOT_DIR/scripts/step_to_3mf.py" "$OUT_PATH" "$THREEMF_OUT"; then
+  if ! "$ROOT_DIR/scripts/step_to_3mf.py" "$OUT_PATH" "$THREEMF_OUT" --command "$ORIG_CMD" --repo-dir "$ROOT_DIR"; then
     echo "Error: failed to export 3MF from $OUT_PATH." >&2
     exit 1
   fi
