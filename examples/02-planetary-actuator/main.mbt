@@ -234,6 +234,8 @@ async fn main {
   }
   let output = @common.output_paths(args)
   let detail = output.detail_level()
+  let mfg_process = output.mfg_process()
+  let use_fdm_teardrops = mfg_process.needs_fdm_teardrops()
   let explode = args.flag("explode")
   let motor_kind = args.string_opt("motor").unwrap_or("bldc")
   if motor_kind != "bldc" && motor_kind != "exposed" {
@@ -626,6 +628,7 @@ async fn main {
       material="carbon fiber nylon",
       process="3D print",
       unit_cost_usd=5.0,
+      print_bed_orient=@cad.PrintBedOrient::RotateDeg(180.0, 0.0, 0.0),
     )
     let flange_outer = @step_gears.arc_circle_segments(46.0)
     let flange_holes : Array[Array[@step_cad.ProfileSegment]] = [
@@ -672,12 +675,25 @@ async fn main {
       .translate(z=6.0)
     // Two radial M4 tap/pilot holes at 0 deg and 90 deg in the 20 mm clamping
     // boss for two M4 cup-point set screws locking onto a flatted 8 mm shaft.
-    let set_hole_0 = @step_cad.Cylinder::new(1.7, 12.0)
-      .with_name("flange_set_hole_0")
-      .rotate_y(90.0)
+    // When printed flat on the 46 mm disk (z = 14 -> Z_print = 0), local -Z
+    // points straight up (+Z_print), so under FDM each horizontal bore gets a
+    // 45-degree tangent teardrop peak pointing along local -Z for support-free
+    // printing.
+    let set_hole_0 = @step_cad.horizontal_bore(
+        1.7,
+        12.0,
+        fdm=use_fdm_teardrops,
+        name="flange_set_hole_0",
+      )
+      .rotate_x(-90.0)
+      .rotate_z(-90.0)
       .translate(x=2.0, z=3.0)
-    let set_hole_1 = @step_cad.Cylinder::new(1.7, 12.0)
-      .with_name("flange_set_hole_1")
+    let set_hole_1 = @step_cad.horizontal_bore(
+        1.7,
+        12.0,
+        fdm=use_fdm_teardrops,
+        name="flange_set_hole_1",
+      )
       .rotate_x(-90.0)
       .translate(y=2.0, z=3.0)
     let flange_boss_drilled = @step_cad.difference(
@@ -685,14 +701,14 @@ async fn main {
       [set_hole_0, set_hole_1],
       name="bldc_actuator_output_flange_boss",
     ).with_color(@step_cad.Rgb::new(0.10, 0.72, 0.85))
-    let flange_boss_part : @cad.BodyPart = {
+    let flange_solid_node = @step_cad.union_all(
+      [flange_boss_drilled, flange_disk_node],
+      name="bldc_actuator_output_flange",
+    ).with_color(@step_cad.Rgb::new(0.10, 0.72, 0.85))
+    let flange_solid_part : @cad.BodyPart = {
       ..flange_boss_body,
-      node: flange_boss_drilled,
-    }.with_part(flange_part)
-    let flange_disk_part : @cad.BodyPart = {
-      ..flange_boss_body,
-      name: "bldc_actuator_output_flange_disk",
-      node: flange_disk_node,
+      name: "bldc_actuator_output_flange",
+      node: flange_solid_node,
     }.with_part(flange_part)
     let flange_set_screw_part = @cad.PartMeta::new(
       "SET-M4x12",
@@ -706,8 +722,8 @@ async fn main {
         description="Bolted 6xM4 front output load flange with dual radial M4 set screws",
       )
       .with_part(flange_part)
-      .add_body(flange_boss_part)
-      .add_body(flange_disk_part)
+      .with_param("mfg_process", mfg_process.to_string())
+      .add_body(flange_solid_part)
       .add_body(
         @cad.BodyPart::cylinder_mm(
           "bldc_actuator_output_flange_set_screw_0",

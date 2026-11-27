@@ -96,6 +96,8 @@ pub(all) struct OutputPaths {
   print_parts : String?
   posed_parts : String?
   detail : String
+  process : String
+  fdm : Bool
   threads : String
   bed_size : String
   check : Bool
@@ -107,6 +109,7 @@ pub(all) struct OutputPaths {
   validate_meshes : Bool
 }
 pub fn OutputPaths::detail_level(Self) -> @gmlewis/step/components/common.DetailLevel
+pub fn OutputPaths::mfg_process(Self) -> @gmlewis/step/components/common.MfgProcess
 pub fn OutputPaths::print_bed(Self) -> @gmlewis/cad.PrintBedSpec
 pub fn OutputPaths::thread_rep(Self) -> @gmlewis/step/components/common.ThreadRepresentation?
 

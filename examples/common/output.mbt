@@ -26,6 +26,8 @@ pub(all) struct OutputPaths {
   print_parts : String?
   posed_parts : String?
   detail : String
+  process : String
+  fdm : Bool
   threads : String
   bed_size : String
   check : Bool
@@ -287,6 +289,18 @@ pub fn with_output_args(spec : Map[String, @cli.Arg]) -> Map[String, @cli.Arg] {
     ),
   )
   spec.set(
+    "process",
+    @cli.opt_string(
+      help="Manufacturing process for DFM features: fdm, sls, cnc, or nominal (default: fdm for --package/--print-parts, nominal otherwise)",
+    ),
+  )
+  spec.set(
+    "fdm",
+    @cli.flag(
+      help="Shortcut for --process fdm (enable support-free FDM DFM features such as 45-degree teardrop horizontal bores)",
+    ),
+  )
+  spec.set(
     "bedSize",
     @cli.opt_string(
       help="Print bed size WxDxH in mm for the fit check (default 220x220x250)",
@@ -358,6 +372,8 @@ pub fn output_paths(args : @cli.Args) -> OutputPaths {
     print_parts: args.string_opt("print-parts"),
     posed_parts: args.string_opt("posed-parts"),
     detail: args.string_opt("detail").unwrap_or("simplified"),
+    process: args.string_opt("process").unwrap_or(""),
+    fdm: args.flag("fdm"),
     threads: args.string_opt("threads").unwrap_or(""),
     bed_size: args.string_opt("bedSize").unwrap_or(""),
     check: args.flag("check"),
@@ -383,6 +399,29 @@ pub fn OutputPaths::detail_level(
         self.detail +
         "' (expected simplified, detailed, or fully-modeled)",
       )
+  }
+}
+
+///|
+/// Resolves the manufacturing process from `--process` / `--fdm`, defaulting to
+/// `Fdm` for printable exports (`--package` or `--print-parts`) and `Nominal`
+/// otherwise. Aborts on an invalid `--process` value.
+pub fn OutputPaths::mfg_process(self : OutputPaths) -> @step_common.MfgProcess {
+  if self.process != "" {
+    match @step_common.MfgProcess::parse(self.process) {
+      Some(proc) => return proc
+      None =>
+        abort(
+          "error: invalid --process '" +
+          self.process +
+          "' (expected fdm, sls, cnc, or nominal)",
+        )
+    }
+  }
+  if self.fdm || self.build_package is Some(_) || self.print_parts is Some(_) {
+    @step_common.MfgProcess::Fdm
+  } else {
+    @step_common.MfgProcess::Nominal
   }
 }
 

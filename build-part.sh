@@ -49,6 +49,9 @@ Options:
   --meshes                     Export printable/*.3mf and printable/*.stl
   --3mf                        Export only printable/*.3mf (implied by --meshes)
   --fast                       With --meshes/--3mf, skip large gear cartridges
+  --process PROCESS            Manufacturing process: fdm (default), sls, cnc, nominal
+  --fdm | --sls | --cnc | --nominal
+                               Shortcuts for --process <value>
   -h, --help                   Show this help and exit
 
 Options that take a value accept it as the next argument or inline after "="
@@ -73,6 +76,7 @@ EXCLUDE_PATTERN=""
 EXPORT_MESHES=0
 MESH_FORMATS="3mf,stl"
 FAST_MESHES=0
+MFG_PROCESS="fdm"
 EXAMPLE=""
 ARGS=("$@")
 i=0
@@ -124,6 +128,31 @@ while (( i < ${#ARGS[@]} )); do
       ;;
     --fast)
       FAST_MESHES=1
+      ;;
+    --process)
+      if (( ! inline )); then
+        if (( i < ${#ARGS[@]} )) && [[ "${ARGS[$i]}" != -* ]]; then
+          value="${ARGS[$i]}"
+          i=$((i + 1))
+        else
+          echo "error: ${opt} needs a value (fdm, sls, cnc, or nominal)" >&2
+          usage >&2
+          exit 2
+        fi
+      fi
+      MFG_PROCESS="${value}"
+      ;;
+    --fdm)
+      MFG_PROCESS="fdm"
+      ;;
+    --sls)
+      MFG_PROCESS="sls"
+      ;;
+    --cnc)
+      MFG_PROCESS="cnc"
+      ;;
+    --nominal)
+      MFG_PROCESS="nominal"
       ;;
     --)
       ;;
@@ -182,7 +211,7 @@ echo "Building ${EXAMPLE} ..."
 # `detailed` is the buildable level: it includes heat-set inserts, bearings,
 # and the full fastener schedule. Use `--detail simplified` by hand for a
 # lighter mock-up.
-./run-example.sh "${EXAMPLE}" --headless --release --detail detailed --package "${OUT}"
+./run-example.sh "${EXAMPLE}" --headless --release --detail detailed --process "${MFG_PROCESS}" --package "${OUT}"
 
 # Every purchased part should carry a viable supplier link. This is a warning,
 # not a build failure, so existing examples keep building while their link
