@@ -44,12 +44,15 @@ Examples:
 
 Options:
   --check-interferences        Run the exact SMLib solid-solid overlap check
-  --min-overlap=MM3            Ignore overlaps below this volume (default 1.0)
-  --exclude-pattern=REGEX      Body-name pattern for intentional contacts
+  --min-overlap MM3            Ignore overlaps below this volume (default 1.0)
+  --exclude-pattern REGEX      Body-name pattern for intentional contacts
   --meshes                     Export printable/*.3mf and printable/*.stl
   --3mf                        Export only printable/*.3mf (implied by --meshes)
   --fast                       With --meshes/--3mf, skip large gear cartridges
   -h, --help                   Show this help and exit
+
+Options that take a value accept it as the next argument or inline after "="
+(`--min-overlap 2.5` or `--min-overlap=2.5`); both forms are equivalent.
 
 Every build also renders views/{iso,front,left,top,exploded}.png when
 solidcraft-cli is on PATH, and START-HERE.html embeds them.
@@ -71,8 +74,20 @@ EXPORT_MESHES=0
 MESH_FORMATS="3mf,stl"
 FAST_MESHES=0
 EXAMPLE=""
-for arg in "$@"; do
-  case "$arg" in
+ARGS=("$@")
+i=0
+while (( i < ${#ARGS[@]} )); do
+  arg="${ARGS[$i]}"
+  i=$((i + 1))
+  opt="$arg"
+  value=""
+  inline=0
+  if [[ "$arg" == -* && "$arg" == *=* ]]; then
+    opt="${arg%%=*}"
+    value="${arg#*=}"
+    inline=1
+  fi
+  case "$opt" in
     -h | --help)
       usage
       exit 0
@@ -80,11 +95,24 @@ for arg in "$@"; do
     --check-interferences)
       CHECK_INTERFERENCES=1
       ;;
-    --min-overlap=*)
-      MIN_OVERLAP="${arg#*=}"
-      ;;
-    --exclude-pattern=*)
-      EXCLUDE_PATTERN="${arg#*=}"
+    --min-overlap | --exclude-pattern)
+      # The value may follow inline ("--min-overlap=2") or as the next
+      # argument ("--min-overlap 2").
+      if (( ! inline )); then
+        if (( i < ${#ARGS[@]} )) && [[ "${ARGS[$i]}" != -* ]]; then
+          value="${ARGS[$i]}"
+          i=$((i + 1))
+        else
+          echo "error: ${opt} needs a value" >&2
+          usage >&2
+          exit 2
+        fi
+      fi
+      if [[ "${opt}" == "--min-overlap" ]]; then
+        MIN_OVERLAP="${value}"
+      else
+        EXCLUDE_PATTERN="${value}"
+      fi
       ;;
     --meshes)
       EXPORT_MESHES=1
