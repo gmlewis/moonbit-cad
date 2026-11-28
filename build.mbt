@@ -972,13 +972,255 @@ fn collect_name_key(
 /// only after `viewer.js` has loaded `assembly.gltf`, so an offline or
 /// `file://` page keeps the static image.
 fn viewer_html() -> String {
-  "<div class=\"model-panel\">\n" +
+  "<div class=\"model-panel\" id=\"model-panel\">\n" +
   "  <img class=\"model-fallback\" src=\"views/iso.png\" alt=\"Isometric assembly view\">\n" +
   "  <canvas hidden aria-label=\"Interactive 3D assembly view\"></canvas>\n" +
   "  <div class=\"model-hint\" hidden></div>\n" +
   "</div>\n" +
   "<script type=\"importmap\">{\"imports\":{\"three\":\"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js\",\"three/addons/\":\"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/\"}}</script>\n" +
   "<script type=\"module\" src=\"viewer.js\"></script>\n\n"
+}
+
+///|
+/// Escapes HTML special characters for safe inline HTML inside START-HERE.md.
+fn html_escape(text : String) -> String {
+  text
+  .replace_all(old="&", new="&amp;")
+  .replace_all(old="<", new="&lt;")
+  .replace_all(old=">", new="&gt;")
+  .replace_all(old="\"", new="&quot;")
+}
+
+///|
+/// Formats a STEP/GLB node name identically to Three.js GLTFLoader +
+/// `viewer.js`'s `humanizePartName()`, so Ctrl-F in START-HERE.html matches
+/// right-clicked part names in the 3D viewer character-for-character.
+fn viewer_display_name(raw_name : String) -> String {
+  let buf = StringBuilder()
+  for ch in raw_name {
+    if ch == '/' ||
+      ch == '[' ||
+      ch == ']' ||
+      ch == '.' ||
+      ch == ':' ||
+      ch == ' ' {
+      continue
+    }
+    buf.write_char(ch)
+  }
+  let sanitized = buf.to_string()
+  let trimmed = if sanitized.has_prefix("bldc_actuator_bldc_actuator_") {
+    sanitized[28:].to_owned()
+  } else if sanitized.has_prefix("bldc_actuator_") {
+    sanitized[14:].to_owned()
+  } else {
+    sanitized
+  }
+  trimmed.replace_all(old="_", new=" ")
+}
+
+///|
+/// Maps each BOM `part_number` to the unique 3D viewer display names of its
+/// compiled bodies in `assembly.step` / `assembly.glb`.
+fn Component::part_viewer_name_map(
+  self : Component,
+) -> Map[String, Array[String]] {
+  let out : Map[String, Array[String]] = Map([])
+  let (links, _, _) = self.compile_links()
+  for link in links {
+    for body in link.bodies {
+      match body.part {
+        Some(meta) => {
+          let vname = viewer_display_name(link.name + "_" + body.name)
+          let list = match out.get(meta.part_number) {
+            Some(existing) => existing
+            None => {
+              let fresh : Array[String] = []
+              out.set(meta.part_number, fresh)
+              fresh
+            }
+          }
+          if !list.contains(vname) {
+            list.push(vname)
+          }
+        }
+        None => ()
+      }
+    }
+  }
+  out
+}
+
+///|
+/// Formats a list of 3D viewer names as clickable focus links for a Markdown
+/// table cell.
+fn format_viewer_names_cell(names : Array[String]) -> String {
+  if names.length() == 0 {
+    return "—"
+  }
+  let links = names.map(fn(n) {
+    let esc = html_escape(n)
+    "<a class=\"part-focus-link\" href=\"#model-panel\" data-focus-part=\"" +
+    esc +
+    "\" title=\"Focus in 3D viewer\">" +
+    esc +
+    "</a>"
+  })
+  links.join(", ")
+}
+
+///|
+/// Collects a map from CAD component/link/body names appearing in the assembly
+/// procedure to a matching 3D viewer focus query string.
+fn Component::collect_focus_targets(self : Component) -> Map[String, String] {
+  let targets : Map[String, String] = Map([])
+  let (links, _, _) = self.compile_links()
+  for link in links {
+    if link.bodies.length() > 0 {
+      let first_vname = viewer_display_name(
+        link.name + "_" + link.bodies[0].name,
+      )
+      if !targets.contains(link.name) {
+        targets.set(link.name, first_vname)
+      }
+    }
+    for body in link.bodies {
+      let vname = viewer_display_name(link.name + "_" + body.name)
+      if !targets.contains(body.name) {
+        targets.set(body.name, vname)
+      }
+      let full = link.name + "_" + body.name
+      if !targets.contains(full) {
+        targets.set(full, vname)
+      }
+    }
+  }
+  // Also map every sub-component name in the tree so merged sub-components
+  // (such as `bldc_actuator_output_flange`, `bldc_actuator_rotor_adapter`,
+  // `bldc_actuator_output_collar`, `moteus_c1`, etc.) resolve to their
+  // viewer display name.
+  fn walk(comp : Component) -> Unit {
+    if !targets.contains(comp.name) {
+      let query = viewer_display_name(comp.name)
+      if query != "" {
+        targets.set(comp.name, query)
+      }
+    }
+    for att in comp.attachments {
+      walk(att.child)
+    }
+  }
+  walk(self)
+  targets
+}
+
+///|
+fn is_ident_char(ch : Char) -> Bool {
+  (ch >= 'a' && ch <= 'z') ||
+  (ch >= 'A' && ch <= 'Z') ||
+  (ch >= '0' && ch <= '9') ||
+  ch == '_' ||
+  ch == '-'
+}
+
+///|
+/// Turns known CAD part/component identifiers in a single procedure line into
+/// clickable `<a class="part-focus-link">` links that jump to the 3D viewer
+/// and lock Focus onto that part.
+fn linkify_procedure_line(
+  line : String,
+  targets : Map[String, String],
+) -> String {
+  let chars : Array[Char] = line.iter().collect()
+  let n = chars.length()
+  let out = StringBuilder()
+  let mut i = 0
+  while i < n {
+    if is_ident_char(chars[i]) {
+      let start = i
+      while i < n && is_ident_char(chars[i]) {
+        i = i + 1
+      }
+      let tok_buf = StringBuilder()
+      for k in start..<i {
+        tok_buf.write_char(chars[k])
+      }
+      let tok = tok_buf.to_string()
+      match targets.get(tok) {
+        Some(focus_query) => {
+          out.write_string(
+            "<a class=\"part-focus-link\" href=\"#model-panel\" data-focus-part=\"",
+          )
+          out.write_string(html_escape(focus_query))
+          out.write_string("\" title=\"Focus ")
+          out.write_string(html_escape(focus_query))
+          out.write_string(" in 3D viewer\">")
+          out.write_string(html_escape(tok))
+          out.write_string("</a>")
+        }
+        None => out.write_string(html_escape(tok))
+      }
+    } else {
+      let ch = chars[i]
+      if ch == '&' {
+        out.write_string("&amp;")
+      } else if ch == '<' {
+        out.write_string("&lt;")
+      } else if ch == '>' {
+        out.write_string("&gt;")
+      } else if ch == '"' {
+        out.write_string("&quot;")
+      } else {
+        out.write_char(ch)
+      }
+      i = i + 1
+    }
+  }
+  out.to_string()
+}
+
+///|
+/// Renders the assembly and test procedure as interactive HTML where every
+/// named part is a clickable focus link back to the 3D viewer.
+fn render_interactive_procedure_html(
+  procedure : String,
+  targets : Map[String, String],
+) -> String {
+  let raw_lines : Array[String] = procedure
+    .split("\n")
+    .collect()
+    .map(fn(s) { s.to_owned() })
+  let out = StringBuilder()
+  out.write_string("```{=html}\n<section class=\"assembly-procedure\">\n")
+  let n = raw_lines.length()
+  let mut i = 0
+  while i < n {
+    let line = raw_lines[i]
+    let trimmed = line.trim().to_owned()
+    if trimmed == "" {
+      i = i + 1
+      continue
+    }
+    // Detect underlined section headers ("===" or "---" on the next line).
+    if i + 1 < n {
+      let next_trim = raw_lines[i + 1].trim().to_owned()
+      if next_trim.length() >= 3 &&
+        (next_trim.has_prefix("===") || next_trim.has_prefix("---")) {
+        let tag = if next_trim.has_prefix("===") { "h3" } else { "h4" }
+        out.write_string(
+          "<" + tag + ">" + html_escape(trimmed) + "</" + tag + ">\n",
+        )
+        i = i + 2
+        continue
+      }
+    }
+    out.write_string("<p class=\"assembly-step\">")
+    out.write_string(linkify_procedure_line(line, targets))
+    out.write_string("</p>\n")
+    i = i + 1
+  }
+  out.write_string("</section>\n```\n\n")
+  out.to_string()
 }
 
 ///|
@@ -1056,10 +1298,11 @@ pub fn Component::start_here_text(
   out = out +
     "Open the `printable/` folder. Print one copy of each file unless the Qty column says more. " +
     "Use the material and infill below, and put the largest flat face on the build plate.\n\n"
+  let viewer_names_by_part = self.part_viewer_name_map()
   out = out +
-    "| File to print | What it is | Qty | Material | Process | Infill | Orientation | Size (mm) | Fits bed | Est. mass | Est. time |\n"
+    "| File to print | 3D Viewer Name | What it is | Qty | Material | Process | Infill | Orientation | Size (mm) | Fits bed | Est. mass | Est. time |\n"
   out = out +
-    "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n"
+    "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n"
   let part_map = printable_part_map(printable)
   let mut printed_count = 0
   for line in bom.lines {
@@ -1070,6 +1313,9 @@ pub fn Component::start_here_text(
       printable_files.contains(sanitize_part_number(line.part_number)) {
       printed_count = printed_count + line.quantity
       let infill = print_infill(line)
+      let viewer_cell = format_viewer_names_cell(
+        viewer_names_by_part.get(line.part_number).unwrap_or([]),
+      )
       let (size, bed_fit, mass, time) = match part_map.get(line.part_number) {
         Some(part) =>
           (
@@ -1096,6 +1342,8 @@ pub fn Component::start_here_text(
         "| `printable/" +
         sanitize_part_number(line.part_number) +
         ".step` | " +
+        viewer_cell +
+        " | " +
         md_cell(line.description) +
         " | " +
         line.quantity.to_string() +
@@ -1120,10 +1368,22 @@ pub fn Component::start_here_text(
   }
   for cartridge in cartridges {
     printed_count = printed_count + 1
+    let cart_viewer_names : Array[String] = []
+    for line in bom.lines {
+      if is_gearset_layer_for(line.part_number, [cartridge]) {
+        for vn in viewer_names_by_part.get(line.part_number).unwrap_or([]) {
+          if !cart_viewer_names.contains(vn) {
+            cart_viewer_names.push(vn)
+          }
+        }
+      }
+    }
     out = out +
       "| `printable/" +
       cartridge +
-      ".step` | Print-in-place herringbone gear set (sun + planets + ring) | 1 | PETG / carbon fiber nylon | 3D print | 40% | flat on the build plate, gears already in place | — | — | — | — |\n"
+      ".step` | " +
+      format_viewer_names_cell(cart_viewer_names) +
+      " | Print-in-place herringbone gear set (sun + planets + ring) | 1 | PETG / carbon fiber nylon | 3D print | 40% | flat on the build plate, gears already in place | — | — | — | — |\n"
   }
   out = out +
     "\nThat is **" +
@@ -1131,12 +1391,15 @@ pub fn Component::start_here_text(
     " printed pieces**. `print-list.csv` has the same list with layer height and support notes.\n\n"
   out = out + "## 2. Buy these parts\n\n"
   out = out +
-    "| Qty | What to buy | Supplier | Unit price | Line total | Link | Notes |\n"
-  out = out + "| --- | --- | --- | --- | --- | --- | --- |\n"
+    "| Qty | What to buy | 3D Viewer Name | Supplier | Unit price | Line total | Link | Notes |\n"
+  out = out + "| --- | --- | --- | --- | --- | --- | --- | --- |\n"
   let mut purchase_total = 0.0
   for line in bom.lines {
     if line.process == "purchased" {
       purchase_total = purchase_total + line.total_cost_usd
+      let viewer_cell = format_viewer_names_cell(
+        viewer_names_by_part.get(line.part_number).unwrap_or([]),
+      )
       let link = if line.supplier_url == "" {
         "—"
       } else {
@@ -1150,6 +1413,8 @@ pub fn Component::start_here_text(
         " (" +
         md_cell(line.part_number) +
         ") | " +
+        viewer_cell +
+        " | " +
         md_cell(if line.supplier == "" { "any" } else { line.supplier }) +
         " | $" +
         round2(line.unit_cost_usd).to_string() +
@@ -1195,10 +1460,13 @@ pub fn Component::start_here_text(
       keys.join(", ") + ".\n\n"
     })
   out = out +
+    "Click any highlighted part name below (or in the tables above) to jump to the 3D viewer and lock focus on it while scrubbing the explosion slider. " +
     "If a step uses a name you do not recognize, open `NAME-KEY.md`; it maps every name to the part it means.\n\n"
   let step_count = self.assembly_plan().length()
   if step_count <= 80 {
-    out = out + "```\n" + display_procedure + "```\n\n"
+    let focus_targets = self.collect_focus_targets()
+    out = out +
+      render_interactive_procedure_html(display_procedure, focus_targets)
   } else {
     out = out +
       "This design has **" +

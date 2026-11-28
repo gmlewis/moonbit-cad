@@ -2381,45 +2381,79 @@ pub fn planetary_bldc_actuator(
     @urdf.JointMimic::new(rotor_joint, multiplier=1.0),
   )
   // Couple the A12 rotor prop adapter (`output_face` at z = -6.0) to Stage 1 sun
-  // (`z = 4.0`) with a bolted 4xM4 flange + integral 6.7 mm across-flats hex
-  // drive post that engages the sun gear's 7.0 mm hexagonal bore (zero slip).
+  // (`z = 4.0`) with a bolted 4xM4 flange + raised central cylindrical thrust
+  // spacer (clearing the planet gears and sun teeth by 2 mm axially) + integral
+  // 6.7 mm across-flats hex drive post engaging the sun gear's hexagonal bore.
+  // The 4 M4 SHCS heads are counterbored (7.8 mm dia x 4.4 mm deep) so they sit
+  // completely recessed inside the flange with full axial clearance to the gears.
   if is_a12 {
     let adapter_len = -motor_mount_z - 32.0 + stage_gap
+    let spacer_h = if adapter_len >= 9.0 { 2.0 } else { 1.0 }
+    let flange_h = adapter_len - spacer_h
+    let cbore_depth = 4.4
+    let bolt_seat_z = if flange_h > cbore_depth + 2.0 {
+      flange_h - cbore_depth
+    } else {
+      flange_h / 2.0
+    }
     let hex_post_len = gear_length_mm - 0.5
     let adapter_part = fabricated_part(
-      "ACT-ROTOR-ADAPTER", "Printed A12 rotor-to-sun hex drive adapter: bolts to the A12 23 mm 4xM4 prop mount and slides its integral 6.7 mm hex post straight into the sun gear's hexagonal bore",
+      "ACT-ROTOR-ADAPTER", "Printed A12 rotor-to-sun hex drive adapter: counterbored 4xM4x8 flange (2 mm axial gear clearance), 12 mm central sun-hub spacer, and integral 6.7 mm hex drive post",
       "carbon fiber nylon", "3D print", 6.0,
     )
     let prop_bolt_r = 11.5
     let flange_holes : Array[(Double, Double, Double)] = []
+    let cbore_cutters : Array[@step_cad.SceneNode] = []
     for i in 0..<4 {
       let theta = 2.0 * @math.PI * i.to_double() / 4.0
-      flange_holes.push(
-        (prop_bolt_r * @math.cos(theta), prop_bolt_r * @math.sin(theta), 4.3),
+      let bx = prop_bolt_r * @math.cos(theta)
+      let by = prop_bolt_r * @math.sin(theta)
+      flange_holes.push((bx, by, 4.3))
+      // 7.8 mm dia counterbore clears ISO 4762 M4 SHCS (7.0 mm head dia, 4.0 mm
+      // head height) and extends 0.5 mm past flange_h for clean boolean trim.
+      cbore_cutters.push(
+        @step_cad.Cylinder::new(7.8, flange_h - bolt_seat_z + 0.5)
+        .with_name(name + "_rotor_adapter_cbore_\{i}")
+        .translate(x=bx, y=by, z=bolt_seat_z),
       )
     }
     let flange_body = actuator_plate_body(
       name + "_rotor_adapter_flange",
-      31.0,
-      adapter_len,
+      34.0,
+      flange_h,
       0.0,
       flange_holes,
       @urdf.Density::carbon_fiber(),
       @step_cad.Rgb::orange(),
       detail,
     )
+    let flange_cbored = @step_cad.difference(
+      flange_body.node,
+      cbore_cutters,
+      name=name + "_rotor_adapter_flange_cbored",
+    )
+    // Central 12.0 mm OD cylindrical spacer boss contacts only the co-rotating
+    // sun gear hub (r = 6.0 mm < sun root 7.125 mm < planet sweep 7.5 mm),
+    // leaving 2.0 mm axial air gap over the outer flange and counterbored bolts.
+    let spacer_overlap = 0.5
+    let spacer_boss_node = @step_cad.Cylinder::new(
+        12.0,
+        spacer_h + spacer_overlap,
+      )
+      .with_name(name + "_rotor_adapter_spacer")
+      .translate(z=flange_h - spacer_overlap)
     let hex_post_body = hex_prism_body_mm(
       name + "_rotor_adapter_hex_post",
       3.35,
-      hex_post_len,
-      adapter_len,
+      hex_post_len + spacer_overlap,
+      adapter_len - spacer_overlap,
       @urdf.Density::carbon_fiber(),
       @step_cad.Rgb::orange(),
     )
     let adapter_monolith : @cad.BodyPart = {
       ..flange_body,
       node: @step_cad.union_all(
-        [flange_body.node, hex_post_body.node],
+        [flange_cbored, spacer_boss_node, hex_post_body.node],
         name=name + "_rotor_adapter_flange",
       ).with_color(@step_cad.Rgb::orange()),
     }.with_part(adapter_part)
@@ -2430,8 +2464,9 @@ pub fn planetary_bldc_actuator(
       .with_part(adapter_part)
       .add_body(adapter_monolith)
       .add_mate_mm_deg("rotor_seat")
-    // Four M4 x 14 mm socket head cap screws bolt ACT-ROTOR-ADAPTER down onto
-    // the A12 rotor's 23 mm prop-adapter bolt circle.
+    // Four M4 x 8 mm socket head cap screws seat inside the counterbores at
+    // z = bolt_seat_z (3.6 mm), giving 4.4 mm thread engagement into the A12
+    // rotor prop mount with heads recessed 0.4 mm below the flange top.
     for i in 0..<4 {
       let theta = 2.0 * @math.PI * i.to_double() / 4.0
       adapter = adapter
@@ -2439,7 +2474,7 @@ pub fn planetary_bldc_actuator(
           "adapter_bolt_\{i}",
           x=prop_bolt_r * @math.cos(theta),
           y=prop_bolt_r * @math.sin(theta),
-          z=adapter_len,
+          z=bolt_seat_z,
         )
         .attach(
           "adapter_screw_merge_\{i}",
@@ -2447,7 +2482,7 @@ pub fn planetary_bldc_actuator(
           iso_shcs_screw(
             name="\{name}_rotor_adapter_screw_\{i}",
             size=@step_standards.M4,
-            length_mm=14.0,
+            length_mm=8.0,
             detail~,
           ),
           child_mate="head_seat",

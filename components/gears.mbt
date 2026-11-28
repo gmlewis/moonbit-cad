@@ -294,13 +294,19 @@ fn pgb_carrier_component(
   } else {
     pgb_output_boss_mm
   }
-  let part = fabricated_part(
-    "PGB-CARRIER",
-    "Planetary carrier plate and top hub (print); drill/tap the M4 radial set-screw hole, press the 8 mm pins into the 8.1 mm holes, and fit the separate steel pins, washers, and output shaft",
-    "PETG / carbon fiber nylon",
-    "3D print",
-    pgb_carrier_cost_usd(),
-  )
+  let part = {
+    ..fabricated_part(
+      "PGB-CARRIER",
+      "Planetary carrier plate and top hub (print); drill/tap the M4 radial set-screw hole, press the 8 mm pins into the 8.1 mm holes, and fit the separate steel pins, washers, and output shaft",
+      "PETG / carbon fiber nylon",
+      "3D print",
+      pgb_carrier_cost_usd(),
+    ),
+    // Flip 180 deg around X so the solid hub face sits flat on the build plate
+    // and the 22 mm central recess opens upward (100% support-free FDM print;
+    // the 0.35 mm elephant-foot chamfer is applied to this new Z=0 bottom).
+    print_bed_orient: @cad.PrintBedOrient::RotateDeg(180.0, 0.0, 0.0),
+  }
   let pin_part = purchased_part(
     "DOWEL-\{pin_diam}x\{pin_length}",
     "Hardened dowel pin \{pin_diam} x \{pin_length} mm",
@@ -623,12 +629,43 @@ fn pgb_build(
         Ok(size) => size.width_mm
         Err(_) => 5.0
       }
+      // Integral 1.0 mm internal bearing shoulder at Z = 0..1.0 mm prevents
+      // the planet bearing from walking downward out of the bore under
+      // vibration while clearing the inner race and dust seal (ID = bore - 3 mm).
+      let planet_bore_diam = params.planet_bore_radius_mm * 2.0
+      let shoulder_h = if planet_bore_diam >= 13.0 &&
+        length >= bearing_width + 1.0 {
+        let shoulder_part = if planet_part.bodies.length() > 0 {
+          planet_part.bodies[0].part
+        } else {
+          None
+        }
+        let shoulder_body = @cad.BodyPart::tube_mm(
+          "\{planet_name}_bearing_shoulder",
+          planet_bore_diam + 0.6,
+          planet_bore_diam - 3.0,
+          1.0,
+          z_mm=0.5,
+          density=@urdf.Density::petg(),
+          color=@step_cad.Rgb::new(0.15, 0.65, 0.95),
+        )
+        let assigned_shoulder = match shoulder_part {
+          Some(pm) => shoulder_body.with_part(pm)
+          None => shoulder_body
+        }
+        planet_part = planet_part.add_body(assigned_shoulder)
+        1.0
+      } else {
+        0.0
+      }
       planet_part = planet_part.attach(
         "\{planet_name}_bearing_merge",
         parent_mate="bottom",
         bearing,
         child_mate="origin",
-        spec=@cad.JointSpec::merge_rigid(offset_mm=bearing_width / 2.0),
+        spec=@cad.JointSpec::merge_rigid(
+          offset_mm=shoulder_h + bearing_width / 2.0,
+        ),
       )
     }
     let planet_spec = @cad.JointSpec::continuous(
@@ -765,14 +802,40 @@ pub fn planetary_print_in_place(
     pgb_ring_cost_usd() +
     pgb_planet_cost_usd() * params.num_planets.to_double(),
   )
-  @cad.Component::from_step_component(
-    name,
-    step_comp,
-    density=@urdf.Density::petg(),
-    part=Some(part),
-  )
-  .with_param("num_elbows", params.num_elbows.to_string())
-  .with_param("print_in_place", "true")
+  let layout = @step_planetary.herringbone_planetary_layout(step_params)
+  let mut comp = @cad.Component::from_step_component(
+      name,
+      step_comp,
+      density=@urdf.Density::petg(),
+      part=Some(part),
+    )
+    .with_param("num_elbows", params.num_elbows.to_string())
+    .with_param("print_in_place", "true")
+  // Add an integral 1.0 mm internal bearing retaining shoulder at Z = 0..1.0 mm
+  // inside each planet gear when sized for a planet bearing (e.g. 688-2RS in a
+  // 16 mm bore). Prints 100% support-free on the build plate and prevents the
+  // bearing from dropping out the bottom under vibration.
+  let planet_bore_diam = params.planet_bore_radius_mm * 2.0
+  if params.carrier_bearing_designation != "" &&
+    planet_bore_diam >= 13.0 &&
+    params.gear_length_mm >= 6.0 {
+    for i in 0..<layout.planets.length() {
+      let planet = layout.planets[i]
+      let shoulder = @cad.BodyPart::tube_mm(
+        "\{name}_planet_\{i}_bearing_shoulder",
+        planet_bore_diam + 0.6,
+        planet_bore_diam - 3.0,
+        1.0,
+        x_mm=planet.x,
+        y_mm=-planet.z,
+        z_mm=0.5,
+        density=@urdf.Density::petg(),
+        color=@step_cad.Rgb::new(0.15, 0.65, 0.95),
+      ).with_part(part)
+      comp = comp.add_body(shoulder)
+    }
+  }
+  comp
 }
 
 ///|

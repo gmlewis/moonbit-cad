@@ -126,6 +126,10 @@ function createToolbar(panelEl, hasExplode) {
   ctxMenu.hidden = true;
   ctxMenu.innerHTML = `
     <div class="viewer-context-header"></div>
+    <button type="button" class="viewer-context-item" data-action="focus-part">
+      <span>🎯</span>
+      <span>Focus Part (Lock During Explode)</span>
+    </button>
     <button type="button" class="viewer-context-item" data-action="copy-part-name">
       <span>📋</span>
       <span>Copy Part Name to Clipboard</span>
@@ -133,12 +137,21 @@ function createToolbar(panelEl, hasExplode) {
   `;
   panelEl.appendChild(ctxMenu);
 
+  const focusBadge = document.createElement("div");
+  focusBadge.className = "viewer-focus-badge";
+  focusBadge.hidden = true;
+  focusBadge.innerHTML = `
+    <span class="viewer-focus-label"></span>
+    <button type="button" class="viewer-focus-clear" title="Clear focus (Esc)">✕</button>
+  `;
+  panelEl.appendChild(focusBadge);
+
   const toast = document.createElement("div");
   toast.className = "viewer-toast";
   toast.hidden = true;
   panelEl.appendChild(toast);
 
-  return { bar, tooltip, ctxMenu, toast };
+  return { bar, tooltip, ctxMenu, focusBadge, toast };
 }
 
 async function init() {
@@ -255,6 +268,7 @@ async function init() {
     }
     obj.userData.baseColors = baseColors;
     const rawName = (obj.parent && obj.parent !== model && obj.parent.name) ? obj.parent.name : obj.name;
+    obj.userData.rawName = rawName;
     obj.userData.displayName = humanizePartName(rawName);
     pickableMeshes.push(obj);
   });
@@ -363,10 +377,32 @@ async function init() {
   const ANIM_DURATION_MS = 1650;
   let useRoleColors = false;
 
-  // Smooth camera transition targets when clicking Explode / Assemble / Reset.
+  // Smooth camera transition targets when clicking Explode / Assemble / Reset / Focus.
   let camAnim = null;
+  // Sticky focus state: when set, camera + orbit target track this part's
+  // world-space center delta as the explosion slider/animation moves parts.
+  let focusedTarget = null;
+
+  function computeTargetBounds(meshes) {
+    root.updateMatrixWorld(true);
+    const box = new THREE.Box3();
+    for (const m of meshes) {
+      box.expandByObject(m);
+    }
+    if (box.isEmpty()) {
+      return { center: new THREE.Vector3(), radius: 0.05 };
+    }
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    const radius = Math.max(size.x, size.y, size.z) * 0.5 || 0.02;
+    return { center, radius };
+  }
 
   function applyExplode(t) {
+    const prevFocusCenter = focusedTarget
+      ? computeTargetBounds(focusedTarget.meshes).center
+      : null;
+
     currentT = Math.max(0, Math.min(1, t));
     for (const part of animatedParts) {
       const [w0, w1] = part.window;
@@ -385,6 +421,21 @@ async function init() {
               m.color.copy(baseColors[i]).lerp(part.roleColor, colorMix);
             }
           }
+        }
+      }
+    }
+
+    if (focusedTarget && prevFocusCenter) {
+      const newFocusCenter = computeTargetBounds(focusedTarget.meshes).center;
+      const delta = newFocusCenter.clone().sub(prevFocusCenter);
+      if (delta.lengthSq() > 1e-14) {
+        camera.position.add(delta);
+        controls.target.add(delta);
+        if (camAnim) {
+          camAnim.fromPos.add(delta);
+          camAnim.toPos.add(delta);
+          camAnim.fromTarget.add(delta);
+          camAnim.toTarget.add(delta);
         }
       }
     }
@@ -436,12 +487,121 @@ async function init() {
     camAnim = null;
   });
 
-  // Build interactive toolbar, tooltip, context menu & toast.
-  const { bar, tooltip, ctxMenu, toast } = createToolbar(panel, hasExplode);
+  // Build interactive toolbar, tooltip, context menu, focus badge & toast.
+  const { bar, tooltip, ctxMenu, focusBadge, toast } = createToolbar(panel, hasExplode);
   const ctxHeader = ctxMenu.querySelector(".viewer-context-header");
+  const ctxFocusBtn = ctxMenu.querySelector('[data-action="focus-part"]');
   const ctxCopyBtn = ctxMenu.querySelector('[data-action="copy-part-name"]');
+  const focusLabelEl = focusBadge.querySelector(".viewer-focus-label");
+  const focusClearBtn = focusBadge.querySelector(".viewer-focus-clear");
   let ctxTargetName = "";
+  let ctxTargetMesh = null;
   let toastTimer = null;
+
+  function setMeshEmissive(mesh, hex, intensity) {
+    if (!mesh) return;
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    for (const m of mats) {
+      if (m && m.emissive) {
+        m.emissive.setHex(hex);
+        m.emissiveIntensity = intensity;
+      }
+    }
+  }
+
+  function refreshMeshHighlight(mesh) {
+    if (!mesh) return;
+    const isFocused = focusedTarget && focusedTarget.meshes.includes(mesh);
+    if (mesh === hoveredMesh) {
+      setMeshEmissive(mesh, 0x1d4ed8, 0.42);
+    } else if (isFocused) {
+      setMeshEmissive(mesh, 0xf59e0b, 0.36);
+    } else {
+      setMeshEmissive(mesh, 0x000000, 0);
+    }
+  }
+
+  function clearFocus() {
+    if (!focusedTarget) return;
+    const prev = focusedTarget.meshes;
+    focusedTarget = null;
+    for (const m of prev) refreshMeshHighlight(m);
+    focusBadge.hidden = true;
+  }
+
+  function meshesForSamePart(mesh) {
+    if (!mesh) return [];
+    const parent = mesh.parent;
+    if (parent && parent !== model && parent.name) {
+      const groupMeshes = [];
+      parent.traverse((c) => {
+        if (c.isMesh) groupMeshes.push(c);
+      });
+      if (groupMeshes.length > 0) return groupMeshes;
+    }
+    return [mesh];
+  }
+
+  function focusOnMeshes(meshes, label, scrollToViewer = false) {
+    if (!meshes || meshes.length === 0) return;
+    clearFocus();
+    focusedTarget = { label, meshes };
+    for (const m of meshes) refreshMeshHighlight(m);
+    if (focusLabelEl) focusLabelEl.textContent = `🎯 Focused: ${label}`;
+    focusBadge.hidden = false;
+    const { center, radius } = computeTargetBounds(meshes);
+    const distance = Math.max(radius * 3.8, 0.045);
+    startCameraTransition({ center, distance }, 750);
+    if (scrollToViewer) {
+      panel.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    showToast(`Focused: ${label}`);
+  }
+
+  function focusByQuery(query, scrollToViewer = true) {
+    const q = (query || "").trim().toLowerCase();
+    if (!q) return false;
+    const qNorm = q.replaceAll("_", " ");
+    let matched = pickableMeshes.filter(
+      (m) => (m.userData.displayName || "").toLowerCase() === qNorm,
+    );
+    if (matched.length === 0) {
+      matched = pickableMeshes.filter(
+        (m) => (m.userData.rawName || "").toLowerCase() === q,
+      );
+    }
+    if (matched.length === 0) {
+      matched = pickableMeshes.filter((m) => {
+        const dn = (m.userData.displayName || "").toLowerCase();
+        const rn = (m.userData.rawName || "").toLowerCase();
+        return dn.includes(qNorm) || rn.includes(q);
+      });
+    }
+    if (matched.length === 0) {
+      showToast(`Part not found in 3D view: ${query}`);
+      return false;
+    }
+    const label = matched.length === 1 && matched[0].userData.displayName
+      ? matched[0].userData.displayName
+      : query;
+    focusOnMeshes(matched, label, scrollToViewer);
+    return true;
+  }
+
+  if (focusClearBtn) {
+    focusClearBtn.addEventListener("click", () => {
+      clearFocus();
+      showToast("Focus cleared");
+    });
+  }
+
+  document.addEventListener("click", (ev) => {
+    const link = ev.target && ev.target.closest ? ev.target.closest("[data-focus-part]") : null;
+    if (!link) return;
+    ev.preventDefault();
+    const query = link.getAttribute("data-focus-part") || link.textContent || "";
+    focusByQuery(query, true);
+  });
 
   function showToast(msg) {
     toast.textContent = msg;
@@ -483,6 +643,17 @@ async function init() {
   function hideContextMenu() {
     ctxMenu.hidden = true;
     ctxTargetName = "";
+    ctxTargetMesh = null;
+  }
+
+  if (ctxFocusBtn) {
+    ctxFocusBtn.addEventListener("click", () => {
+      const targetMesh = ctxTargetMesh;
+      const targetName = ctxTargetName;
+      hideContextMenu();
+      if (!targetMesh) return;
+      focusOnMeshes(meshesForSamePart(targetMesh), targetName, false);
+    });
   }
 
   if (ctxCopyBtn) {
@@ -511,8 +682,13 @@ async function init() {
     }
   });
   document.addEventListener("keydown", (ev) => {
-    if (ev.key === "Escape" && !ctxMenu.hidden) {
-      hideContextMenu();
+    if (ev.key === "Escape") {
+      if (!ctxMenu.hidden) {
+        hideContextMenu();
+      } else if (focusedTarget) {
+        clearFocus();
+        showToast("Focus cleared");
+      }
     }
   });
   const toggleBtn = bar.querySelector('[data-action="toggle-explode"]');
@@ -543,7 +719,9 @@ async function init() {
       animToT = targetT;
       animStartTime = performance.now();
       isAnimating = true;
-      startCameraTransition(goingToExplode ? explodedFit : assembledFit, ANIM_DURATION_MS);
+      if (!focusedTarget) {
+        startCameraTransition(goingToExplode ? explodedFit : assembledFit, ANIM_DURATION_MS);
+      }
       syncUI();
     });
   }
@@ -568,6 +746,7 @@ async function init() {
 
   if (resetBtn) {
     resetBtn.addEventListener("click", () => {
+      clearFocus();
       const fit = computeFitPose();
       startCameraTransition(fit, 650);
     });
@@ -603,17 +782,6 @@ async function init() {
   const pointer = new THREE.Vector2();
   let hoveredMesh = null;
 
-  function setHoverEmissive(mesh, active) {
-    if (!mesh) return;
-    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-    for (const m of mats) {
-      if (m && m.emissive) {
-        m.emissive.setHex(active ? 0x1d4ed8 : 0x000000);
-        m.emissiveIntensity = active ? 0.35 : 0;
-      }
-    }
-  }
-
   canvas.addEventListener("pointermove", (ev) => {
     if (ev.buttons !== 0) {
       tooltip.hidden = true;
@@ -626,9 +794,10 @@ async function init() {
     const hits = raycaster.intersectObjects(pickableMeshes, false);
     const hit = hits.length > 0 ? hits[0].object : null;
     if (hit !== hoveredMesh) {
-      setHoverEmissive(hoveredMesh, false);
+      const prev = hoveredMesh;
       hoveredMesh = hit;
-      setHoverEmissive(hoveredMesh, true);
+      refreshMeshHighlight(prev);
+      refreshMeshHighlight(hoveredMesh);
     }
     if (hoveredMesh && hoveredMesh.userData.displayName) {
       tooltip.textContent = hoveredMesh.userData.displayName;
@@ -639,8 +808,9 @@ async function init() {
   });
 
   canvas.addEventListener("pointerleave", () => {
-    setHoverEmissive(hoveredMesh, false);
+    const prev = hoveredMesh;
     hoveredMesh = null;
+    refreshMeshHighlight(prev);
     tooltip.hidden = true;
   });
 
@@ -670,6 +840,7 @@ async function init() {
       return;
     }
     ctxTargetName = partName;
+    ctxTargetMesh = hit;
     if (ctxHeader) ctxHeader.textContent = partName;
     const panelRect = panel.getBoundingClientRect();
     let left = ev.clientX - panelRect.left;

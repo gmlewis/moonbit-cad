@@ -414,3 +414,89 @@ test "Tier-1 A12 8318 motor adapts cleanly to the two-link motor interface" {
   assert_true(names.contains("a12_motor_rotor_bell-skirt"))
   assert_true(names.contains("a12_motor_rotor_shaft"))
 }
+
+///|
+fn node_world_z_range(node : @step_cad.SceneNode) -> (Double, Double) {
+  let (x0, x1, y0, y1, z0, z1) = node.shape.bounding_box()
+  let xf = @step_cad.Transform::from_node(node)
+  let corners = [
+    (x0, y0, z0),
+    (x0, y0, z1),
+    (x0, y1, z0),
+    (x0, y1, z1),
+    (x1, y0, z0),
+    (x1, y0, z1),
+    (x1, y1, z0),
+    (x1, y1, z1),
+  ]
+  let mut min_z = 1.0e30
+  let mut max_z = -1.0e30
+  for c in corners {
+    let (_, _, wz) = xf.apply(c)
+    if wz < min_z {
+      min_z = wz
+    }
+    if wz > max_z {
+      max_z = wz
+    }
+  }
+  (min_z, max_z)
+}
+
+///|
+test "A12 planetary actuator assembly has no structural inter-penetration at output bearings and cover boss" {
+  let act = @components.planetary_bldc_actuator(
+    name="bldc_actuator",
+    preset="a12_8318_100kv",
+    stages=1,
+    module_mm=1.5,
+    sun_teeth=12,
+    planet_teeth=18,
+    planet_count=4,
+    gear_length_mm=10.0,
+    num_elbows=4,
+    output_encoder=false,
+    output_shaft_extension_mm=12.0,
+    detail=@step_common.DetailLevel::Detailed,
+  )
+  let design = act.to_design()
+  let mut cover_boss_top = -1.0e30
+  let mut bearing_top = -1.0e30
+  let mut output_shaft_top = -1.0e30
+  let mut carrier_top = -1.0e30
+  let mut cover_plate_bottom = 1.0e30
+  for node in design.nodes() {
+    let (z0, z1) = node_world_z_range(node)
+    if node.name.contains("output_cover_tube") {
+      if z1 > cover_boss_top {
+        cover_boss_top = z1
+      }
+    } else if node.name.contains("output_bearing") {
+      if z1 > bearing_top {
+        bearing_top = z1
+      }
+    } else if node.name.contains("carrier_output_shaft") {
+      if z1 > output_shaft_top {
+        output_shaft_top = z1
+      }
+    } else if node.name.contains("stage1_carrier_plate") {
+      if z1 > carrier_top {
+        carrier_top = z1
+      }
+    } else if node.name.contains("output_cover_plate") {
+      if z0 < cover_plate_bottom {
+        cover_plate_bottom = z0
+      }
+    }
+  }
+  // Output cover plate must sit cleanly above the rotating carrier plate.
+  assert_true(cover_plate_bottom >= carrier_top + 1.0)
+  // Upper 608 bearing must sit within ACT-COVER-BOSS (no protrusion above it).
+  assert_true(bearing_top <= cover_boss_top + 0.01)
+  // Open output shaft must protrude at least 12 mm above ACT-COVER-BOSS so
+  // ACT-OUTPUT-FLANGE (14 mm tall, mated at load_face z = 11.5 mm) clears both
+  // ACT-COVER-BOSS and the upper 608 bearing by >= 1.0 mm.
+  let flange_bottom = output_shaft_top - 11.5
+  assert_true(flange_bottom >= cover_boss_top + 0.99)
+  assert_true(flange_bottom >= bearing_top + 0.99)
+}

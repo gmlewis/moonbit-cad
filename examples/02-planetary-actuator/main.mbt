@@ -46,6 +46,15 @@ fn explode_offset(node : @step_cad.SceneNode) -> (Double, Double, Double) {
     (0.0, 0.0, -185.0)
   } else if name.contains("rear_magnet") || name.contains("output_magnet") {
     (0.0, 0.0, -165.0)
+  } else if name.contains("output_flange_set_screw_0") {
+    // Radial M4 set screw at +X unscrews outward along +X as the flange lifts.
+    (25.0, 0.0, 275.0)
+  } else if name.contains("output_flange_set_screw_1") {
+    // Radial M4 set screw at +Y unscrews outward along +Y as the flange lifts.
+    (0.0, 25.0, 275.0)
+  } else if name.contains("carrier_hub_set_screw") {
+    // Radial M4 set screw in the carrier hub unscrews outward along +X.
+    (25.0, 0.0, 122.0)
   } else if name.contains("output_flange") {
     // Open front bolted load flange slides straight off the 8 mm output shaft.
     (0.0, 0.0, 275.0)
@@ -55,6 +64,9 @@ fn explode_offset(node : @step_cad.SceneNode) -> (Double, Double, Double) {
     (0.0, 0.0, 235.0)
   } else if name.contains("bearing-608") {
     (0.0, 0.0, 210.0)
+  } else if name.contains("output_cover_tube") {
+    // ACT-COVER-BOSS separates cleanly between ACT-OUTPUT-COVER (180) and the 608 bearings (210).
+    (0.0, 0.0, 198.0)
   } else if name.contains("output_cover") {
     (0.0, 0.0, 180.0)
   } else if name.contains("carrier_pin") ||
@@ -78,8 +90,8 @@ fn explode_offset(node : @step_cad.SceneNode) -> (Double, Double, Double) {
     } else {
       (0.0, 0.0, 14.0)
     }
-  } else if name.contains("M4-14") {
-    // Four M4x14 screws bolting ACT-ROTOR-ADAPTER down onto the A12 rotor.
+  } else if name.contains("M4-8") || name.contains("M4-14") {
+    // Four M4x8 counterbored screws bolting ACT-ROTOR-ADAPTER onto the A12 rotor.
     (0.0, 0.0, -14.0)
   } else if name.contains("M3-10") {
     if node.tz < -46.0 {
@@ -106,7 +118,9 @@ fn explode_offset(node : @step_cad.SceneNode) -> (Double, Double, Double) {
 ///|
 /// A distinct display color for each kind of part in the exploded view.
 fn explode_color(name : String) -> @step_cad.Rgb {
-  if name.contains("output_cover") {
+  if name.contains("output_cover_tube") {
+    @step_cad.Rgb::new(0.32, 0.42, 0.56)
+  } else if name.contains("output_cover") {
     @step_cad.Rgb::new(0.22, 0.24, 0.30)
   } else if name.contains("housing") || name.contains("internal_chamfer") {
     @step_cad.Rgb::new(0.22, 0.24, 0.28)
@@ -116,7 +130,9 @@ fn explode_color(name : String) -> @step_cad.Rgb {
     @step_cad.Rgb::new(0.95, 0.75, 0.10)
   } else if name.contains("board_standoff") {
     @step_cad.Rgb::new(0.75, 0.55, 0.20)
-  } else if name.contains("M3-10") || name.contains("M4-14") {
+  } else if name.contains("M3-10") ||
+    name.contains("M4-8") ||
+    name.contains("M4-14") {
     @step_cad.Rgb::new(0.20, 0.45, 0.90)
   } else if name.contains("M3-12") {
     @step_cad.Rgb::new(0.40, 0.75, 0.95)
@@ -762,7 +778,11 @@ async fn main {
         ),
       )
       .add_mate_mm_deg("shaft_seat")
-      .add_mate_mm_deg("load_face", z=14.0)
+      // Mate 11.5 mm up from the boss bottom (2.5 mm below the top of the 8 mm
+      // disk) so the flange sits at z = 41.0..55.0 mm — leaving a 1.0 mm axial
+      // air gap above ACT-COVER-BOSS and the upper 608 bearing (z = 40.0 mm)
+      // while keeping 11.5 mm of full shaft engagement inside the 8.1 mm bore.
+      .add_mate_mm_deg("load_face", z=11.5)
     let out_shaft_top_z = match act.get_mate("output_shaft") {
       Some(mate) => mate.placement.apply_point((0.0, 0.0, 0.0)).2
       None => 52.5

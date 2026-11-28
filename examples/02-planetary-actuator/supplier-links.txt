@@ -13,6 +13,7 @@ ISO4762-M3x10 | Amazon | https://www.amazon.com/NIULUNBAO-Socket-Machine-Threade
 BEARING-608 | Amazon | https://www.amazon.com/Bearings-Skateboard-Shielded-Miniature-Skateboards/dp/B07R7PR72H | 608-2RS, 8 x 22 x 7 mm, 10-pack | 0.70
 INSERT-3 | Amazon | https://www.amazon.com/Vibit-Threaded-Soldering-Printing-Component/dp/B0FWWW8VP1 | M3 heat-set insert kit with soldering tips | 0.05
 BLDC-A12-8318 | FreeRcHobby | https://www.freerchobby.cc/ | A12 8318 100KV brushless outrunner motor (91 mm OD, 12 mm shaft, 32 mm M4 mount) | 159.00
+ISO4762-M4x8 | McMaster-Carr | https://www.mcmaster.com/screws/socket-head-cap-screws/ | ISO 4762 M4 x 8 mm socket head cap screw (bolts counterbored ACT-ROTOR-ADAPTER to A12 23 mm prop mount) | 0.35
 ISO4762-M4x10 | McMaster-Carr | https://www.mcmaster.com/screws/socket-head-cap-screws/ | ISO 4762 M4 x 10 mm socket head cap screw (A12 stator mount) | 0.35
 ISO4762-M4x14 | McMaster-Carr | https://www.mcmaster.com/screws/socket-head-cap-screws/ | ISO 4762 M4 x 14 mm socket head cap screw (bolts ACT-ROTOR-ADAPTER to A12 23 mm prop mount) | 0.35
 BLDC-5010_360kv | Amazon | https://www.amazon.com/GoolRC-Brushless-MultiCopter-Quadcopter-Multi-axis/dp/B0C2YRNX1Z | 5010 360KV outrunner (GoolRC) | 27.98
