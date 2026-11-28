@@ -1869,19 +1869,30 @@ pub fn planetary_bldc_actuator(
   }
   for ki in 0..<4 {
     let ang_deg = 45.0 + 90.0 * ki.to_double()
-    let ang_rad = ang_deg * deg
-    let lug_body = @cad.BodyPart::box_mm(
+    let lug_node = ramped_ring_key_node(
       name + "_stage1_ring_key_" + ki.to_string(),
-      key_radial_len,
+      ring_outer,
+      key_embed,
+      key_protrusion,
       key_width,
       gear_length_mm,
-      x_mm=key_r_center * @math.cos(ang_rad),
-      y_mm=key_r_center * @math.sin(ang_rad),
-      z_mm=gear_length_mm / 2.0,
-      rz_deg=ang_deg,
-      density=@urdf.Density::petg(),
-      color=@step_cad.Rgb::grey(),
+      ang_deg,
     )
+    let lug_body : @cad.BodyPart = {
+      ..@cad.BodyPart::box_mm(
+        name + "_stage1_ring_key_" + ki.to_string(),
+        key_radial_len,
+        key_width,
+        gear_length_mm,
+        x_mm=key_r_center * @math.cos(ang_deg * deg),
+        y_mm=key_r_center * @math.sin(ang_deg * deg),
+        z_mm=gear_length_mm / 2.0,
+        rz_deg=ang_deg,
+        density=@urdf.Density::petg(),
+        color=@step_cad.Rgb::grey(),
+      ),
+      node: lug_node,
+    }
     let lug_assigned : @cad.BodyPart = match ring_part_meta {
       Some(pm) => lug_body.with_part(pm)
       None => lug_body
@@ -2051,144 +2062,193 @@ pub fn planetary_bldc_actuator(
       barrel_total_h
     }
     let barrel_solid_h = barrel_total_h - rear_pocket_h
-    let rear_pocket_holes : Array[(Double, Double, Double)] = [
-      (0.0, 0.0, barrel_inner_r * 2.0),
-    ]
-    for i in 0..<4 {
-      let theta = 2.0 * @math.PI * i.to_double() / 4.0
-      rear_pocket_holes.push(
-        (
-          rear_bolt_circle / 2.0 * @math.cos(theta),
-          rear_bolt_circle / 2.0 * @math.sin(theta),
-          4.4,
-        ),
+    if high_torque_output {
+      // Single all-curved G1-tangent 4-lobe VESA-100 (100x100 mm, 4xM5) base
+      // flange: zero sharp corners on Layer 1 so the IVI never curls an edge!
+      // Lower 6.0 mm carries the 4x M3 rear heat-set insert pockets + 4x M5
+      // VESA holes; upper 2.0 mm carries the 4x M5 VESA holes (8 mm total ear
+      // thickness). All ACT-HOUSING sections are unioned into one monolithic
+      // solid (`solids = 1` in SolidCraft).
+      let vesa_outer = vesa_flange_outer_segments(
+        barrel_outer,
+        (50.0 * 50.0 * 2.0).sqrt(),
+        9.5,
+        12.0,
       )
-    }
-    extra_housing_bodies.push(
-      actuator_plate_body(
-        name + "_a12_motor_barrel_rear",
-        barrel_outer * 2.0,
-        rear_pocket_h,
-        motor_mount_z,
-        rear_pocket_holes,
-        @urdf.Density::carbon_fiber(),
-        @step_cad.Rgb::black(),
-        detail,
-      ).with_part(housing_part),
-    )
-    if barrel_solid_h > 0.1 {
-      extra_housing_bodies.push(
-        actuator_plate_body(
+      let vesa_rear_holes : Array[Array[@step_cad.ProfileSegment]] = [
+        @step_gears.arc_circle_segments(barrel_inner_r * 2.0),
+      ]
+      for i in 0..<4 {
+        let theta = 2.0 * @math.PI * i.to_double() / 4.0
+        vesa_rear_holes.push(
+          translate_arc_circle(
+            4.4,
+            rear_bolt_circle / 2.0 * @math.cos(theta),
+            rear_bolt_circle / 2.0 * @math.sin(theta),
+          ),
+        )
+      }
+      let vesa_upper_holes : Array[Array[@step_cad.ProfileSegment]] = [
+        @step_gears.arc_circle_segments(barrel_inner_r * 2.0),
+      ]
+      let ear_r = (50.0 * 50.0 * 2.0).sqrt()
+      for ei in 0..<4 {
+        let ang_rad = (45.0 + 90.0 * ei.to_double()) * deg
+        let h_m5 = translate_arc_circle(
+          5.4,
+          ear_r * @math.cos(ang_rad),
+          ear_r * @math.sin(ang_rad),
+        )
+        vesa_rear_holes.push(h_m5)
+        vesa_upper_holes.push(h_m5)
+      }
+      let vesa_lower_node = @step_cad.ExtrudedArcProfile::new(
+          vesa_outer,
+          rear_pocket_h,
+          holes=vesa_rear_holes,
+        )
+        .as_shape()
+        .with_name(name + "_a12_motor_barrel_rear")
+        .with_color(@step_cad.Rgb::black())
+        .translate(z=motor_mount_z)
+      let vesa_upper_node = @step_cad.ExtrudedArcProfile::new(
+          vesa_outer,
+          2.2,
+          holes=vesa_upper_holes,
+        )
+        .as_shape()
+        .with_name(name + "_a12_vesa_flange_upper")
+        .with_color(@step_cad.Rgb::black())
+        .translate(z=motor_mount_z + rear_pocket_h - 0.2)
+      let barrel_above_h = barrel_total_h - (rear_pocket_h + 2.0)
+      let barrel_above_node = actuator_plate_body(
           name + "_a12_motor_barrel",
           barrel_outer * 2.0,
-          barrel_solid_h,
-          motor_mount_z + rear_pocket_h,
+          barrel_above_h + 0.4,
+          motor_mount_z + rear_pocket_h + 1.8,
           [(0.0, 0.0, barrel_inner_r * 2.0)],
+          @urdf.Density::carbon_fiber(),
+          @step_cad.Rgb::black(),
+          detail,
+        ).node
+      let mono_nodes : Array[@step_cad.SceneNode] = [
+        vesa_lower_node, vesa_upper_node, barrel_above_node,
+      ]
+      let ramp_h = barrel_inner_r - housing_inner
+      if ramp_h > 0.2 {
+        let ramp_outer_r = barrel_inner_r + 0.5
+        let ramp_profile = @step_cad.RevolvedProfile::polyline(
+          [
+            (barrel_inner_r, -ramp_h),
+            (ramp_outer_r, -ramp_h),
+            (ramp_outer_r, 0.2),
+            (housing_inner, 0.2),
+          ],
+          closed=true,
+        )
+        mono_nodes.push(
+          ramp_profile
+          .as_shape()
+          .with_name(name + "_internal_chamfer")
+          .with_color(@step_cad.Rgb::black()),
+        )
+      }
+      if lower_ring_h > 0.1 {
+        mono_nodes.push(
+          keyed_housing_body_mm(
+            name + "_housing_lower",
+            housing_outer,
+            housing_inner,
+            keyway_width,
+            keyway_depth,
+            lower_ring_h + 0.2,
+            housing_bottom,
+            [],
+            @urdf.Density::carbon_fiber(),
+            @step_cad.Rgb::black(),
+          ).node,
+        )
+      }
+      mono_nodes.push(keyed_ring_body.node)
+      // Replace split housing bodies with one monolithic unioned solid.
+      extra_housing_bodies.clear()
+      extra_housing_bodies.push(
+        {
+          ..keyed_ring_body,
+          name: name + "_housing",
+          node: @step_cad.union_all(mono_nodes, name=name + "_housing").with_color(
+            @step_cad.Rgb::black(),
+          ),
+        }.with_part(housing_part),
+      )
+    } else {
+      let rear_pocket_holes : Array[(Double, Double, Double)] = [
+        (0.0, 0.0, barrel_inner_r * 2.0),
+      ]
+      for i in 0..<4 {
+        let theta = 2.0 * @math.PI * i.to_double() / 4.0
+        rear_pocket_holes.push(
+          (
+            rear_bolt_circle / 2.0 * @math.cos(theta),
+            rear_bolt_circle / 2.0 * @math.sin(theta),
+            4.4,
+          ),
+        )
+      }
+      extra_housing_bodies.push(
+        actuator_plate_body(
+          name + "_a12_motor_barrel_rear",
+          barrel_outer * 2.0,
+          rear_pocket_h,
+          motor_mount_z,
+          rear_pocket_holes,
           @urdf.Density::carbon_fiber(),
           @step_cad.Rgb::black(),
           detail,
         ).with_part(housing_part),
       )
-    }
-    // 45-degree internal transition chamfer eliminating the 90-degree step
-    // overhang from barrel_inner_r (47.5 mm) inward to housing_inner (44.09 mm).
-    let ramp_h = barrel_inner_r - housing_inner
-    if ramp_h > 0.2 {
-      let ramp_outer_r = barrel_inner_r + 0.5
-      let ramp_profile = @step_cad.RevolvedProfile::polyline(
-        [
-          (barrel_inner_r, -ramp_h),
-          (ramp_outer_r, -ramp_h),
-          (ramp_outer_r, 0.0),
-          (housing_inner, 0.0),
-        ],
-        closed=true,
-      )
-      let ramp_node = ramp_profile
-        .as_shape()
-        .with_name(name + "_internal_chamfer")
-        .with_color(@step_cad.Rgb::black())
-      extra_housing_bodies.push(
-        {
-          ..keyed_ring_body,
-          name: name + "_internal_chamfer",
-          node: ramp_node,
-        }.with_part(housing_part),
-      )
-    }
-    // Standardized 100x100 mm VESA / 2020-extrusion 4xM5 bench-test & robot
-    // frame mounting ears at z = motor_mount_z .. motor_mount_z + 8.0 mm
-    // (sits flat on the build plate at Z_print = 0..8 mm, 100% support-free).
-    // Built as exact analytic ExtrudedArcProfiles (rounded stadium + 5.4 mm M5
-    // hole) so both printable/ACT-HOUSING.step and assembly.glb show crisp M5
-    // holes with zero CSG overhead.
-    if high_torque_output {
-      let ear_h = 8.0
-      let ear_r_half = 9.0
-      let ear_hole_d = 5.4
-      let vesa_half = 50.0
-      let ear_r = (vesa_half * vesa_half * 2.0).sqrt()
-      let bridge_inner_r = barrel_outer - 3.0
-      let ear_outer : Array[@step_cad.ProfileSegment] = [
-        @step_cad.ProfileSegment::SegmentLine(
-          (bridge_inner_r, -ear_r_half),
-          (ear_r, -ear_r_half),
-        ),
-        @step_cad.ProfileSegment::SegmentArc(
-          (ear_r, -ear_r_half),
-          (ear_r + ear_r_half, 0.0),
-          (ear_r, 0.0),
-        ),
-        @step_cad.ProfileSegment::SegmentArc(
-          (ear_r + ear_r_half, 0.0),
-          (ear_r, ear_r_half),
-          (ear_r, 0.0),
-        ),
-        @step_cad.ProfileSegment::SegmentLine(
-          (ear_r, ear_r_half),
-          (bridge_inner_r, ear_r_half),
-        ),
-        @step_cad.ProfileSegment::SegmentLine(
-          (bridge_inner_r, ear_r_half),
-          (bridge_inner_r, -ear_r_half),
-        ),
-      ]
-      let ear_hole = @step_gears.arc_circle_segments(ear_hole_d).map(fn(seg) {
-        match seg {
-          @step_cad.ProfileSegment::SegmentLine((x0, y0), (x1, y1)) =>
-            @step_cad.ProfileSegment::SegmentLine(
-              (x0 + ear_r, y0),
-              (x1 + ear_r, y1),
-            )
-          @step_cad.ProfileSegment::SegmentArc((x0, y0), (x1, y1), (cx, cy)) =>
-            @step_cad.ProfileSegment::SegmentArc(
-              (x0 + ear_r, y0),
-              (x1 + ear_r, y1),
-              (cx + ear_r, cy),
-            )
-        }
-      })
-      let ear_shape = @step_cad.ExtrudedArcProfile::new(ear_outer, ear_h, holes=[
-        ear_hole,
-      ]).as_shape()
-      for ei in 0..<4 {
-        let ang_deg = 45.0 + 90.0 * ei.to_double()
-        let ear_node = ear_shape
-          .with_name("\{name}_mount_ear_\{ei}")
+      if barrel_solid_h > 0.1 {
+        extra_housing_bodies.push(
+          actuator_plate_body(
+            name + "_a12_motor_barrel",
+            barrel_outer * 2.0,
+            barrel_solid_h,
+            motor_mount_z + rear_pocket_h,
+            [(0.0, 0.0, barrel_inner_r * 2.0)],
+            @urdf.Density::carbon_fiber(),
+            @step_cad.Rgb::black(),
+            detail,
+          ).with_part(housing_part),
+        )
+      }
+      // 45-degree internal transition chamfer eliminating the 90-degree step
+      // overhang from barrel_inner_r (47.5 mm) inward to housing_inner (44.09 mm).
+      let ramp_h = barrel_inner_r - housing_inner
+      if ramp_h > 0.2 {
+        let ramp_outer_r = barrel_inner_r + 0.5
+        let ramp_profile = @step_cad.RevolvedProfile::polyline(
+          [
+            (barrel_inner_r, -ramp_h),
+            (ramp_outer_r, -ramp_h),
+            (ramp_outer_r, 0.0),
+            (housing_inner, 0.0),
+          ],
+          closed=true,
+        )
+        let ramp_node = ramp_profile
+          .as_shape()
+          .with_name(name + "_internal_chamfer")
           .with_color(@step_cad.Rgb::black())
-          .rotate_z(ang_deg)
-          .translate(z=motor_mount_z)
         extra_housing_bodies.push(
           {
             ..keyed_ring_body,
-            name: "\{name}_mount_ear_\{ei}",
-            node: ear_node,
+            name: name + "_internal_chamfer",
+            node: ramp_node,
           }.with_part(housing_part),
         )
       }
     }
   }
-  let keyed_housing_body = keyed_ring_body
   let mut housing = @cad.Component::new(
       name,
       description="Planetary BLDC actuator",
@@ -2200,7 +2260,9 @@ pub fn planetary_bldc_actuator(
     .with_param("planet_bearing", planet_bearing)
     .with_param("planet_pin_diam_mm", planet_pin_diam.to_string())
     .with_param("output_shaft_diam_mm", coupling_shaft_diam.to_string())
-    .add_body(keyed_housing_body)
+  if !(high_torque_output && is_a12) {
+    housing = housing.add_body(keyed_ring_body)
+  }
   for hb in extra_housing_bodies {
     housing = housing.add_body(hb)
   }
@@ -2572,35 +2634,37 @@ pub fn planetary_bldc_actuator(
       "carbon fiber nylon", "3D print", 6.0,
     )
     let prop_bolt_r = 11.5
-    let flange_holes : Array[(Double, Double, Double)] = []
-    let cbore_cutters : Array[@step_cad.SceneNode] = []
+    let lower_holes : Array[(Double, Double, Double)] = []
+    let cbore_holes : Array[(Double, Double, Double)] = []
     for i in 0..<4 {
       let theta = 2.0 * @math.PI * i.to_double() / 4.0
       let bx = prop_bolt_r * @math.cos(theta)
       let by = prop_bolt_r * @math.sin(theta)
-      flange_holes.push((bx, by, 4.3))
-      // 7.8 mm dia counterbore clears ISO 4762 M4 SHCS (7.0 mm head dia, 4.0 mm
-      // head height) and extends 0.5 mm past flange_h for clean boolean trim.
-      cbore_cutters.push(
-        @step_cad.Cylinder::new(7.8, flange_h - bolt_seat_z + 0.5)
-        .with_name(name + "_rotor_adapter_cbore_\{i}")
-        .translate(x=bx, y=by, z=bolt_seat_z),
-      )
+      lower_holes.push((bx, by, 4.3))
+      cbore_holes.push((bx, by, 7.8))
     }
-    let flange_body = actuator_plate_body(
-      name + "_rotor_adapter_flange",
+    // Layered ExtrudedArcProfile flange (lower 4.3 mm bolt holes + upper 7.8 mm
+    // counterbores) so all 4 counterbores are visible in BOTH SolidCraft AND
+    // the 3D glTF viewer with zero boolean artifacts.
+    let flange_lower = actuator_plate_body(
+      name + "_rotor_adapter_flange_lower",
       34.0,
-      flange_h,
+      bolt_seat_z + 0.1,
       0.0,
-      flange_holes,
+      lower_holes,
       @urdf.Density::carbon_fiber(),
       @step_cad.Rgb::orange(),
       detail,
     )
-    let flange_cbored = @step_cad.difference(
-      flange_body.node,
-      cbore_cutters,
-      name=name + "_rotor_adapter_flange_cbored",
+    let flange_upper = actuator_plate_body(
+      name + "_rotor_adapter_flange_upper",
+      34.0,
+      flange_h - bolt_seat_z,
+      bolt_seat_z,
+      cbore_holes,
+      @urdf.Density::carbon_fiber(),
+      @step_cad.Rgb::orange(),
+      detail,
     )
     // Central 12.0 mm OD cylindrical spacer boss contacts only the co-rotating
     // sun gear hub (r = 6.0 mm < sun root 7.125 mm < planet sweep 7.5 mm),
@@ -2621,9 +2685,15 @@ pub fn planetary_bldc_actuator(
       @step_cad.Rgb::orange(),
     )
     let adapter_monolith : @cad.BodyPart = {
-      ..flange_body,
+      ..flange_lower,
+      name: name + "_rotor_adapter_flange",
       node: @step_cad.union_all(
-        [flange_cbored, spacer_boss_node, hex_post_body.node],
+        [
+          flange_lower.node,
+          flange_upper.node,
+          spacer_boss_node,
+          hex_post_body.node,
+        ],
         name=name + "_rotor_adapter_flange",
       ).with_color(@step_cad.Rgb::orange()),
     }.with_part(adapter_part)
@@ -2995,18 +3065,30 @@ pub fn planetary_actuator_cartridge(
   for ki in 0..<4 {
     let ang_deg = 45.0 + 90.0 * ki.to_double()
     let ang_rad = ang_deg * deg
-    let lug = @cad.BodyPart::box_mm(
+    let lug_node = ramped_ring_key_node(
       name + "_ring_key_" + ki.to_string(),
-      key_radial_len,
+      ring_outer,
+      key_embed,
+      key_protrusion,
       key_width,
       gear_length_mm,
-      x_mm=key_r_center * @math.cos(ang_rad),
-      y_mm=key_r_center * @math.sin(ang_rad),
-      z_mm=gear_length_mm / 2.0,
-      rz_deg=ang_deg,
-      density=@urdf.Density::petg(),
-      color=@step_cad.Rgb::grey(),
+      ang_deg,
     )
+    let lug : @cad.BodyPart = {
+      ..@cad.BodyPart::box_mm(
+        name + "_ring_key_" + ki.to_string(),
+        key_radial_len,
+        key_width,
+        gear_length_mm,
+        x_mm=key_r_center * @math.cos(ang_rad),
+        y_mm=key_r_center * @math.sin(ang_rad),
+        z_mm=gear_length_mm / 2.0,
+        rz_deg=ang_deg,
+        density=@urdf.Density::petg(),
+        color=@step_cad.Rgb::grey(),
+      ),
+      node: lug_node,
+    }
     let lug_assigned : @cad.BodyPart = match cart_part {
       Some(pm) => lug.with_part(pm)
       None => lug
@@ -3014,6 +3096,139 @@ pub fn planetary_actuator_cartridge(
     cartridge = cartridge.add_body(lug_assigned)
   }
   cartridge
+}
+
+///|
+fn translate_arc_circle(
+  diam : Double,
+  hx : Double,
+  hy : Double,
+) -> Array[@step_cad.ProfileSegment] {
+  @step_gears.arc_circle_segments(diam).map(fn(seg) {
+    match seg {
+      @step_cad.ProfileSegment::SegmentLine((x0, y0), (x1, y1)) =>
+        @step_cad.ProfileSegment::SegmentLine(
+          (x0 + hx, y0 + hy),
+          (x1 + hx, y1 + hy),
+        )
+      @step_cad.ProfileSegment::SegmentArc((x0, y0), (x1, y1), (cx, cy)) =>
+        @step_cad.ProfileSegment::SegmentArc(
+          (x0 + hx, y0 + hy),
+          (x1 + hx, y1 + hy),
+          (cx + hx, cy + hy),
+        )
+    }
+  })
+}
+
+///|
+/// Builds a 2D regular hexagon hole contour (across-flats = `2 * apothem`)
+/// centered at `(hx, hy)` as six `SegmentLine`s for `ExtrudedArcProfile`.
+fn hex_hole_segments(
+  apothem : Double,
+  hx : Double,
+  hy : Double,
+) -> Array[@step_cad.ProfileSegment] {
+  let r = apothem / @math.cos(@math.PI / 6.0)
+  let pts : Array[(Double, Double)] = []
+  for i in 0..<6 {
+    let a = 2.0 * @math.PI * i.to_double() / 6.0
+    pts.push((hx + r * @math.cos(a), hy + r * @math.sin(a)))
+  }
+  let segs : Array[@step_cad.ProfileSegment] = []
+  for i in 0..<6 {
+    segs.push(@step_cad.ProfileSegment::SegmentLine(pts[i], pts[(i + 1) % 6]))
+  }
+  segs
+}
+
+///|
+/// Builds a 100% all-curved G1-tangent 4-lobe VESA-100 mounting flange outer
+/// contour (zero straight edges, zero sharp corners on Layer 1).
+fn vesa_flange_outer_segments(
+  r_barrel : Double,
+  ear_r : Double,
+  r_ear : Double,
+  r_fillet : Double,
+) -> Array[@step_cad.ProfileSegment] {
+  let a = r_barrel + r_fillet
+  let b = r_ear + r_fillet
+  let cos_alpha = (ear_r * ear_r + a * a - b * b) / (2.0 * ear_r * a)
+  let alpha = @math.acos(cos_alpha)
+  let deg = @math.PI / 180.0
+  let segs : Array[@step_cad.ProfileSegment] = []
+  let pt_on = fn(r : Double, ang : Double) -> (Double, Double) {
+    (r * @math.cos(ang), r * @math.sin(ang))
+  }
+  for k in 0..<4 {
+    let theta_prev = (45.0 + 90.0 * ((k + 3) % 4).to_double()) * deg
+    let theta = (45.0 + 90.0 * k.to_double()) * deg
+    // 1. Barrel arc from previous lobe's exit tangent to this lobe's entry tangent (CCW).
+    let b_start = pt_on(r_barrel, theta_prev + alpha)
+    let b_in = pt_on(r_barrel, theta - alpha)
+    segs.push(@step_cad.ProfileSegment::SegmentArc(b_start, b_in, (0.0, 0.0)))
+    // 2. Entry concave fillet arc (CW around f_in).
+    let f_in = pt_on(a, theta - alpha)
+    let e_center = pt_on(ear_r, theta)
+    let e_in = (
+      e_center.0 + r_ear / b * (f_in.0 - e_center.0),
+      e_center.1 + r_ear / b * (f_in.1 - e_center.1),
+    )
+    segs.push(@step_cad.ProfileSegment::SegmentArc(b_in, e_in, f_in))
+    // 3. Ear tip convex arc split at the outer apex (two CCW arcs < 180 deg).
+    let e_apex = pt_on(ear_r + r_ear, theta)
+    let f_out = pt_on(a, theta + alpha)
+    let e_out = (
+      e_center.0 + r_ear / b * (f_out.0 - e_center.0),
+      e_center.1 + r_ear / b * (f_out.1 - e_center.1),
+    )
+    segs.push(@step_cad.ProfileSegment::SegmentArc(e_in, e_apex, e_center))
+    segs.push(@step_cad.ProfileSegment::SegmentArc(e_apex, e_out, e_center))
+    // 4. Exit concave fillet arc (CW around f_out).
+    let b_out = pt_on(r_barrel, theta + alpha)
+    segs.push(@step_cad.ProfileSegment::SegmentArc(e_out, b_out, f_out))
+  }
+  segs
+}
+
+///|
+/// Builds one anti-rotation ring-gear key lug with a 45-degree bottom-up
+/// lead-in ramp so Layer 1 (`z = 0`) is a pure smooth circle with zero sharp
+/// protruding corners, ramping cleanly to full square key width by `z = 2.5 mm`.
+fn ramped_ring_key_node(
+  name : String,
+  ring_outer : Double,
+  key_embed : Double,
+  key_protrusion : Double,
+  key_width : Double,
+  gear_length_mm : Double,
+  ang_deg : Double,
+) -> @step_cad.SceneNode {
+  let ramp_z = if key_protrusion < gear_length_mm - 1.0 {
+    key_protrusion
+  } else {
+    gear_length_mm * 0.25
+  }
+  let prof = @step_cad.ExtrudedProfile::new(
+    [
+      (ring_outer - key_embed, 0.0),
+      (ring_outer, 0.0),
+      (ring_outer + key_protrusion, ramp_z),
+      (ring_outer + key_protrusion, gear_length_mm),
+      (ring_outer - key_embed, gear_length_mm),
+    ],
+    key_width,
+  )
+  // Rotate profile from local XY into world (radial X, Z) plane, centered on
+  // Y = 0, then swing to `ang_deg` around Z.
+  let rad = ang_deg * @math.PI / 180.0
+  let half_w = key_width / 2.0
+  prof
+  .with_name(name)
+  .with_color(@step_cad.Rgb::grey())
+  .rotate_x(90.0)
+  .rotate_z(ang_deg)
+  .translate(x=-half_w * @math.sin(rad), y=half_w * @math.cos(rad))
 }
 
 ///|

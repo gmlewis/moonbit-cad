@@ -46,8 +46,8 @@ fn explode_offset(node : @step_cad.SceneNode) -> (Double, Double, Double) {
     (0.0, 0.0, -185.0)
   } else if name.contains("rear_magnet") || name.contains("output_magnet") {
     (0.0, 0.0, -165.0)
-  } else if name.contains("output_flange_drive_screw") {
-    // Four M4x20 drive bolts explode axially forward out of the QDD flange.
+  } else if name.contains("output_flange_drive_screw") || name.contains("M4-20") {
+    // Four M4x20 drive bolts explode axially forward ABOVE ACT-OUTPUT-FLANGE (250).
     (0.0, 0.0, 295.0)
   } else if name.contains("output_flange") {
     // High-torque QDD bolted output hub slides straight off the 6808 bearing.
@@ -650,7 +650,7 @@ async fn main {
     let _ = use_fdm_teardrops
     let flange_part = @cad.PartMeta::new(
       "ACT-OUTPUT-FLANGE",
-      description="High-torque QDD bolted output hub (58 mm OD, 6xM4 load mount on 46 mm BCD, 39.9 mm 6808 bearing journal, 4xM4x20 counterbored drive bolts on 28 mm BCD, 16 mm hollow bore)",
+      description="High-torque QDD bolted output hub (58 mm OD, 6xM4 load mount on 46 mm BCD with underside captive M4 hex nut pockets so bolts never hit the 6808 bearing, 39.9 mm 6808 bearing journal, 4xM4x20 counterbored drive bolts on 28 mm BCD, 16 mm hollow bore)",
       material="carbon fiber nylon",
       process="3D print",
       unit_cost_usd=6.0,
@@ -677,78 +677,110 @@ async fn main {
         }
       })
     }
+    let hex_hole = fn(
+      apothem : Double,
+      hx : Double,
+      hy : Double,
+    ) -> Array[@step_cad.ProfileSegment] {
+      let r = apothem / @math.cos(@math.PI / 6.0)
+      let pts : Array[(Double, Double)] = []
+      for i in 0..<6 {
+        let a = 2.0 * @math.PI * i.to_double() / 6.0
+        pts.push((hx + r * @math.cos(a), hy + r * @math.sin(a)))
+      }
+      let segs : Array[@step_cad.ProfileSegment] = []
+      for i in 0..<6 {
+        segs.push(
+          @step_cad.ProfileSegment::SegmentLine(pts[i], pts[(i + 1) % 6]),
+        )
+      }
+      segs
+    }
     let drive_bcd_r = 14.0
-    let drive_holes : Array[Array[@step_cad.ProfileSegment]] = [
+    let drive_bolt_holes : Array[Array[@step_cad.ProfileSegment]] = [
+      @step_gears.arc_circle_segments(16.0),
+    ]
+    let drive_cbore_holes : Array[Array[@step_cad.ProfileSegment]] = [
       @step_gears.arc_circle_segments(16.0),
     ]
     for i in 0..<4 {
       let ang = (45.0 + 90.0 * i.to_double()) * @math.PI / 180.0
-      drive_holes.push(
-        translate_circle(
-          4.3,
-          drive_bcd_r * @math.cos(ang),
-          drive_bcd_r * @math.sin(ang),
-        ),
-      )
+      let dx = drive_bcd_r * @math.cos(ang)
+      let dy = drive_bcd_r * @math.sin(ang)
+      drive_bolt_holes.push(translate_circle(4.3, dx, dy))
+      drive_cbore_holes.push(translate_circle(7.8, dx, dy))
     }
-    // Zone 1: Carrier seat shoulder (Ø36 mm, z = 0..2.5 mm, overlaps 0.5 mm into journal).
+    // Layered ExtrudedArcProfiles (zero boolean Difference) so all 4 topside
+    // M4x20 counterbores AND all 6 underside captive M4 hex nut pockets are
+    // 100% visible in BOTH SolidCraft AND the 3D glTF viewer!
+    // Zone 1: Carrier seat shoulder (Ø36 mm, z = 0..2.2 mm).
     let seat_node = @step_cad.ExtrudedArcProfile::new(
         @step_gears.arc_circle_segments(36.0),
-        2.5,
-        holes=drive_holes,
+        2.2,
+        holes=drive_bolt_holes,
       )
       .as_shape()
       .with_name("bldc_actuator_output_flange_seat")
-    // Zone 2: 6808-2RS bearing journal (Ø39.9 mm, z = 2.0..11.0 mm, overlaps 0.5 mm into flange).
+    // Zone 2: 6808-2RS bearing journal (Ø39.9 mm, z = 2.0..10.7 mm).
     let journal_node = @step_cad.ExtrudedArcProfile::new(
         @step_gears.arc_circle_segments(39.9),
-        9.0,
-        holes=drive_holes,
+        8.7,
+        holes=drive_bolt_holes,
       )
       .as_shape()
       .with_name("bldc_actuator_output_flange_journal")
       .translate(z=2.0)
-    // Zone 3: Front load flange (Ø58 mm, z = 10.5..18.5 mm, 1.0 mm clear above 6808 cover).
-    // 6xM4 load-mounting through-holes on Ø46 mm BCD (r = 23 mm) + 4xM4 drive holes.
-    let flange_holes : Array[Array[@step_cad.ProfileSegment]] = []
-    for h in drive_holes {
-      flange_holes.push(h)
+    // Zone 3a (z = 10.5..12.6 mm): 4x Ø4.3 drive bolt floor + 6x underside M4 hex nut pockets (7.2 mm AF).
+    let flange_3a_holes : Array[Array[@step_cad.ProfileSegment]] = []
+    for h in drive_bolt_holes {
+      flange_3a_holes.push(h)
+    }
+    // Zone 3b (z = 12.5..14.2 mm): 4x Ø7.8 drive counterbores + 6x underside M4 hex nut pockets (3.6 mm deep total).
+    let flange_3b_holes : Array[Array[@step_cad.ProfileSegment]] = []
+    for h in drive_cbore_holes {
+      flange_3b_holes.push(h)
+    }
+    // Zone 3c (z = 14.1..18.5 mm): 4x Ø7.8 drive counterbores + 6x Ø4.3 M4 load through-holes.
+    let flange_3c_holes : Array[Array[@step_cad.ProfileSegment]] = []
+    for h in drive_cbore_holes {
+      flange_3c_holes.push(h)
     }
     for i in 0..<6 {
       let a = 2.0 * @math.PI * i.to_double() / 6.0
-      flange_holes.push(
-        translate_circle(4.3, 23.0 * @math.cos(a), 23.0 * @math.sin(a)),
-      )
+      let lx = 23.0 * @math.cos(a)
+      let ly = 23.0 * @math.sin(a)
+      let nut_hex = hex_hole(3.6, lx, ly)
+      flange_3a_holes.push(nut_hex)
+      flange_3b_holes.push(nut_hex)
+      flange_3c_holes.push(translate_circle(4.3, lx, ly))
     }
-    let flange_disk_node = @step_cad.ExtrudedArcProfile::new(
-        @step_gears.arc_circle_segments(58.0),
-        8.0,
-        holes=flange_holes,
+    let flange_outer_58 = @step_gears.arc_circle_segments(58.0)
+    let flange_3a_node = @step_cad.ExtrudedArcProfile::new(
+        flange_outer_58,
+        2.1,
+        holes=flange_3a_holes,
       )
       .as_shape()
-      .with_name("bldc_actuator_output_flange_disk")
+      .with_name("bldc_actuator_output_flange_disk_lower")
       .translate(z=10.5)
-    // Four counterbores (Ø7.8 mm, z = 12.5..19.0 mm) recess the M4x20 SHCS
-    // heads 2.0 mm below the front load face so test levers bolt completely flush.
-    let drive_cbore_cutters : Array[@step_cad.SceneNode] = []
-    for i in 0..<4 {
-      let ang = (45.0 + 90.0 * i.to_double()) * @math.PI / 180.0
-      drive_cbore_cutters.push(
-        @step_cad.Cylinder::new(7.8, 6.5)
-        .with_name("flange_drive_cbore_\{i}")
-        .translate(
-          x=drive_bcd_r * @math.cos(ang),
-          y=drive_bcd_r * @math.sin(ang),
-          z=12.5,
-        ),
+    let flange_3b_node = @step_cad.ExtrudedArcProfile::new(
+        flange_outer_58,
+        1.7,
+        holes=flange_3b_holes,
       )
-    }
-    let flange_solid_node = @step_cad.difference(
-      @step_cad.union_all(
-        [seat_node, journal_node, flange_disk_node],
-        name="bldc_actuator_output_flange_raw",
-      ),
-      drive_cbore_cutters,
+      .as_shape()
+      .with_name("bldc_actuator_output_flange_disk_mid")
+      .translate(z=12.5)
+    let flange_3c_node = @step_cad.ExtrudedArcProfile::new(
+        flange_outer_58,
+        4.4,
+        holes=flange_3c_holes,
+      )
+      .as_shape()
+      .with_name("bldc_actuator_output_flange_disk_top")
+      .translate(z=14.1)
+    let flange_solid_node = @step_cad.union_all(
+      [seat_node, journal_node, flange_3a_node, flange_3b_node, flange_3c_node],
       name="bldc_actuator_output_flange",
     ).with_color(@step_cad.Rgb::new(0.10, 0.72, 0.85))
     let flange_ref_body = @cad.BodyPart::tube_mm(

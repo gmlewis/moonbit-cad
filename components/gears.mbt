@@ -385,29 +385,50 @@ fn pgb_carrier_component(
     detail,
   )
   let carrier_monolith : @cad.BodyPart = if use_bolted_output {
+    // Stacked ExtrudedArcProfile layers (zero boolean Difference) so all 4
+    // captive M4 hex nut pockets (7.2 mm AF x 3.6 mm deep) are 100% visible
+    // in BOTH SolidCraft AND the 3D glTF viewer.
     let bcd_r = bolted_output_bcd_mm / 2.0
-    let nut_pockets : Array[@step_cad.SceneNode] = []
+    let carrier_outer = @step_gears.arc_circle_segments(plate_radius * 2.0)
+    let lower_holes : Array[Array[@step_cad.ProfileSegment]] = [
+      @step_gears.arc_circle_segments(central_diameter),
+    ]
+    let upper_holes : Array[Array[@step_cad.ProfileSegment]] = [
+      @step_gears.arc_circle_segments(central_diameter),
+    ]
+    for i in 0..<layout.planets.length() {
+      let planet = layout.planets[i]
+      let ph = translate_arc_circle(pin_diam + 0.1, planet.x, -planet.z)
+      lower_holes.push(ph)
+      upper_holes.push(ph)
+    }
     for i in 0..<4 {
       let ang = (45.0 + 90.0 * i.to_double()) * @math.PI / 180.0
       let nx = bcd_r * @math.cos(ang)
       let ny = bcd_r * @math.sin(ang)
-      let hex_pocket = hex_prism_body_mm(
-        "\{name}_m4_nut_pocket_\{i}",
-        3.6,
-        4.1,
-        -0.5,
-        @urdf.Density::petg(),
-        @step_cad.Rgb::purple(),
-      ).node.translate(x=nx, y=ny)
-      nut_pockets.push(hex_pocket)
+      lower_holes.push(hex_hole_segments(3.6, nx, ny))
+      upper_holes.push(translate_arc_circle(4.3, nx, ny))
     }
+    let lower_node = @step_cad.ExtrudedArcProfile::new(
+        carrier_outer,
+        3.7,
+        holes=lower_holes,
+      )
+      .as_shape()
+      .with_name(name + "_plate_lower")
+    let upper_node = @step_cad.ExtrudedArcProfile::new(
+        carrier_outer,
+        thickness - 3.6,
+        holes=upper_holes,
+      )
+      .as_shape()
+      .with_name(name + "_plate_upper")
+      .translate(z=3.6)
     {
       ..carrier_plate_body,
-      node: @step_cad.difference(
-        carrier_plate_body.node,
-        nut_pockets,
-        name=name + "_plate",
-      ).with_color(@step_cad.Rgb::purple()),
+      node: @step_cad.union_all([lower_node, upper_node], name=name + "_plate").with_color(
+        @step_cad.Rgb::purple(),
+      ),
     }.with_part(part)
   } else {
     let carrier_hub_body = @cad.BodyPart::tube_mm(

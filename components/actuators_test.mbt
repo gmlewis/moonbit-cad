@@ -524,7 +524,7 @@ test "High-torque QDD A12 actuator clears carrier, 6808 bearing, and VESA-100 mo
   let mut cover_top = -1.0e30
   let mut bearing_bottom = 1.0e30
   let mut bearing_top = -1.0e30
-  let mut mount_ear_count = 0
+  let mut housing_span_x = 0.0
   let mut m4_nut_count = 0
   for node in design.nodes() {
     let (z0, z1) = node_world_z_range(node)
@@ -546,13 +546,16 @@ test "High-torque QDD A12 actuator clears carrier, 6808 bearing, and VESA-100 mo
       if z1 > bearing_top {
         bearing_top = z1
       }
-    } else if node.name.contains("mount_ear_") {
-      mount_ear_count += 1
+    } else if node.name.has_suffix("_housing") {
+      let (x0, x1, _, _, _, _) = node.shape.bounding_box()
+      if x1 - x0 > housing_span_x {
+        housing_span_x = x1 - x0
+      }
     } else if node.name.contains("m4_nut_") {
       m4_nut_count += 1
     }
   }
-  assert_eq(mount_ear_count, 4)
+  assert_true(housing_span_x > 115.0)
   assert_eq(m4_nut_count, 4)
   // Cover sits cleanly above carrier; 6808 bearing sits inside cover above 1 mm shoulder.
   assert_true(cover_bottom >= carrier_top + 1.0)

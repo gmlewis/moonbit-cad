@@ -240,6 +240,29 @@ async function init() {
   const pickableMeshes = [];
   const boundObjects = new Set();
 
+  const partLabelMap = new Map();
+  const embeddedLabelsEl = document.getElementById("embedded-part-labels");
+  if (embeddedLabelsEl && embeddedLabelsEl.textContent.trim()) {
+    try {
+      const parsed = JSON.parse(embeddedLabelsEl.textContent);
+      for (const [k, v] of Object.entries(parsed)) {
+        partLabelMap.set(k, v);
+      }
+    } catch (_) {
+      // Fall back to humanized node names.
+    }
+  }
+  const lookupPartLabel = (rawName) => {
+    if (!rawName) return "";
+    const sk = sanitizeKey(rawName);
+    if (partLabelMap.has(sk)) return partLabelMap.get(sk);
+    const stripped = sk.replace(/_\d+$/, "");
+    if (stripped !== sk && partLabelMap.has(stripped)) {
+      return partLabelMap.get(stripped);
+    }
+    return "";
+  };
+
   // First pass: enhance all mesh materials and record base colors.
   model.traverse((obj) => {
     if (!obj.isMesh) return;
@@ -269,7 +292,10 @@ async function init() {
     obj.userData.baseColors = baseColors;
     const rawName = (obj.parent && obj.parent !== model && obj.parent.name) ? obj.parent.name : obj.name;
     obj.userData.rawName = rawName;
-    obj.userData.displayName = humanizePartName(rawName);
+    const partLabel = lookupPartLabel(rawName);
+    const humanized = humanizePartName(rawName);
+    obj.userData.partNumber = partLabel;
+    obj.userData.displayName = partLabel ? `${partLabel} · ${humanized}` : humanized;
     pickableMeshes.push(obj);
   });
 
@@ -563,7 +589,9 @@ async function init() {
     if (!q) return false;
     const qNorm = q.replaceAll("_", " ");
     let matched = pickableMeshes.filter(
-      (m) => (m.userData.displayName || "").toLowerCase() === qNorm,
+      (m) =>
+        (m.userData.partNumber || "").toLowerCase() === q ||
+        (m.userData.displayName || "").toLowerCase() === qNorm,
     );
     if (matched.length === 0) {
       matched = pickableMeshes.filter(

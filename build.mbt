@@ -1256,6 +1256,55 @@ fn view_gallery_html() -> String {
 }
 
 ///|
+/// Builds a JSON script tag mapping each sanitized GLB node name to its exact
+/// BOM/printable part number (e.g. `ACT-HOUSING`, `PGB-CARRIER`, `BEARING-6808`)
+/// so the 3D viewer displays the exact same part names as the printed files.
+fn Component::embedded_part_labels_html(self : Component) -> String {
+  let (links, _, _) = self.compile_links()
+  let entries : Array[String] = []
+  let seen : Map[String, Bool] = Map([])
+  for link in links {
+    for body in link.bodies {
+      match body.part {
+        Some(meta) => {
+          let raw = link.name + "_" + body.name
+          let buf = StringBuilder()
+          for ch in raw {
+            if ch == '/' ||
+              ch == '[' ||
+              ch == ']' ||
+              ch == '.' ||
+              ch == ':' ||
+              ch == ' ' {
+              continue
+            }
+            buf.write_char(ch)
+          }
+          let sanitized = buf.to_string()
+          if !seen.contains(sanitized) {
+            seen.set(sanitized, true)
+            let pnum = meta.part_number
+              .replace_all(old="\\", new="\\\\")
+              .replace_all(old="\"", new="\\\"")
+            let key = sanitized
+              .replace_all(old="\\", new="\\\\")
+              .replace_all(old="\"", new="\\\"")
+            entries.push("\"" + key + "\":\"" + pnum + "\"")
+          }
+        }
+        None => ()
+      }
+    }
+  }
+  if entries.length() == 0 {
+    return ""
+  }
+  "<script id=\"embedded-part-labels\" type=\"application/json\">{" +
+  entries.join(",") +
+  "}</script>\n"
+}
+
+///|
 pub fn Component::start_here_text(
   self : Component,
   name~ : String = "",
@@ -1284,6 +1333,7 @@ pub fn Component::start_here_text(
     "**Interactive 3D preview** — drag to orbit and scroll to zoom; the static\n" +
     "gallery below stays available offline.\n\n"
   out = out + viewer_html()
+  out = out + self.embedded_part_labels_html()
   out = out + view_gallery_html()
   out = out + "## 1. 3D-print these files\n\n"
   if cartridges.contains("PGB-CARTRIDGE") {
