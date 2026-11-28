@@ -500,3 +500,62 @@ test "A12 planetary actuator assembly has no structural inter-penetration at out
   assert_true(flange_bottom >= cover_boss_top + 0.99)
   assert_true(flange_bottom >= bearing_top + 0.99)
 }
+
+///|
+test "High-torque QDD A12 actuator clears carrier, 6808 bearing, and VESA-100 mount ears" {
+  let act = @components.planetary_bldc_actuator(
+    name="bldc_actuator",
+    preset="a12_8318_100kv",
+    stages=1,
+    module_mm=1.5,
+    sun_teeth=12,
+    planet_teeth=18,
+    planet_count=4,
+    gear_length_mm=10.0,
+    num_elbows=4,
+    output_encoder=false,
+    output_shaft_extension_mm=12.0,
+    high_torque_output=true,
+    detail=@step_common.DetailLevel::Detailed,
+  )
+  let design = act.to_design()
+  let mut carrier_top = -1.0e30
+  let mut cover_bottom = 1.0e30
+  let mut cover_top = -1.0e30
+  let mut bearing_bottom = 1.0e30
+  let mut bearing_top = -1.0e30
+  let mut mount_ear_count = 0
+  let mut m4_nut_count = 0
+  for node in design.nodes() {
+    let (z0, z1) = node_world_z_range(node)
+    if node.name.contains("stage1_carrier_plate") {
+      if z1 > carrier_top {
+        carrier_top = z1
+      }
+    } else if node.name.contains("output_cover_plate") {
+      if z0 < cover_bottom {
+        cover_bottom = z0
+      }
+      if z1 > cover_top {
+        cover_top = z1
+      }
+    } else if node.name.contains("bearing-6808") {
+      if z0 < bearing_bottom {
+        bearing_bottom = z0
+      }
+      if z1 > bearing_top {
+        bearing_top = z1
+      }
+    } else if node.name.contains("mount_ear_") {
+      mount_ear_count += 1
+    } else if node.name.contains("m4_nut_") {
+      m4_nut_count += 1
+    }
+  }
+  assert_eq(mount_ear_count, 4)
+  assert_eq(m4_nut_count, 4)
+  // Cover sits cleanly above carrier; 6808 bearing sits inside cover above 1 mm shoulder.
+  assert_true(cover_bottom >= carrier_top + 1.0)
+  assert_true(bearing_bottom >= cover_bottom + 0.99)
+  assert_true(bearing_top <= cover_top + 0.01)
+}

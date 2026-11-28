@@ -1704,6 +1704,7 @@ pub fn planetary_bldc_actuator(
   output_sensor~ : String = "pcb",
   magnet_diameter_mm~ : Double = 6.0,
   magnet_height_mm~ : Double = 2.5,
+  high_torque_output~ : Bool = false,
 ) -> @cad.Component {
   // `output_sensor = "pcb"` keeps the small printed-on-board sensor; `"none"`
   // leaves the magnet and cover boss in place for an external sensor board
@@ -1847,6 +1848,11 @@ pub fn planetary_bldc_actuator(
     detail,
     false,
     sun_hole_type=stage1_sun_hole_type,
+    bolted_output_bcd_mm=if high_torque_output && stage_count == 1 {
+      28.0
+    } else {
+      0.0
+    },
   )
   // Add the four matching anti-rotation key lugs onto stage 1's ring gear so
   // assembly.step, exploded.step, and START-HERE.html show the positive lock
@@ -1883,16 +1889,30 @@ pub fn planetary_bldc_actuator(
     first = first.add_body(lug_assigned)
   }
   let housing_part = fabricated_part(
-    "ACT-HOUSING", "Printed planetary actuator housing with four 45-deg anti-rotation keyways; slide the keyed ring cartridge in and bolt the cover with M3 screws",
-    "carbon fiber nylon", "3D print", 18.0,
+    "ACT-HOUSING",
+    if high_torque_output {
+      "Printed planetary actuator housing with four 45-deg anti-rotation keyways and integrated 100x100 mm VESA / 2020-extrusion 4xM5 bench-test mounting ears"
+    } else {
+      "Printed planetary actuator housing with four 45-deg anti-rotation keyways; slide the keyed ring cartridge in and bolt the cover with M3 screws"
+    },
+    "carbon fiber nylon",
+    "3D print",
+    18.0,
   )
   let plate_part = fabricated_part(
     "ACT-MOTOR-PLATE", "Rear motor plate with motor bolt pattern and shaft clearance; the motor's own front bearing runs in the bore",
     "carbon fiber nylon", "3D print", 10.0,
   )
   let cover_part = fabricated_part(
-    "ACT-OUTPUT-COVER", "Output bearing cover with AS5047P sensor mount; press the 608 bearings into the 22.2 mm seats",
-    "carbon fiber nylon", "3D print", 10.0,
+    "ACT-OUTPUT-COVER",
+    if high_torque_output {
+      "High-torque QDD output bearing cover with 52.2 mm bore and 1 mm retaining shoulder for a 6808-2RS (40x52x7 mm) thin-section output bearing"
+    } else {
+      "Output bearing cover with AS5047P sensor mount; press the 608 bearings into the 22.2 mm seats"
+    },
+    "carbon fiber nylon",
+    "3D print",
+    10.0,
   )
   let cover_boss_part = fabricated_part(
     "ACT-COVER-BOSS", "Printed output cover bearing boss; press the second 608 bearing into this seat",
@@ -2096,6 +2116,77 @@ pub fn planetary_bldc_actuator(
         }.with_part(housing_part),
       )
     }
+    // Standardized 100x100 mm VESA / 2020-extrusion 4xM5 bench-test & robot
+    // frame mounting ears at z = motor_mount_z .. motor_mount_z + 8.0 mm
+    // (sits flat on the build plate at Z_print = 0..8 mm, 100% support-free).
+    // Built as exact analytic ExtrudedArcProfiles (rounded stadium + 5.4 mm M5
+    // hole) so both printable/ACT-HOUSING.step and assembly.glb show crisp M5
+    // holes with zero CSG overhead.
+    if high_torque_output {
+      let ear_h = 8.0
+      let ear_r_half = 9.0
+      let ear_hole_d = 5.4
+      let vesa_half = 50.0
+      let ear_r = (vesa_half * vesa_half * 2.0).sqrt()
+      let bridge_inner_r = barrel_outer - 3.0
+      let ear_outer : Array[@step_cad.ProfileSegment] = [
+        @step_cad.ProfileSegment::SegmentLine(
+          (bridge_inner_r, -ear_r_half),
+          (ear_r, -ear_r_half),
+        ),
+        @step_cad.ProfileSegment::SegmentArc(
+          (ear_r, -ear_r_half),
+          (ear_r + ear_r_half, 0.0),
+          (ear_r, 0.0),
+        ),
+        @step_cad.ProfileSegment::SegmentArc(
+          (ear_r + ear_r_half, 0.0),
+          (ear_r, ear_r_half),
+          (ear_r, 0.0),
+        ),
+        @step_cad.ProfileSegment::SegmentLine(
+          (ear_r, ear_r_half),
+          (bridge_inner_r, ear_r_half),
+        ),
+        @step_cad.ProfileSegment::SegmentLine(
+          (bridge_inner_r, ear_r_half),
+          (bridge_inner_r, -ear_r_half),
+        ),
+      ]
+      let ear_hole = @step_gears.arc_circle_segments(ear_hole_d).map(fn(seg) {
+        match seg {
+          @step_cad.ProfileSegment::SegmentLine((x0, y0), (x1, y1)) =>
+            @step_cad.ProfileSegment::SegmentLine(
+              (x0 + ear_r, y0),
+              (x1 + ear_r, y1),
+            )
+          @step_cad.ProfileSegment::SegmentArc((x0, y0), (x1, y1), (cx, cy)) =>
+            @step_cad.ProfileSegment::SegmentArc(
+              (x0 + ear_r, y0),
+              (x1 + ear_r, y1),
+              (cx + ear_r, cy),
+            )
+        }
+      })
+      let ear_shape = @step_cad.ExtrudedArcProfile::new(ear_outer, ear_h, holes=[
+        ear_hole,
+      ]).as_shape()
+      for ei in 0..<4 {
+        let ang_deg = 45.0 + 90.0 * ei.to_double()
+        let ear_node = ear_shape
+          .with_name("\{name}_mount_ear_\{ei}")
+          .with_color(@step_cad.Rgb::black())
+          .rotate_z(ang_deg)
+          .translate(z=motor_mount_z)
+        extra_housing_bodies.push(
+          {
+            ..keyed_ring_body,
+            name: "\{name}_mount_ear_\{ei}",
+            node: ear_node,
+          }.with_part(housing_part),
+        )
+      }
+    }
   }
   let keyed_housing_body = keyed_ring_body
   let mut housing = @cad.Component::new(
@@ -2113,42 +2204,97 @@ pub fn planetary_bldc_actuator(
   for hb in extra_housing_bodies {
     housing = housing.add_body(hb)
   }
+  housing = housing.add_body(
+    actuator_plate_body(
+      name + "_motor_plate",
+      barrel_outer * 2.0,
+      motor_plate_mm,
+      plate_bottom_z,
+      plate_holes,
+      @urdf.Density::carbon_fiber(),
+      @step_cad.Rgb::black(),
+      detail,
+    ).with_part(plate_part),
+  )
+  if high_torque_output {
+    // Monolithic high-torque 6808-2RS (40x52x7 mm) bearing cover:
+    // z = housing_top .. housing_top + 1.0 mm: 46.0 mm ID retaining shoulder
+    // z = housing_top + 1.0 .. housing_top + 8.0 mm: 52.2 mm bearing seat bore.
+    let cover_bolt_holes : Array[(Double, Double, Double)] = []
+    for i in 0..<4 {
+      let theta = 2.0 * @math.PI * i.to_double() / 4.0
+      cover_bolt_holes.push(
+        (
+          bolt_circle / 2.0 * @math.cos(theta),
+          bolt_circle / 2.0 * @math.sin(theta),
+          3.4,
+        ),
+      )
+    }
+    let shoulder_holes : Array[(Double, Double, Double)] = [(0.0, 0.0, 46.0)]
+    for h in cover_bolt_holes {
+      shoulder_holes.push(h)
+    }
+    let seat_holes : Array[(Double, Double, Double)] = [(0.0, 0.0, 52.2)]
+    for h in cover_bolt_holes {
+      seat_holes.push(h)
+    }
+    let cover_shoulder_body = actuator_plate_body(
+      name + "_output_cover_shoulder",
+      housing_outer * 2.0,
+      1.0,
+      housing_top,
+      shoulder_holes,
+      @urdf.Density::carbon_fiber(),
+      @step_cad.Rgb::black(),
+      detail,
+    )
+    let cover_seat_body = actuator_plate_body(
+      name + "_output_cover_seat",
+      housing_outer * 2.0,
+      cover_plate_mm - 1.0,
+      housing_top + 1.0,
+      seat_holes,
+      @urdf.Density::carbon_fiber(),
+      @step_cad.Rgb::black(),
+      detail,
+    )
+    let cover_monolith : @cad.BodyPart = {
+      ..cover_seat_body,
+      name: name + "_output_cover_plate",
+      node: @step_cad.union_all(
+        [cover_shoulder_body.node, cover_seat_body.node],
+        name=name + "_output_cover_plate",
+      ).with_color(@step_cad.Rgb::black()),
+    }.with_part(cover_part)
+    housing = housing.add_body(cover_monolith)
+  } else {
+    housing = housing
+      .add_body(
+        actuator_plate_body(
+          name + "_output_cover_plate",
+          housing_outer * 2.0,
+          cover_plate_mm,
+          housing_top,
+          cover_holes,
+          @urdf.Density::carbon_fiber(),
+          @step_cad.Rgb::black(),
+          detail,
+        ).with_part(cover_part),
+      )
+      .add_body(
+        @cad.BodyPart::tube_mm(
+          name + "_output_cover_tube",
+          32.0,
+          22.2,
+          cover_tube_mm,
+          z_mm=housing_top + cover_plate_mm + cover_tube_mm / 2.0,
+          density=@urdf.Density::carbon_fiber(),
+          color=@step_cad.Rgb::black(),
+        ).with_part(cover_boss_part),
+      )
+  }
   housing = housing
-    .add_body(
-      actuator_plate_body(
-        name + "_motor_plate",
-        barrel_outer * 2.0,
-        motor_plate_mm,
-        plate_bottom_z,
-        plate_holes,
-        @urdf.Density::carbon_fiber(),
-        @step_cad.Rgb::black(),
-        detail,
-      ).with_part(plate_part),
-    )
-    .add_body(
-      actuator_plate_body(
-        name + "_output_cover_plate",
-        housing_outer * 2.0,
-        cover_plate_mm,
-        housing_top,
-        cover_holes,
-        @urdf.Density::carbon_fiber(),
-        @step_cad.Rgb::black(),
-        detail,
-      ).with_part(cover_part),
-    )
-    .add_body(
-      @cad.BodyPart::tube_mm(
-        name + "_output_cover_tube",
-        32.0,
-        22.2,
-        cover_tube_mm,
-        z_mm=housing_top + cover_plate_mm + cover_tube_mm / 2.0,
-        density=@urdf.Density::carbon_fiber(),
-        color=@step_cad.Rgb::black(),
-      ).with_part(cover_boss_part),
-    )
     .add_mate_mm_deg("motor_mount", z=motor_mount_z, axis=(0.0, 0.0, -1.0))
     .add_mate_mm_deg("bearing_seat", z=-3.0)
     .add_mate_mm_deg("gearbox_mount")
@@ -2244,25 +2390,49 @@ pub fn planetary_bldc_actuator(
         z=cover_top,
       )
   }
-  // Output cartridge: two 608 bearings in the cover, separated by a spacer.
-  housing = housing
-    .add_mate_mm_deg("output_bearing_1", z=housing_top + 3.5)
-    .add_mate_mm_deg("output_bearing_2", z=housing_top + 12.5)
-  for i in 0..<2 {
-    let bearing = ball_bearing(
-      name="\{name}_output_bearing_\{i}",
-      designation="608",
+  // Output bearing cartridge: either a single large 6808-2RS (40x52x7 mm)
+  // thin-section QDD bearing in high-torque mode, or two 608 bearings in the
+  // standard shaft layout.
+  if high_torque_output {
+    let qdd_bearing = ball_bearing(
+      name="\{name}_output_bearing_0",
+      designation="6808",
       detail~,
       density=@urdf.Density::steel_mild(),
     )
-    let mate_name = if i == 0 { "output_bearing_1" } else { "output_bearing_2" }
-    housing = housing.attach(
-      "output_bearing_merge_\{i}",
-      parent_mate=mate_name,
-      bearing,
-      child_mate="origin",
-      spec=@cad.JointSpec::merge_rigid(),
-    )
+    housing = housing
+      .add_mate_mm_deg("output_bearing_1", z=housing_top + 4.5)
+      .attach(
+        "output_bearing_merge_0",
+        parent_mate="output_bearing_1",
+        qdd_bearing,
+        child_mate="origin",
+        spec=@cad.JointSpec::merge_rigid(),
+      )
+  } else {
+    housing = housing
+      .add_mate_mm_deg("output_bearing_1", z=housing_top + 3.5)
+      .add_mate_mm_deg("output_bearing_2", z=housing_top + 12.5)
+    for i in 0..<2 {
+      let bearing = ball_bearing(
+        name="\{name}_output_bearing_\{i}",
+        designation="608",
+        detail~,
+        density=@urdf.Density::steel_mild(),
+      )
+      let mate_name = if i == 0 {
+        "output_bearing_1"
+      } else {
+        "output_bearing_2"
+      }
+      housing = housing.attach(
+        "output_bearing_merge_\{i}",
+        parent_mate=mate_name,
+        bearing,
+        child_mate="origin",
+        spec=@cad.JointSpec::merge_rigid(),
+      )
+    }
   }
   // The motor's own front bearing runs in the plate bore, so the actuator does
   // not add a second bearing there. The motor mounting screws pass through the
@@ -2605,23 +2775,25 @@ pub fn planetary_bldc_actuator(
     output_joint = name + "_stage2_carrier_joint"
     output_carrier = name + "_stage2_carrier"
   }
-  // A set-screw clamp collar on the output shaft, between the two 608
-  // bearings, retains the inner races and locks the shaft to the carrier.
-  housing = housing.attach_to(
-    output_carrier,
-    name + "_output_collar_merge",
-    parent_mate="output_flange",
-    shaft_collar(
-      name=name + "_output_collar",
-      bore_diam_mm=8.0,
-      outer_diam_mm=16.0,
-      width_mm=2.0,
-      style="set_screw",
-      thread_size=@step_standards.M2,
-    ),
-    child_mate="origin",
-    spec=@cad.JointSpec::fixed(offset_mm=1.5),
-  )
+  // A set-screw clamp collar on the output shaft retains the 608 inner races
+  // in the standard shaft layout (not used in the bolted QDD output layout).
+  if !high_torque_output {
+    housing = housing.attach_to(
+      output_carrier,
+      name + "_output_collar_merge",
+      parent_mate="output_flange",
+      shaft_collar(
+        name=name + "_output_collar",
+        bore_diam_mm=8.0,
+        outer_diam_mm=16.0,
+        width_mm=2.0,
+        style="set_screw",
+        thread_size=@step_standards.M2,
+      ),
+      child_mate="origin",
+      spec=@cad.JointSpec::fixed(offset_mm=1.5),
+    )
+  }
   if output_encoder {
     // Output magnet on the final carrier shaft. Its top face is at the
     // `output_shaft` mate; an external sensor board places its chip above it.

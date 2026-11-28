@@ -157,7 +157,7 @@ pub fn pcb_from_kicad(name? : String, footprints? : Array[KiCadFootprint], board
 
 pub fn planetary_actuator_cartridge(name? : String, preset? : String, module_mm? : Double, sun_teeth? : Int32, planet_teeth? : Int32, planet_count? : Int32, gear_length_mm? : Double, num_elbows? : Int32, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
 
-pub fn planetary_bldc_actuator(name? : String, preset? : String, stages? : Int32, module_mm? : Double, sun_teeth? : Int32, planet_teeth? : Int32, planet_count? : Int32, gear_length_mm? : Double, gear_type? : String, num_elbows? : Int32, detail? : @common.DetailLevel, joint_name? : String, add_binding? : Bool, output_encoder? : Bool, output_shaft_extension_mm? : Double, heat_set_inserts? : Bool, motor_source? : String, output_sensor? : String, magnet_diameter_mm? : Double, magnet_height_mm? : Double) -> @gmlewis/cad.Component
+pub fn planetary_bldc_actuator(name? : String, preset? : String, stages? : Int32, module_mm? : Double, sun_teeth? : Int32, planet_teeth? : Int32, planet_count? : Int32, gear_length_mm? : Double, gear_type? : String, num_elbows? : Int32, detail? : @common.DetailLevel, joint_name? : String, add_binding? : Bool, output_encoder? : Bool, output_shaft_extension_mm? : Double, heat_set_inserts? : Bool, motor_source? : String, output_sensor? : String, magnet_diameter_mm? : Double, magnet_height_mm? : Double, high_torque_output? : Bool) -> @gmlewis/cad.Component
 
 pub fn planetary_gearbox(name? : String, params? : PlanetaryGearboxParams, smooth? : Bool, detail? : @common.DetailLevel) -> @gmlewis/cad.Component
 

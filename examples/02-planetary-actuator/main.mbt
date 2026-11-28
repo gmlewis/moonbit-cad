@@ -46,32 +46,29 @@ fn explode_offset(node : @step_cad.SceneNode) -> (Double, Double, Double) {
     (0.0, 0.0, -185.0)
   } else if name.contains("rear_magnet") || name.contains("output_magnet") {
     (0.0, 0.0, -165.0)
-  } else if name.contains("output_flange_set_screw_0") {
-    // Radial M4 set screw at +X unscrews outward along +X as the flange lifts.
-    (25.0, 0.0, 275.0)
-  } else if name.contains("output_flange_set_screw_1") {
-    // Radial M4 set screw at +Y unscrews outward along +Y as the flange lifts.
-    (0.0, 25.0, 275.0)
-  } else if name.contains("carrier_hub_set_screw") {
-    // Radial M4 set screw in the carrier hub unscrews outward along +X.
-    (25.0, 0.0, 122.0)
+  } else if name.contains("output_flange_drive_screw") {
+    // Four M4x20 drive bolts explode axially forward out of the QDD flange.
+    (0.0, 0.0, 295.0)
   } else if name.contains("output_flange") {
-    // Open front bolted load flange slides straight off the 8 mm output shaft.
-    (0.0, 0.0, 275.0)
+    // High-torque QDD bolted output hub slides straight off the 6808 bearing.
+    (0.0, 0.0, 250.0)
   } else if name.contains("output_collar") {
     (0.0, 0.0, 248.0)
   } else if name.contains("M3-12") {
-    (0.0, 0.0, 235.0)
-  } else if name.contains("bearing-608") {
-    (0.0, 0.0, 210.0)
+    (0.0, 0.0, 225.0)
+  } else if name.contains("bearing-6808") || name.contains("bearing-608") {
+    (0.0, 0.0, 205.0)
   } else if name.contains("output_cover_tube") {
     // ACT-COVER-BOSS separates cleanly between ACT-OUTPUT-COVER (180) and the 608 bearings (210).
     (0.0, 0.0, 198.0)
   } else if name.contains("output_cover") {
-    (0.0, 0.0, 180.0)
+    (0.0, 0.0, 175.0)
+  } else if name.contains("m4_nut") {
+    // Four captive M4 hex nuts slide slightly below PGB-CARRIER so they're visible.
+    (0.0, 0.0, 108.0)
   } else if name.contains("carrier_pin") ||
     name.contains("carrier_output_shaft") {
-    (0.0, 0.0, 150.0)
+    (0.0, 0.0, 148.0)
   } else if name.contains("stage1_carrier") {
     (0.0, 0.0, 122.0)
   } else if name.contains("stage1_sun") ||
@@ -122,7 +119,9 @@ fn explode_color(name : String) -> @step_cad.Rgb {
     @step_cad.Rgb::new(0.32, 0.42, 0.56)
   } else if name.contains("output_cover") {
     @step_cad.Rgb::new(0.22, 0.24, 0.30)
-  } else if name.contains("housing") || name.contains("internal_chamfer") {
+  } else if name.contains("housing") ||
+    name.contains("internal_chamfer") ||
+    name.contains("mount_ear") {
     @step_cad.Rgb::new(0.22, 0.24, 0.28)
   } else if name.contains("motor_plate") {
     @step_cad.Rgb::new(0.35, 0.35, 0.40)
@@ -132,14 +131,18 @@ fn explode_color(name : String) -> @step_cad.Rgb {
     @step_cad.Rgb::new(0.75, 0.55, 0.20)
   } else if name.contains("M3-10") ||
     name.contains("M4-8") ||
-    name.contains("M4-14") {
+    name.contains("M4-14") ||
+    name.contains("M4-20") ||
+    name.contains("drive_screw") {
     @step_cad.Rgb::new(0.20, 0.45, 0.90)
   } else if name.contains("M3-12") {
     @step_cad.Rgb::new(0.40, 0.75, 0.95)
-  } else if name.contains("bearing-608") {
+  } else if name.contains("bearing-6808") || name.contains("bearing-608") {
     @step_cad.Rgb::new(0.78, 0.78, 0.82)
   } else if name.contains("bearing-688") {
     @step_cad.Rgb::new(0.45, 0.65, 0.85)
+  } else if name.contains("m4_nut") {
+    @step_cad.Rgb::new(0.85, 0.85, 0.90)
   } else if name.contains("set_screw") {
     @step_cad.Rgb::new(0.60, 0.02, 0.02)
   } else if name.contains("output_flange") {
@@ -431,13 +434,16 @@ async fn main {
       detail~,
       motor_source="brushless",
       // Mount moteus C1 on the REAR behind ACT-MOTOR-PLATE (mjbots qdd100
-      // layout) so the FRONT 8 mm output shaft is completely open for a bolted
-      // 6xM4 load-mounting flange (`ACT-OUTPUT-FLANGE`).
+      // layout) and enable the true high-torque QDD output architecture:
+      // 6808-2RS (40x52x7 mm) thin-section output bearing, 4xM4 bolted drive
+      // hub on 28 mm BCD into captive steel M4 nuts, and standardized 100x100 mm
+      // VESA / 2020-extrusion 4xM5 bench-test mounting ears on ACT-HOUSING.
       output_encoder=false,
       output_sensor="none",
       output_shaft_extension_mm=12.0,
       magnet_diameter_mm~,
       magnet_height_mm~,
+      high_torque_output=true,
     )
     // The 4-elbow herringbone gear set is print-in-place. Mark it so the build
     // package lists one cartridge instead of separate sun/planet/ring files.
@@ -634,27 +640,28 @@ async fn main {
         child_mate="top",
         spec=@cad.JointSpec::merge_rigid(),
       )
-    // Open front bolted output flange (`ACT-OUTPUT-FLANGE`): clamps onto the
-    // protruding 8 mm steel output shaft above ACT-OUTPUT-COVER and provides
-    // six M4 mounting holes on a 34 mm bolt circle so you can bolt on a robot
-    // arm, quadruped leg, wheel, pulley, or torque-test lever.
+    // High-torque QDD bolted output hub (`ACT-OUTPUT-FLANGE`): runs inside the
+    // 6808-2RS (40x52x7 mm) thin-section output bearing in ACT-OUTPUT-COVER,
+    // bolts directly to PGB-CARRIER with four counterbored M4x20 steel SHCS
+    // into captive M4 steel hex nuts on a 28 mm BCD (3.5x larger lever arm than
+    // an 8 mm shaft, zero set-screw slippage), and provides a 58 mm OD front
+    // load flange with 6xM4 through-holes on a 46 mm BCD for bolting on a heavy
+    // test lever, robot leg, or wheel.
+    let _ = use_fdm_teardrops
     let flange_part = @cad.PartMeta::new(
       "ACT-OUTPUT-FLANGE",
-      description="Printed bolted output flange (46 mm OD, 6xM4 on 34 mm BCD, 8.1 mm bore) — slide onto the open front 8 mm output shaft and bolt your robot arm, leg, or wheel directly to it",
+      description="High-torque QDD bolted output hub (58 mm OD, 6xM4 load mount on 46 mm BCD, 39.9 mm 6808 bearing journal, 4xM4x20 counterbored drive bolts on 28 mm BCD, 16 mm hollow bore)",
       material="carbon fiber nylon",
       process="3D print",
-      unit_cost_usd=5.0,
+      unit_cost_usd=6.0,
       print_bed_orient=@cad.PrintBedOrient::RotateDeg(180.0, 0.0, 0.0),
     )
-    let flange_outer = @step_gears.arc_circle_segments(46.0)
-    let flange_holes : Array[Array[@step_cad.ProfileSegment]] = [
-      @step_gears.arc_circle_segments(8.1),
-    ]
-    for i in 0..<6 {
-      let a = 2.0 * @math.PI * i.to_double() / 6.0
-      let hx = 17.0 * @math.cos(a)
-      let hy = 17.0 * @math.sin(a)
-      let hole_segs = @step_gears.arc_circle_segments(4.3).map(fn(seg) {
+    let translate_circle = fn(
+      diam : Double,
+      hx : Double,
+      hy : Double,
+    ) -> Array[@step_cad.ProfileSegment] {
+      @step_gears.arc_circle_segments(diam).map(fn(seg) {
         match seg {
           @step_cad.ProfileSegment::SegmentLine((x0, y0), (x1, y1)) =>
             @step_cad.ProfileSegment::SegmentLine(
@@ -669,123 +676,124 @@ async fn main {
             )
         }
       })
-      flange_holes.push(hole_segs)
     }
-    let flange_disk_shape = @step_cad.ExtrudedArcProfile::new(
-      flange_outer,
-      8.0,
-      holes=flange_holes,
-    ).as_shape()
-    let flange_boss_body = @cad.BodyPart::tube_mm(
-      "bldc_actuator_output_flange_boss",
-      20.0,
-      8.1,
-      6.0,
-      z_mm=3.0,
+    let drive_bcd_r = 14.0
+    let drive_holes : Array[Array[@step_cad.ProfileSegment]] = [
+      @step_gears.arc_circle_segments(16.0),
+    ]
+    for i in 0..<4 {
+      let ang = (45.0 + 90.0 * i.to_double()) * @math.PI / 180.0
+      drive_holes.push(
+        translate_circle(
+          4.3,
+          drive_bcd_r * @math.cos(ang),
+          drive_bcd_r * @math.sin(ang),
+        ),
+      )
+    }
+    // Zone 1: Carrier seat shoulder (Ø36 mm, z = 0..2.5 mm, overlaps 0.5 mm into journal).
+    let seat_node = @step_cad.ExtrudedArcProfile::new(
+        @step_gears.arc_circle_segments(36.0),
+        2.5,
+        holes=drive_holes,
+      )
+      .as_shape()
+      .with_name("bldc_actuator_output_flange_seat")
+    // Zone 2: 6808-2RS bearing journal (Ø39.9 mm, z = 2.0..11.0 mm, overlaps 0.5 mm into flange).
+    let journal_node = @step_cad.ExtrudedArcProfile::new(
+        @step_gears.arc_circle_segments(39.9),
+        9.0,
+        holes=drive_holes,
+      )
+      .as_shape()
+      .with_name("bldc_actuator_output_flange_journal")
+      .translate(z=2.0)
+    // Zone 3: Front load flange (Ø58 mm, z = 10.5..18.5 mm, 1.0 mm clear above 6808 cover).
+    // 6xM4 load-mounting through-holes on Ø46 mm BCD (r = 23 mm) + 4xM4 drive holes.
+    let flange_holes : Array[Array[@step_cad.ProfileSegment]] = []
+    for h in drive_holes {
+      flange_holes.push(h)
+    }
+    for i in 0..<6 {
+      let a = 2.0 * @math.PI * i.to_double() / 6.0
+      flange_holes.push(
+        translate_circle(4.3, 23.0 * @math.cos(a), 23.0 * @math.sin(a)),
+      )
+    }
+    let flange_disk_node = @step_cad.ExtrudedArcProfile::new(
+        @step_gears.arc_circle_segments(58.0),
+        8.0,
+        holes=flange_holes,
+      )
+      .as_shape()
+      .with_name("bldc_actuator_output_flange_disk")
+      .translate(z=10.5)
+    // Four counterbores (Ø7.8 mm, z = 12.5..19.0 mm) recess the M4x20 SHCS
+    // heads 2.0 mm below the front load face so test levers bolt completely flush.
+    let drive_cbore_cutters : Array[@step_cad.SceneNode] = []
+    for i in 0..<4 {
+      let ang = (45.0 + 90.0 * i.to_double()) * @math.PI / 180.0
+      drive_cbore_cutters.push(
+        @step_cad.Cylinder::new(7.8, 6.5)
+        .with_name("flange_drive_cbore_\{i}")
+        .translate(
+          x=drive_bcd_r * @math.cos(ang),
+          y=drive_bcd_r * @math.sin(ang),
+          z=12.5,
+        ),
+      )
+    }
+    let flange_solid_node = @step_cad.difference(
+      @step_cad.union_all(
+        [seat_node, journal_node, flange_disk_node],
+        name="bldc_actuator_output_flange_raw",
+      ),
+      drive_cbore_cutters,
+      name="bldc_actuator_output_flange",
+    ).with_color(@step_cad.Rgb::new(0.10, 0.72, 0.85))
+    let flange_ref_body = @cad.BodyPart::tube_mm(
+      "bldc_actuator_output_flange",
+      58.0,
+      16.0,
+      18.5,
+      z_mm=9.25,
       density=@urdf.Density::carbon_fiber(),
       color=@step_cad.Rgb::new(0.10, 0.72, 0.85),
     )
-    let flange_disk_node = flange_disk_shape
-      .with_name("bldc_actuator_output_flange_disk")
-      .with_color(@step_cad.Rgb::new(0.10, 0.72, 0.85))
-      .translate(z=6.0)
-    // Two radial M4 tap/pilot holes at 0 deg and 90 deg in the 20 mm clamping
-    // boss for two M4 cup-point set screws locking onto a flatted 8 mm shaft.
-    // When printed flat on the 46 mm disk (z = 14 -> Z_print = 0), local -Z
-    // points straight up (+Z_print), so under FDM each horizontal bore gets a
-    // 45-degree tangent teardrop peak pointing along local -Z for support-free
-    // printing.
-    let set_hole_0 = @step_cad.horizontal_bore(
-        1.7,
-        12.0,
-        fdm=use_fdm_teardrops,
-        name="flange_set_hole_0",
-      )
-      .rotate_x(-90.0)
-      .rotate_z(-90.0)
-      .translate(x=2.0, z=3.0)
-    let set_hole_1 = @step_cad.horizontal_bore(
-        1.7,
-        12.0,
-        fdm=use_fdm_teardrops,
-        name="flange_set_hole_1",
-      )
-      .rotate_x(-90.0)
-      .translate(y=2.0, z=3.0)
-    let flange_boss_drilled = @step_cad.difference(
-      flange_boss_body.node,
-      [set_hole_0, set_hole_1],
-      name="bldc_actuator_output_flange_boss",
-    ).with_color(@step_cad.Rgb::new(0.10, 0.72, 0.85))
-    let flange_solid_node = @step_cad.union_all(
-      [flange_boss_drilled, flange_disk_node],
-      name="bldc_actuator_output_flange",
-    ).with_color(@step_cad.Rgb::new(0.10, 0.72, 0.85))
     let flange_solid_part : @cad.BodyPart = {
-      ..flange_boss_body,
-      name: "bldc_actuator_output_flange",
+      ..flange_ref_body,
       node: flange_solid_node,
     }.with_part(flange_part)
-    let flange_set_screw_part = @cad.PartMeta::new(
-      "SET-M4x12",
-      description="M4 x 12 socket set screw (locks ACT-OUTPUT-FLANGE onto flatted 8 mm output shaft; trim to 6 mm or use M4 x 6)",
-      material="steel",
-      process="purchased",
-      unit_cost_usd=0.25,
-    )
-    let output_flange_comp = @cad.Component::new(
+    let mut output_flange_comp = @cad.Component::new(
         "bldc_actuator_output_flange",
-        description="Bolted 6xM4 front output load flange with dual radial M4 set screws",
+        description="High-torque QDD bolted 6xM4 front output hub driven by 4xM4x20 bolts on 28 mm BCD",
       )
       .with_part(flange_part)
       .with_param("mfg_process", mfg_process.to_string())
       .add_body(flange_solid_part)
-      .add_body(
-        @cad.BodyPart::cylinder_mm(
-          "bldc_actuator_output_flange_set_screw_0",
-          4.0,
-          6.0,
-          x_mm=7.0,
-          z_mm=3.0,
-          ry_deg=90.0,
-          density=@urdf.Density::steel_mild(),
-          color=@step_cad.Rgb::grey(),
-        ).with_part(flange_set_screw_part),
-      )
-      .add_body(
-        @cad.BodyPart::cylinder_mm(
-          "bldc_actuator_output_flange_set_screw_1",
-          4.0,
-          6.0,
-          y_mm=7.0,
-          z_mm=3.0,
-          rx_deg=90.0,
-          density=@urdf.Density::steel_mild(),
-          color=@step_cad.Rgb::grey(),
-        ).with_part(flange_set_screw_part),
-      )
-      .add_fastener(
-        @cad.Fastener::new(
-          "output_flange_set_screws",
-          @cad.FastenerKind::Screw,
-          thread="M4",
-          length_mm=6.0,
-          engagement_mm=5.0,
-          quantity=2,
-          torque_nm=1.5,
-          references=["bldc_actuator_output_flange"],
-          part=Some(flange_set_screw_part),
-        ),
-      )
-      .add_mate_mm_deg("shaft_seat")
-      // Mate 11.5 mm up from the boss bottom (2.5 mm below the top of the 8 mm
-      // disk) so the flange sits at z = 41.0..55.0 mm — leaving a 1.0 mm axial
-      // air gap above ACT-COVER-BOSS and the upper 608 bearing (z = 40.0 mm)
-      // while keeping 11.5 mm of full shaft engagement inside the 8.1 mm bore.
-      .add_mate_mm_deg("load_face", z=11.5)
-    let out_shaft_top_z = match act.get_mate("output_shaft") {
-      Some(mate) => mate.placement.apply_point((0.0, 0.0, 0.0)).2
-      None => 52.5
+      .add_mate_mm_deg("carrier_seat")
+      .add_mate_mm_deg("load_face", z=18.5)
+    for i in 0..<4 {
+      let ang = (45.0 + 90.0 * i.to_double()) * @math.PI / 180.0
+      output_flange_comp = output_flange_comp
+        .add_mate_mm_deg(
+          "drive_bolt_\{i}",
+          x=drive_bcd_r * @math.cos(ang),
+          y=drive_bcd_r * @math.sin(ang),
+          z=12.5,
+        )
+        .attach(
+          "output_flange_drive_screw_merge_\{i}",
+          parent_mate="drive_bolt_\{i}",
+          @components.iso_shcs_screw(
+            name="bldc_actuator_output_flange_drive_screw_\{i}",
+            size=@step_standards.M4,
+            length_mm=20.0,
+            detail~,
+          ),
+          child_mate="head_seat",
+          spec=@cad.JointSpec::merge_rigid(),
+        )
     }
     let out_carrier_name = act.parameters
       .get("output_joint")
@@ -794,12 +802,11 @@ async fn main {
     assembly = assembly.attach_to(
       out_carrier_name,
       "output_flange_merge",
-      parent_mate="output_shaft",
+      parent_mate="output_flange",
       output_flange_comp,
-      child_mate="load_face",
+      child_mate="carrier_seat",
       spec=@cad.JointSpec::merge_rigid(),
     )
-    let _ = out_shaft_top_z
     assembly = assembly.add_wire_run(
       @cad.WireRun::new(
         "motor_can",

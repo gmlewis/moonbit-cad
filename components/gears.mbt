@@ -263,6 +263,7 @@ fn pgb_carrier_component(
   layout : @step_planetary.HerringbonePlanetaryLayout,
   params : PlanetaryGearboxParams,
   detail : @step_common.DetailLevel,
+  bolted_output_bcd_mm~ : Double = 0.0,
 ) -> @cad.Component {
   let thickness = if params.carrier_thickness_mm >= 4.0 {
     params.carrier_thickness_mm
@@ -294,17 +295,23 @@ fn pgb_carrier_component(
   } else {
     pgb_output_boss_mm
   }
+  let use_bolted_output = bolted_output_bcd_mm > 0.0
   let part = {
     ..fabricated_part(
       "PGB-CARRIER",
-      "Planetary carrier plate and top hub (print); drill/tap the M4 radial set-screw hole, press the 8 mm pins into the 8.1 mm holes, and fit the separate steel pins, washers, and output shaft",
+      if use_bolted_output {
+        "High-torque bolted planetary carrier plate (print); drop 4x M4 hex nuts into the captive pockets, press the 8 mm planet pins into the 8.1 mm holes, and bolt ACT-OUTPUT-FLANGE directly onto the 28 mm 4xM4 bolt circle"
+      } else {
+        "Planetary carrier plate and top hub (print); drill/tap the M4 radial set-screw hole, press the 8 mm pins into the 8.1 mm holes, and fit the separate steel pins, washers, and output shaft"
+      },
       "PETG / carbon fiber nylon",
       "3D print",
       pgb_carrier_cost_usd(),
     ),
-    // Flip 180 deg around X so the solid hub face sits flat on the build plate
-    // and the 22 mm central recess opens upward (100% support-free FDM print;
-    // the 0.35 mm elephant-foot chamfer is applied to this new Z=0 bottom).
+    // Flip 180 deg around X so the solid hub/bolt face sits flat on the build
+    // plate and the central recess / captive M4 nut pockets open upward (100%
+    // support-free FDM print; the 0.35 mm elephant-foot chamfer is applied to
+    // this new Z=0 bottom).
     print_bed_orient: @cad.PrintBedOrient::RotateDeg(180.0, 0.0, 0.0),
   }
   let pin_part = purchased_part(
@@ -336,7 +343,9 @@ fn pgb_carrier_component(
   let central_hole = 2.0 *
     (layout.center_distance_mm - (pin_diam + 0.1) / 2.0 - 0.5)
   let central_diameter = if central_hole < 22.0 { central_hole } else { 22.0 }
-  let central_diameter = if central_diameter < 12.0 {
+  let central_diameter = if use_bolted_output {
+    16.0
+  } else if central_diameter < 12.0 {
     12.0
   } else {
     central_diameter
@@ -346,6 +355,13 @@ fn pgb_carrier_component(
     let planet = layout.planets[i]
     plate_holes.push((planet.x, -planet.z, pin_diam + 0.1))
   }
+  if use_bolted_output {
+    let bcd_r = bolted_output_bcd_mm / 2.0
+    for i in 0..<4 {
+      let ang = (45.0 + 90.0 * i.to_double()) * @math.PI / 180.0
+      plate_holes.push((bcd_r * @math.cos(ang), bcd_r * @math.sin(ang), 4.3))
+    }
+  }
   let hub_diam = 32.0
   let hub_height = 4.0
   let hub_x = hub_diam / 2.0 - 6.0
@@ -354,8 +370,10 @@ fn pgb_carrier_component(
   )
   // The printed plate is its own component so the standalone print export
   // contains only the printed body, not the steel pins or output shaft.
-  // Union the plate and central hub into one monolithic solid so there are no
-  // coplanar overlapping seam circles on the top face.
+  // In bolted high-torque mode, cut four captive M4 hex nut pockets (7.2 mm AF
+  // x 3.6 mm deep) into the gear-facing back side (z = 0..3.6 mm, opening
+  // upward when printed flipped 180 deg) so the 4xM4 steel drive bolts pull
+  // directly against captive steel nuts in pure compression.
   let carrier_plate_body = actuator_plate_body(
     name + "_plate",
     plate_radius * 2.0,
@@ -366,23 +384,60 @@ fn pgb_carrier_component(
     @step_cad.Rgb::purple(),
     detail,
   )
-  let carrier_hub_body = @cad.BodyPart::tube_mm(
-    name + "_plate_hub",
-    hub_diam,
-    shaft_diam + 0.1,
-    hub_height,
-    z_mm=thickness - hub_height / 2.0,
-    density=@urdf.Density::petg(),
-    color=@step_cad.Rgb::purple(),
-  )
-  let carrier_monolith : @cad.BodyPart = {
-    ..carrier_plate_body,
-    node: @step_cad.union_all(
-      [carrier_plate_body.node, carrier_hub_body.node],
-      name=name + "_plate",
-    ).with_color(@step_cad.Rgb::purple()),
-  }.with_part(part)
-  let printed = @cad.Component::new(
+  let carrier_monolith : @cad.BodyPart = if use_bolted_output {
+    let bcd_r = bolted_output_bcd_mm / 2.0
+    let nut_pockets : Array[@step_cad.SceneNode] = []
+    for i in 0..<4 {
+      let ang = (45.0 + 90.0 * i.to_double()) * @math.PI / 180.0
+      let nx = bcd_r * @math.cos(ang)
+      let ny = bcd_r * @math.sin(ang)
+      let hex_pocket = hex_prism_body_mm(
+        "\{name}_m4_nut_pocket_\{i}",
+        3.6,
+        4.1,
+        -0.5,
+        @urdf.Density::petg(),
+        @step_cad.Rgb::purple(),
+      ).node.translate(x=nx, y=ny)
+      nut_pockets.push(hex_pocket)
+    }
+    {
+      ..carrier_plate_body,
+      node: @step_cad.difference(
+        carrier_plate_body.node,
+        nut_pockets,
+        name=name + "_plate",
+      ).with_color(@step_cad.Rgb::purple()),
+    }.with_part(part)
+  } else {
+    let carrier_hub_body = @cad.BodyPart::tube_mm(
+      name + "_plate_hub",
+      hub_diam,
+      shaft_diam + 0.1,
+      hub_height,
+      z_mm=thickness - hub_height / 2.0,
+      density=@urdf.Density::petg(),
+      color=@step_cad.Rgb::purple(),
+    )
+    {
+      ..carrier_plate_body,
+      node: @step_cad.union_all(
+        [carrier_plate_body.node, carrier_hub_body.node],
+        name=name + "_plate",
+      ).with_color(@step_cad.Rgb::purple()),
+    }.with_part(part)
+  }
+  let printed = if use_bolted_output {
+    @cad.Component::new(
+      name + "_printed",
+      description="High-torque bolted planetary carrier plate with captive 4xM4 hex nut pockets",
+    )
+    .with_param("plate_diameter_mm", (plate_radius * 2.0).to_string())
+    .with_param("bolted_output_bcd_mm", bolted_output_bcd_mm.to_string())
+    .add_body(carrier_monolith)
+    .with_part(part)
+  } else {
+    @cad.Component::new(
       name + "_printed",
       description="Printed planetary carrier plate",
     )
@@ -415,15 +470,47 @@ fn pgb_carrier_component(
         part=Some(set_screw_part),
       ),
     )
+  }
   let mut comp = @cad.Component::new(
       name,
-      description="Planetary carrier plate with steel planet pins and output shaft",
+      description=if use_bolted_output {
+        "High-torque bolted planetary carrier plate with steel planet pins and 4xM4 captive hex nuts"
+      } else {
+        "Planetary carrier plate with steel planet pins and output shaft"
+      },
     )
     .with_param("center_distance_mm", layout.center_distance_mm.to_string())
     .with_param("carrier_pin_diam_mm", pin_diam.to_string())
     .with_param("carrier_thickness_mm", thickness.to_string())
     .with_param("output_shaft_diam_mm", shaft_diam.to_string())
-    .add_body(
+  if use_bolted_output {
+    let nut_part = purchased_part(
+      "NUT-M4", "ISO 4032 M4 hex nut (captive in PGB-CARRIER drive pockets)", "steel",
+      0.08,
+    )
+    let bcd_r = bolted_output_bcd_mm / 2.0
+    for i in 0..<4 {
+      let ang = (45.0 + 90.0 * i.to_double()) * @math.PI / 180.0
+      comp = comp.add_body(
+        hex_prism_body_mm(
+          "\{name}_m4_nut_\{i}",
+          3.5,
+          3.2,
+          0.2,
+          @urdf.Density::steel_mild(),
+          @step_cad.Rgb::grey(),
+        )
+        .transform_by(
+          @cad.urdf_transform_from_mm_deg(
+            x_mm=bcd_r * @math.cos(ang),
+            y_mm=bcd_r * @math.sin(ang),
+          ),
+        )
+        .with_part(nut_part),
+      )
+    }
+  } else {
+    comp = comp.add_body(
       @cad.BodyPart::cylinder_mm(
         name + "_output_shaft",
         shaft_diam,
@@ -433,13 +520,14 @@ fn pgb_carrier_component(
         color=@step_cad.Rgb::grey(),
       ).with_part(shaft_part),
     )
-    .attach(
-      "printed_carrier_merge",
-      parent_mate="origin",
-      printed,
-      child_mate="origin",
-      spec=@cad.JointSpec::merge_rigid(),
-    )
+  }
+  comp = comp.attach(
+    "printed_carrier_merge",
+    parent_mate="origin",
+    printed,
+    child_mate="origin",
+    spec=@cad.JointSpec::merge_rigid(),
+  )
   for i in 0..<layout.planets.length() {
     let planet = layout.planets[i]
     comp = comp
@@ -492,6 +580,7 @@ fn pgb_build(
   include_housing : Bool,
   carrier_transmission_reduction~ : Double? = None,
   sun_hole_type~ : String = "",
+  bolted_output_bcd_mm~ : Double = 0.0,
 ) -> @cad.Component {
   let step_params = pgb_step_params(params, smooth, detail, sun_hole_type~)
   let layout = @step_planetary.herringbone_planetary_layout(step_params)
@@ -587,7 +676,13 @@ fn pgb_build(
   let mut has_carrier = false
   if params.include_carrier {
     has_carrier = true
-    let carrier = pgb_carrier_component(carrier_name, layout, params, detail)
+    let carrier = pgb_carrier_component(
+      carrier_name,
+      layout,
+      params,
+      detail,
+      bolted_output_bcd_mm~,
+    )
     comp = comp.attach(
       "\{name}_carrier_joint",
       parent_mate="output_face",
